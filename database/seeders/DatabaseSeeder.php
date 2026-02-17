@@ -1,0 +1,23 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\User;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use Illuminate\Database\Seeder;
+
+class DatabaseSeeder extends Seeder
+{
+    use WithoutModelEvents;
+
+  public function run(): void
+    {
+        $this->call([
+        RbacSeeder::class,
+        DivisionSeeder::class,
+        OrgUnitSeeder::class,
+        PlantillaItemsSeeder::class,
+        UserSeeder::class,
+        ]);
+    }
+}
