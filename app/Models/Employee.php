@@ -6,28 +6,42 @@ use Illuminate\Database\Eloquent\Model;
 
 class Employee extends Model
 {
-  protected $fillable = [
-    'employee_number',
-    'first_name','middle_name','last_name','suffix',
-    'sex','birthdate','civil_status','blood_type','citizenship',
-    'email','contact_no',
-    'region','city','barangay','zipcode',
-    'employment_status',
-  ];
+    protected $fillable = [
+        'employee_number',
+        'plantilla_item_id',
+        'sg_level',
+        'step_increment_id',
+        'prefix',
+        'first_name',
+        'middle_name',
+        'last_name',
+        'suffix',
+        'title',
+        'position_designation',
+        'role',
+        'employment_type',
+        'employment_status',
+        'avatar',
+        'border_color',
+        'aligned',
+        'expanded',
+        'notes',
+    ];
 
-  protected $casts = [
-    'birthdate' => 'date',
-  ];
+    public function user()
+    {
+        return $this->hasOne(User::class);
+    }
 
-  public function getFullNameAttribute(): string
-  {
-    $mid = $this->middle_name ? (' ' . $this->middle_name) : '';
-    $suf = $this->suffix ? (' ' . $this->suffix) : '';
-    return "{$this->first_name}{$mid} {$this->last_name}{$suf}";
-  }
+    public function divisions()
+    {
+        return $this->belongsToMany(Division::class, 'division_employee')
+            ->withPivot(['is_primary'])
+            ->withTimestamps();
+    }
 
-  public function users()
-  {
-    return $this->hasMany(User::class);
-  }
+        public function plantillaItem()
+    {
+        return $this->belongsTo(PlantillaItem::class, 'plantilla_item_id');
+    }
 }

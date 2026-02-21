@@ -70,6 +70,10 @@ return [
 
         'role_has_permissions' => 'role_has_permissions',
     ],
+    
+    'defaults' => [
+    'guard' => 'web',
+        ],
 
     'column_names' => [
         /*

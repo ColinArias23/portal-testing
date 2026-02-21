@@ -3,35 +3,18 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
-use App\Models\OrgUnit;
-use App\Models\Position;
 use App\Models\PlantillaItem;
+use App\Models\SalaryGrade;
 
 class PlantillaItemsSeeder extends Seeder
 {
   public function run(): void
   {
-    /**
-     * IMPORTANT:
-     * Your plantilla list currently has no "department/org unit per row".
-     * So we temporarily assign everything to one org unit.
-     *
-     * Change this to MED / AAO / CN / CH depending on where you want them first.
-     */
-    $defaultOrgUnitCode = 'CH';
-
-    $orgUnit = OrgUnit::where('code', $defaultOrgUnitCode)->first();
-
-    if (!$orgUnit) {
-      throw new \RuntimeException("OrgUnit not found for code: {$defaultOrgUnitCode}. Run OrgUnitSeeder first.");
-    }
-
     // ===========================
     // YOUR PLANTILLA LIST (DATA)
     // ===========================
     $rows = [
-      ['status' => 'FOR PSB',             'item_no' => '1',    'sg' => 27, 'title' => 'CITY GOVERNMENT DEPARTMENT HEAD III'],
+      ['status' => 'FOR_PSB',             'item_no' => '1',    'sg' => 27, 'title' => 'CITY GOVERNMENT DEPARTMENT HEAD III'],
       ['status' => 'FILLED',              'item_no' => '2',    'sg' => 26, 'title' => 'CITY GOVERNMENT DEPARTMENT HEAD II (MEDICAL CENTER CHIEF I)'],
       ['status' => 'UNFILLED',            'item_no' => '3',    'sg' => 11, 'title' => 'COMPUTER MAINTENANCE TECHNOLOGIST I'],
       ['status' => 'PENDING APPOINTMENT', 'item_no' => '4',    'sg' => 9,  'title' => 'ADMINISTRATIVE ASSISTANT III (SECRETARY II)'],
@@ -79,7 +62,7 @@ class PlantillaItemsSeeder extends Seeder
       ['status' => 'UNFILLED',            'item_no' => '23-6',  'sg' => 11, 'title' => 'PHARMACIST I'],
       ['status' => 'FILLED',              'item_no' => '24',    'sg' => 4,  'title' => 'ADMINISTRATIVE AIDE IV'],
       ['status' => 'UNFILLED',            'item_no' => '25',    'sg' => 3,  'title' => 'ADMINISTRATIVE AIDE III (UTILITY WORKER II)'],
-      ['status' => 'FOR PSB',             'item_no' => '26',    'sg' => 18, 'title' => 'SOCIAL WELFARE OFFICER III'],
+      ['status' => 'FOR_PSB',             'item_no' => '26',    'sg' => 18, 'title' => 'SOCIAL WELFARE OFFICER III'],
       ['status' => 'UNFILLED',            'item_no' => '27-1',  'sg' => 11, 'title' => 'SOCIAL WELFARE OFFICER I'],
       ['status' => 'FILLED',              'item_no' => '27-2',  'sg' => 11, 'title' => 'SOCIAL WELFARE OFFICER I'],
       ['status' => 'IMPENDING',           'item_no' => '27-3',  'sg' => 11, 'title' => 'SOCIAL WELFARE OFFICER I'],
@@ -439,7 +422,7 @@ class PlantillaItemsSeeder extends Seeder
       ['status' => 'IMPENDING','item_no' => '139-1', 'sg' => 3,  'title' => 'LAUNDRY WORKER II'],
       ['status' => 'FILLED',   'item_no' => '139-2', 'sg' => 3,  'title' => 'LAUNDRY WORKER II'],
       ['status' => 'IMPENDING','item_no' => '140',   'sg' => 2,  'title' => 'SEAMSTRESS'],
-      ['status' => 'FOR PSB',  'item_no' => '141',   'sg' => 19, 'title' => 'ACCOUNTANT III'],
+      ['status' => 'FOR_PSB',  'item_no' => '141',   'sg' => 19, 'title' => 'ACCOUNTANT III'],
       ['status' => 'FILLED',   'item_no' => '142',   'sg' => 16, 'title' => 'ACCOUNTANT II'],
       ['status' => 'IMPENDING','item_no' => '143-1', 'sg' => 8,  'title' => 'ADMINISTRATIVE ASSISTANT II (ACCOUNTING CLERK III)'],
       ['status' => 'FILLED',   'item_no' => '143-2', 'sg' => 8,  'title' => 'ADMINISTRATIVE ASSISTANT II (ACCOUNTING CLERK III)'],
@@ -458,70 +441,34 @@ class PlantillaItemsSeeder extends Seeder
       ['status' => 'UNFILLED', 'item_no' => '148-3', 'sg' => 10, 'title' => 'ADMINISTRATIVE OFFICER I (CASHIER I)'],
       ['status' => 'UNFILLED', 'item_no' => '148-4', 'sg' => 10, 'title' => 'ADMINISTRATIVE OFFICER I (CASHIER I)'],
       ['status' => 'UNFILLED', 'item_no' => '148-5', 'sg' => 10, 'title' => 'ADMINISTRATIVE OFFICER I (CASHIER I)'],
-    ['status' => 'UNFILLED', 'item_no' => '149',   'sg' => 8,  'title' => 'ADMINISTRATIVE ASSISTANT II (CASH CLERK III)'],
+      ['status' => 'UNFILLED', 'item_no' => '149',   'sg' => 8,  'title' => 'ADMINISTRATIVE ASSISTANT II (CASH CLERK III)'],
     ];
+       foreach ($rows as $r) {
 
-    foreach ($rows as $r) {
-      $status = $this->normalizeStatus($r['status']);
+            // ✅ Normalize status (handles "PENDING APPOINTMENT" etc.)
+            $status = strtoupper(str_replace(' ', '_', trim($r['status'])));
 
-      // 1) Create / Update Position
-      $positionCode = $this->makePositionCode($r['title'], (int)$r['sg']);
+            // ✅ Find salary grade id
+            $sg = SalaryGrade::where('salary_grade', $r['sg'])->first();
 
-      $position = Position::updateOrCreate(
-        ['code' => $positionCode],
-        [
-          'title' => $r['title'],
-          'salary_grade' => (int) $r['sg'],
-          'employment_type' => $this->inferEmploymentType($r['title']), // usually Plantilla
-        ]
-      );
+            if (!$sg) {
+                // if wala pang salary grade seed, skip or create
+                $sg = SalaryGrade::create([
+                    'salary_grade' => $r['sg'],
+                    'monthly_salary' => null,
+                    'annual_salary' => null,
+                ]);
+            }
 
-      // 2) Create / Update Plantilla Item (slot)
-      PlantillaItem::updateOrCreate(
-        ['item_number' => (string) $r['item_no']],
-        [
-          'org_unit_id' => $orgUnit->id,
-          'position_id' => $position->id,
-          'funding_source' => 'Local Fund', // change later if you have per-item funding
-          'item_status' => $status,
-          'employee_id' => null, // link later when you have employee_number per filled slot
-          'filled_at' => $status === 'FILLED' ? now()->toDateString() : null,
-        ]
-      );
+            PlantillaItem::updateOrCreate(
+                ['item_number' => $r['item_no']], // ✅ unique key
+                [
+                    'status' => $status,            // ✅ enum value
+                    'salary_grade_id' => $sg->id,   // ✅ required FK
+                    'title' => $r['title'],
+                    'description' => $r['description'] ?? null,
+                ]
+            );
+        }
     }
-  }
-
-  // ---------------------------
-  // Helpers
-  // ---------------------------
-
-  private function normalizeStatus(string $status): string
-  {
-    $status = trim($status);
-
-    $allowed = [
-      'FILLED',
-      'FOR PSB',
-      'IMPENDING',
-      'PENDING APPOINTMENT',
-      'UNFILLED',
-    ];
-
-    return in_array($status, $allowed, true) ? $status : 'UNFILLED';
-  }
-
-  private function makePositionCode(string $title, int $sg): string
-  {
-    // Stable deterministic code, handles duplicates safely.
-    $slug = Str::upper(Str::slug($title, '_'));
-    $slug = Str::limit($slug, 50, '');
-    return "{$slug}_SG{$sg}";
-  }
-
-  private function inferEmploymentType(string $title): string
-  {
-    // You can improve this later if you have actual employment_type column.
-    // For now: default Plantilla.
-    return 'Plantilla';
-  }
 }
