@@ -10,7 +10,7 @@ class DepartmentController extends Controller
 {
     public function index()
     {
-        return Department::with(['head:id,first_name,last_name', 'divisions'])->orderBy('name')->paginate(20);
+        return Department::with(['head:id,first_name,last_name', 'division'])->orderBy('name')->paginate(20);
     }
 
     public function store(Request $request)
@@ -27,7 +27,7 @@ class DepartmentController extends Controller
 
     public function show(Department $department)
     {
-        return $department->load(['head', 'divisions']);
+        return $department->load(['head', 'division']);
     }
 
     public function update(Request $request, Department $department)
@@ -41,7 +41,7 @@ class DepartmentController extends Controller
 
         $department->update($data);
 
-        return $department->fresh(['head','divisions']);
+        return $department->fresh(['head','division']);
     }
 
     public function destroy(Department $department)

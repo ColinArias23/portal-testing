@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 
 class MappingController extends Controller
 {
-    // filter by department -> list divisions + employees
+    // filter by department -> list divisions + employee
     public function index(Request $request)
     {
         $request->validate([
@@ -18,17 +18,17 @@ class MappingController extends Controller
 
         $deptId = $request->integer('department_id');
 
-        $employees = Employee::query()
-            ->with(['divisions.department', 'plantillaItem.salaryGrade', 'stepIncrement'])
+        $employee = Employee::query()
+            ->with(['division.department', 'plantillaItem.salaryGrade', 'stepIncrement'])
             ->when($deptId, function ($q) use ($deptId) {
-                $q->whereHas('divisions', fn($qq) => $qq->where('department_id', $deptId));
+                $q->whereHas('division', fn($qq) => $qq->where('department_id', $deptId));
             })
             ->orderBy('last_name')
             ->paginate(50);
 
         return [
             'departments' => Department::select('id','code','name')->orderBy('name')->get(),
-            'employees' => $employees,
+            'employee' => $employee,
         ];
     }
 
@@ -42,8 +42,8 @@ class MappingController extends Controller
         $deptId = $request->integer('department_id');
 
         $rows = Employee::query()
-            ->with(['divisions.department', 'plantillaItem.salaryGrade', 'stepIncrement'])
-            ->whereHas('divisions', fn($qq) => $qq->where('department_id', $deptId))
+            ->with(['division.department', 'plantillaItem.salaryGrade', 'stepIncrement'])
+            ->whereHas('division', fn($qq) => $qq->where('department_id', $deptId))
             ->get();
 
         return [

@@ -10,22 +10,26 @@ return new class extends Migration {
         Schema::create('divisions', function (Blueprint $table) {
             $table->id();
 
-            $table->foreignId('department_id')
-                ->constrained('departments')
-                ->cascadeOnDelete();
-
-            $table->string('code');
+            $table->string('code')->unique();
             $table->string('name');
             $table->text('description')->nullable();
 
-            $table->foreignId('head_employee_id')->nullable()
-                ->constrained('employees')
-                ->nullOnDelete();
+            // $table->unsignedBigInteger('head_employee_id')->nullable();
+            $table->foreignId('head_employee_id')
+                   ->nullable()
+                   ->constrained('employees')
+                   ->nullOnDelete();
+
+            // $table->unsignedBigInteger('parent_id')->nullable();
+            $table->foreignId('parent_id')
+                   ->nullable()
+                   ->constrained('divisions')
+                   ->nullOnDelete();
 
             $table->timestamps();
 
-            $table->unique(['department_id', 'code']);
             $table->index('head_employee_id');
+            $table->index('parent_id');
         });
     }
 

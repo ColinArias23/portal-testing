@@ -40,19 +40,18 @@ class ManpowerController extends Controller
         return response()->json(['count' => $count]);
     }
 
+    /**
+     * ✅ Correct Vacant logic:
+     * plantilla_items with NO ACTIVE employee_assignment
+     */
     public function vacantCount()
     {
-        /**
-         * ✅ Correct Vacant logic:
-         * Plantilla items with NO assigned employee.
-         */
-        $count = PlantillaItem::query()
-            ->whereDoesntHave('employee')
-            ->count();
+        $count = PlantillaItem::whereDoesntHave('assignments')->count();
 
-        return response()->json(['count' => $count]);
+        return response()->json([
+            'count' => $count
+        ]);
     }
-
     public function summary()
     {
         $plantilla = $this->likeEmploymentType('plantilla')->count();
@@ -68,7 +67,7 @@ class ManpowerController extends Controller
         $consultant = $this->likeEmploymentType('consultant')->count();
 
         $vacant = PlantillaItem::query()
-            ->whereDoesntHave('employee')
+            ->whereDoesntHave('assignments', fn ($q) => $q->active())
             ->count();
 
         return response()->json([
@@ -78,5 +77,56 @@ class ManpowerController extends Controller
             'vacant'     => $vacant,
             'total'      => $plantilla + $cos + $consultant + $vacant,
         ]);
+    }
+
+    public function overstaffed()
+    {
+        $items = PlantillaItem::withCount([
+            'assignments as active_count' => fn ($q) => $q->active()
+        ])
+        ->having('active_count', '>', 1)
+        ->get();
+
+        return response()->json([
+            'count' => $items->count(),
+            'items' => $items
+        ]);
+    }
+
+    public function divisionAnalytics()
+    {
+        $division = \App\Models\Division::with([
+            'plantillaItems' => function ($q) {
+                $q->withCount([
+                    'assignments as active_count' => fn ($qq) => $qq->active()
+                ]);
+            }
+        ])->get();
+
+        $result = $division->map(function ($division) {
+
+            $total = $division->plantillaItems->count();
+
+            $filled = $division->plantillaItems
+                ->where('active_count', '>=', 1)
+                ->count();
+
+            $overstaffed = $division->plantillaItems
+                ->where('active_count', '>', 1)
+                ->count();
+
+            $vacant = $total - $filled;
+
+            return [
+                'division_id' => $division->id,
+                'division_name' => $division->name,
+                'total_slots' => $total,
+                'filled' => $filled,
+                'vacant' => $vacant,
+                'overstaffed' => $overstaffed,
+            ];
+        });
+
+        return response()->json($result);
     }
 }

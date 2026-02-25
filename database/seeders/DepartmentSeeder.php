@@ -4,60 +4,76 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use App\Models\Division;
 
 class DepartmentSeeder extends Seeder
 {
     public function run(): void
     {
         $departments = [
-            ['code' => 'ACCT', 'name' => 'ACCOUNTING'],
-            ['code' => 'ADM',  'name' => 'ADMITTING/INFORMATION'],
-            ['code' => 'ACL',  'name' => 'ANATOMIC AND CLINICAL LABORATORY'],
-            ['code' => 'BILL', 'name' => 'BILLING AND CLAIMS'],
-            ['code' => 'BB',   'name' => 'BLOOD BANK'],
-            ['code' => 'BUD',  'name' => 'BUDGET'],
-            ['code' => 'CASH', 'name' => 'CASH OPERATIONS'],
-            ['code' => 'CSS',  'name' => 'CENTRAL SUPPLY AND STERILIZATION'],
-            ['code' => 'CLIN', 'name' => 'CLINICAL DEPARTMENTS'],
-            ['code' => 'CNU',  'name' => 'CLINICAL NURSING UNITS'],
-            ['code' => 'DR',   'name' => 'DELIVERY ROOM'],
-            ['code' => 'DS',   'name' => 'DENTAL SERVICES'],
-            ['code' => 'PATH', 'name' => 'DEPARTMENT OF PATHOLOGY'],
-            ['code' => 'RAD',  'name' => 'DEPARTMENT OF RADIOLOGY'],
-            ['code' => 'EMD',  'name' => 'EMERGENCY MEDICINE DEPARTMENT'],
-            ['code' => 'ENG',  'name' => 'ENGINEERING AND FACILITIES MANAGEMENT'],
-            ['code' => 'HIM',  'name' => 'HEALTH INFORMATION'],
-            ['code' => 'HK',   'name' => 'HOUSEKEEPING/LAUNDRY'],
-            ['code' => 'HMB',  'name' => 'HUMAN MILK BANK'],
-            ['code' => 'HR',   'name' => 'HUMAN RESOURCE MANAGEMENT'],
-            ['code' => 'ICU',  'name' => 'INTENSIVE CARE UNIT'],
-            ['code' => 'MM',   'name' => 'MATERIALS MANAGEMENT'],
-            ['code' => 'MED',  'name' => 'MEDICAL SERVICE'],
-            ['code' => 'MSW',  'name' => 'MEDICAL SOCIAL WORK'],
-            ['code' => 'NICU', 'name' => 'NEONATAL INTENSIVE CARE UNIT (NICU)'],
-            ['code' => 'ND',   'name' => 'NUTRITION AND DIETETICS'],
-            ['code' => 'AAO',  'name' => 'OFFICE OF THE ADMINISTRATIVE OFFICER'],
-            ['code' => 'CN',   'name' => 'OFFICE OF THE CHIEF NURSE'],
-            ['code' => 'CH',   'name' => 'OFFICE OF THE CHIEF OF HOSPITAL'],
-            ['code' => 'OR',   'name' => 'OPERATING ROOM'],
-            ['code' => 'OPU',  'name' => 'OUT-PATIENT UNIT'],
-            ['code' => 'PH',   'name' => 'PHARMACY'],
-            ['code' => 'PROC', 'name' => 'PROCUREMENT'],
-            ['code' => 'PRU',  'name' => 'PULMONARY/RESPIRATORY UNIT'],
-            ['code' => 'SCA',  'name' => 'SPECIAL CARE AREAS'],
-            ['code' => 'SCA-PACU', 'name' => 'SPECIAL CARE AREAS - POST ANESTHESIA CARE UNIT'],
+            ['division_code' => 'AAO','code' => 'ACCT', 'name' => 'ACCOUNTING','type' => 'DEPARTMENT'],
+            ['division_code' => 'MED','code' => 'ADM',  'name' => 'ADMITTING/INFORMATION','type' => 'DEPARTMENT'],
+            ['division_code' => 'MED','code' => 'ACL',  'name' => 'ANATOMIC AND CLINICAL LABORATORY','type' => 'DEPARTMENT'],
+            ['division_code' => 'AAO','code' => 'BILL', 'name' => 'BILLING AND CLAIMS','type' => 'DEPARTMENT'],
+            ['division_code' => 'MED','code' => 'BB',   'name' => 'BLOOD BANK','type' => 'DEPARTMENT'],
+            ['division_code' => 'AAO','code' => 'BUD',  'name' => 'BUDGET','type' => 'DEPARTMENT'],
+            ['division_code' => 'AAO','code' => 'CASH', 'name' => 'CASH OPERATIONS','type' => 'DEPARTMENT'],
+            ['division_code' => 'CN','code' => 'CSS',  'name' => 'CENTRAL SUPPLY AND STERILIZATION','type' => 'DEPARTMENT'],
+            ['division_code' => 'MED','code' => 'CLIN', 'name' => 'CLINICAL DEPARTMENTS','type' => 'DEPARTMENT'],
+            ['division_code' => 'CN','code' => 'CNU',  'name' => 'CLINICAL NURSING UNITS','type' => 'DEPARTMENT'],
+            ['division_code' => 'CN','code' => 'DR',   'name' => 'DELIVERY ROOM','type' => 'DEPARTMENT'],      
+            ['division_code' => 'MED','code' => 'DS',   'name' => 'DENTAL SERVICES','type' => 'DEPARTMENT'],
+            ['division_code' => 'MED','code' => 'PATH', 'name' => 'DEPARTMENT OF PATHOLOGY','type' => 'DEPARTMENT'],
+            ['division_code' => 'MED','code' => 'RAD',  'name' => 'DEPARTMENT OF RADIOLOGY','type' => 'DEPARTMENT'],
+            ['division_code' => 'MED','code' => 'EMD',  'name' => 'EMERGENCY MEDICINE DEPARTMENT','type' => 'DEPARTMENT'],
+            ['division_code' => 'AAO','code' => 'ENG',  'name' => 'ENGINEERING AND FACILITIES MANAGEMENT','type' => 'DEPARTMENT'],
+            ['division_code' => 'MED','code' => 'HIM',  'name' => 'HEALTH INFORMATION','type' => 'DEPARTMENT'],
+            ['division_code' => 'AAO','code' => 'HK',   'name' => 'HOUSEKEEPING/LAUNDRY','type' => 'DEPARTMENT'],
+            ['division_code' => 'MED','code' => 'HMB',  'name' => 'HUMAN MILK BANK','type' => 'DEPARTMENT'],
+            ['division_code' => 'AAO','code' => 'HR',   'name' => 'HUMAN RESOURCE MANAGEMENT','type' => 'DEPARTMENT'],
+            ['division_code' => 'CN','code' => 'ICU',  'name' => 'INTENSIVE CARE UNIT','type' => 'DEPARTMENT'],
+            ['division_code' => 'AAO','code' => 'MM',   'name' => 'MATERIALS MANAGEMENT','type' => 'DEPARTMENT'],
+            ['division_code' => 'MED','code' => 'MED',  'name' => 'MEDICAL SERVICE','type' => 'DEPARTMENT'],
+            ['division_code' => 'MED','code' => 'MSW',  'name' => 'MEDICAL SOCIAL WORK','type' => 'DEPARTMENT'],
+            ['division_code' => 'CN','code' => 'NICU', 'name' => 'NEONATAL INTENSIVE CARE UNIT (NICU)','type' => 'DEPARTMENT'],
+            ['division_code' => 'MED','code' => 'ND',   'name' => 'NUTRITION AND DIETETICS','type' => 'DEPARTMENT'],
+            ['division_code' => 'AAO','code' => 'AAO',  'name' => 'OFFICE OF THE ADMINISTRATIVE OFFICER','type' => 'DEPARTMENT'],
+            ['division_code' => 'CN','code' => 'CN',   'name' => 'OFFICE OF THE CHIEF NURSE','type' => 'DEPARTMENT'],
+            ['division_code' => 'CH','code' => 'CH',   'name' => 'OFFICE OF THE CHIEF OF HOSPITAL','type' => 'DEPARTMENT'],
+            ['division_code' => 'CN','code' => 'OR',   'name' => 'OPERATING ROOM','type' => 'DEPARTMENT'],
+            ['division_code' => 'MED','code' => 'OPU',  'name' => 'OUT-PATIENT UNIT','type' => 'DEPARTMENT'],
+            ['division_code' => 'MED','code' => 'PH',   'name' => 'PHARMACY','type' => 'DEPARTMENT'],
+            ['division_code' => 'AAO','code' => 'PROC', 'name' => 'PROCUREMENT','type' => 'DEPARTMENT'],
+            ['division_code' => 'CN','code' => 'PRU',  'name' => 'PULMONARY/RESPIRATORY UNIT','type' => 'DEPARTMENT'],
+            ['division_code' => 'MED','code' => 'SCA',  'name' => 'SPECIAL CARE AREAS','type' => 'DEPARTMENT'],
+            ['division_code' => 'CN','code' => 'SCA-PACU', 'name' => 'SPECIAL CARE AREAS - POST ANESTHESIA CARE UNIT','type' => 'DEPARTMENT'],
         ];
 
 
-        $now = now();
+         $now = now();
 
-        $rows = array_map(fn ($d) => [
-            'code' => $d['code'],
-            'name' => $d['name'],
-            'created_at' => $now,
-            'updated_at' => $now,
-        ], $departments);
+        $rows = [];
+        foreach ($departments as $d) {
+            $div = Division::where('code', $d['division_code'])->first();
+            if (!$div) continue;
 
-        DB::table('departments')->upsert($rows, ['code'], ['name', 'updated_at']);
+            $rows[] = [
+                'division_id' => $div->id,
+                'parent_id' => $d['parent_id'] ?? null, // later if you want nesting
+                'type' => $d['type'] ?? 'DEPARTMENT',
+                'code' => $d['code'],
+                'name' => $d['name'],
+                'description' => $d['description'] ?? null,
+                'head_employee_id' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        DB::table('departments')->upsert(
+            $rows,
+            ['division_id', 'code'],
+            ['parent_id', 'type', 'name', 'description', 'head_employee_id', 'updated_at']
+        );
     }
 }

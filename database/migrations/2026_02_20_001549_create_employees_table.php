@@ -11,11 +11,8 @@ return new class extends Migration {
             $table->id();
 
             $table->string('employee_number')->unique();
-
-            $table->foreignId('plantilla_item_id')
-                ->nullable()
-                ->constrained('plantilla_items')
-                ->nullOnDelete();
+            $table->string('role_position')->nullable();
+            // $table->string('parent');
 
             // if you still want SG snapshot on employee (optional)
             $table->unsignedSmallInteger('sg_level')->nullable();
@@ -35,9 +32,9 @@ return new class extends Migration {
             $table->string('title')->nullable();
             $table->string('position_designation')->nullable();
 
-            $table->string('role')->nullable();
             $table->string('employment_type')->nullable();
-            $table->string('employment_status')->nullable();
+            $table->enum('employment_status', ['Active', 'Inactive', 'Resign'])
+                  ->default('Active');
 
             $table->string('avatar')->nullable();
             $table->string('border_color')->nullable();

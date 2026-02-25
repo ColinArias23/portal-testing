@@ -45,6 +45,7 @@ class RbacSeeder extends Seeder
             'users.manage',
 
             'manpower.view',
+            'manpower.manage',
 
             'roles.manage',
             'permissions.manage',
@@ -75,6 +76,7 @@ class RbacSeeder extends Seeder
         // HR
         $hr->syncPermissions(
             'manpower.view',
+            'manpower.manage',
         );
 
         // Employee

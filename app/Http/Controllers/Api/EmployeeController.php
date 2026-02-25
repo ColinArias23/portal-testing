@@ -4,145 +4,120 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
+use App\Models\EmployeeHierarchy;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class EmployeeController extends Controller
 {
     public function index(Request $request)
     {
-        $q = Employee::query()->with([
-            'plantillaItem.salaryGrade',
-            'stepIncrement.salaryGrade',
-            'divisions.department',
+        $query = Employee::with([
+            'info',
+            'primaryAssignment.plantillaItem.department',
+            'primaryAssignment.plantillaItem.division'
         ]);
 
         if ($request->filled('search')) {
-            $s = $request->string('search');
-            $q->where(function ($qq) use ($s) {
-                $qq->where('employee_number', 'like', "%{$s}%")
-                   ->orWhere('first_name', 'like', "%{$s}%")
-                   ->orWhere('last_name', 'like', "%{$s}%");
+            $s = trim($request->search);
+
+            $query->where(function ($q) use ($s) {
+                $q->where('employee_number', 'like', "%{$s}%")
+                  ->orWhere('role_position', 'like', "%{$s}%")
+                  ->orWhere('first_name', 'like', "%{$s}%")
+                  ->orWhere('last_name', 'like', "%{$s}%")
+                  ->orWhere('position_designation', 'like', "%{$s}%")
+                  ->orWhere('title', 'like', "%{$s}%");
             });
         }
 
-        if ($request->filled('division_id')) {
-            $divisionId = $request->integer('division_id');
-            $q->whereHas('divisions', fn ($qq) => $qq->where('divisions.id', $divisionId));
-        }
-
-        return $q->orderBy('last_name')->paginate(20);
+        return $query->orderBy('last_name')->paginate(10);
     }
 
     public function store(Request $request)
     {
         $data = $request->validate([
-            'employee_number' => ['required','string','max:100','unique:employees,employee_number'],
-            'plantilla_item_id' => ['nullable','exists:plantilla_items,id'],
-            'sg_level' => ['nullable','integer','min:1','max:99'],
-            'step_increment_id' => ['nullable','exists:step_increments,id'],
-
-            'prefix' => ['nullable','string','max:50'],
-            'first_name' => ['required','string','max:255'],
-            'middle_name' => ['nullable','string','max:255'],
-            'last_name' => ['required','string','max:255'],
-            'suffix' => ['nullable','string','max:50'],
-
-            'title' => ['nullable','string','max:255'],
-            'position_designation' => ['nullable','string','max:255'],
-
-            'role' => ['nullable','string','max:255'],
-            'employment_type' => ['nullable','string','max:255'],
-            'employment_status' => ['nullable','string','max:255'],
-
-            'avatar' => ['nullable','string','max:255'],
-            'border_color' => ['nullable','string','max:50'],
-            'aligned' => ['nullable','boolean'],
-            'expanded' => ['nullable','boolean'],
-            'notes' => ['nullable','string'],
-
-            // optional: divisions attach in same request
-            'division_ids' => ['nullable','array'],
-            'division_ids.*' => ['integer','exists:divisions,id'],
-            'primary_division_id' => ['nullable','integer','exists:divisions,id'],
+            'employee_number' => ['required','unique:employees,employee_number'],
+            'role_position' => ['required','string'],
+            'first_name' => ['required'],
+            'last_name' => ['required'],
+            'parent_ids' => ['nullable','array'],
+            'parent_ids.*' => ['exists:employees,id'],
         ]);
 
-        $divisionIds = $data['division_ids'] ?? [];
-        $primaryId   = $data['primary_division_id'] ?? null;
+        return DB::transaction(function () use ($data) {
 
-        unset($data['division_ids'], $data['primary_division_id']);
+            $employee = Employee::create(
+                collect($data)->except('parent_ids')->toArray()
+            );
 
-        $employee = Employee::create($data);
-
-        // attach divisions + set primary
-        if (!empty($divisionIds)) {
-            $sync = [];
-            foreach ($divisionIds as $id) {
-                $sync[$id] = ['is_primary' => ($primaryId && $primaryId == $id)];
+            if (!empty($data['parent_ids'])) {
+                foreach ($data['parent_ids'] as $parentId) {
+                    EmployeeHierarchy::create([
+                        'employee_id' => $employee->id,
+                        'parent_id' => $parentId,
+                    ]);
+                }
             }
-            $employee->divisions()->sync($sync);
-        }
 
-        return $employee->load(['plantillaItem.salaryGrade','stepIncrement.salaryGrade','divisions.department']);
-    }
-
-    public function show(Employee $employee)
-    {
-        return $employee->load(['plantillaItem.salaryGrade','stepIncrement.salaryGrade','divisions.department']);
+            return $employee->load([
+                'info',
+                'hierarchy.parent',
+                'parentHierarchy.employee'
+            ]);
+        });
     }
 
     public function update(Request $request, Employee $employee)
     {
         $data = $request->validate([
-            'employee_number' => ['sometimes','string','max:100','unique:employees,employee_number,'.$employee->id],
-            'plantilla_item_id' => ['nullable','exists:plantilla_items,id'],
-            'sg_level' => ['nullable','integer','min:1','max:99'],
-            'step_increment_id' => ['nullable','exists:step_increments,id'],
-
-            'prefix' => ['nullable','string','max:50'],
-            'first_name' => ['sometimes','string','max:255'],
-            'middle_name' => ['nullable','string','max:255'],
-            'last_name' => ['sometimes','string','max:255'],
-            'suffix' => ['nullable','string','max:50'],
-
-            'title' => ['nullable','string','max:255'],
-            'position_designation' => ['nullable','string','max:255'],
-
-            'role' => ['nullable','string','max:255'],
-            'employment_type' => ['nullable','string','max:255'],
-            'employment_status' => ['nullable','string','max:255'],
-
-            'avatar' => ['nullable','string','max:255'],
-            'border_color' => ['nullable','string','max:50'],
-            'aligned' => ['nullable','boolean'],
-            'expanded' => ['nullable','boolean'],
-            'notes' => ['nullable','string'],
-
-            'division_ids' => ['nullable','array'],
-            'division_ids.*' => ['integer','exists:divisions,id'],
-            'primary_division_id' => ['nullable','integer','exists:divisions,id'],
+            'employee_number' => [
+                'sometimes',
+                Rule::unique('employees','employee_number')->ignore($employee->id)
+            ],
+            'role_position' => ['sometimes','string'],
+            'first_name' => ['sometimes'],
+            'last_name' => ['sometimes'],
+            'parent_ids' => ['nullable','array'],
+            'parent_ids.*' => ['exists:employees,id'],
         ]);
 
-        $divisionIds = $data['division_ids'] ?? null;
-        $primaryId   = $data['primary_division_id'] ?? null;
+        return DB::transaction(function () use ($employee, $data) {
 
-        unset($data['division_ids'], $data['primary_division_id']);
+            $employee->update(
+                collect($data)->except('parent_ids')->toArray()
+            );
 
-        $employee->update($data);
+            if (array_key_exists('parent_ids', $data)) {
 
-        if (is_array($divisionIds)) {
-            $sync = [];
-            foreach ($divisionIds as $id) {
-                $sync[$id] = ['is_primary' => ($primaryId && $primaryId == $id)];
+                EmployeeHierarchy::where('employee_id', $employee->id)
+                    ->delete();
+
+                foreach ($data['parent_ids'] ?? [] as $parentId) {
+                    EmployeeHierarchy::create([
+                        'employee_id' => $employee->id,
+                        'parent_id' => $parentId,
+                    ]);
+                }
             }
-            $employee->divisions()->sync($sync);
-        }
 
-        return $employee->fresh(['plantillaItem.salaryGrade','stepIncrement.salaryGrade','divisions.department']);
+            return $employee->fresh()->load([
+                'info',
+                'hierarchy.parent',
+                'parentHierarchy.employee'
+            ]);
+        });
     }
 
     public function destroy(Employee $employee)
     {
+        EmployeeHierarchy::where('employee_id', $employee->id)
+            ->orWhere('parent_id', $employee->id)
+            ->delete();
+
         $employee->delete();
-        return response()->json(['message' => 'Employee deleted.']);
+
+        return response()->json(['message' => 'Deleted successfully']);
     }
 }

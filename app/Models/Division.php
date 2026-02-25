@@ -6,17 +6,36 @@ use Illuminate\Database\Eloquent\Model;
 
 class Division extends Model
 {
-    protected $fillable = ['department_id', 'code', 'name', 'description', 'head_employee_id'];
+    protected $fillable = [
+        'code',
+        'name',
+        'description',
+        'head_employee_id',
+        'parent_id',
+    ];
 
-    public function department()
+    public function head()
     {
-        return $this->belongsTo(Department::class);
+        return $this->belongsTo(Employee::class, 'head_employee_id');
     }
 
-    public function employees()
+    public function departments()
     {
-        return $this->belongsToMany(Employee::class, 'division_employee')
-            ->withPivot(['is_primary'])
-            ->withTimestamps();
+        return $this->hasMany(Department::class);
+    }
+
+    public function parent()
+    {
+        return $this->belongsTo(Division::class, 'parent_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(Division::class, 'parent_id');
+    }
+
+    public function plantillaItems()
+    {
+        return $this->hasMany(PlantillaItem::class);
     }
 }

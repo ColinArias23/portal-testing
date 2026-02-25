@@ -21,8 +21,6 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->string('password');
 
-            $table->string('role')->nullable();
-
             $table->string('approval_status')->default('PENDING');
             $table->timestamp('approved_at')->nullable();
 

@@ -3,12 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\EmployeeHierarchy;
+use App\Models\EmployeeInfo;
 
 class Employee extends Model
 {
     protected $fillable = [
         'employee_number',
-        'plantilla_item_id',
+        'role_position',
         'sg_level',
         'step_increment_id',
         'prefix',
@@ -18,7 +20,6 @@ class Employee extends Model
         'suffix',
         'title',
         'position_designation',
-        'role',
         'employment_type',
         'employment_status',
         'avatar',
@@ -28,20 +29,61 @@ class Employee extends Model
         'notes',
     ];
 
-    public function user()
+    protected $appends = ['full_name'];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Accessor
+    |--------------------------------------------------------------------------
+    */
+
+    public function getFullNameAttribute()
     {
-        return $this->hasOne(User::class);
+        return collect([
+            $this->prefix,
+            $this->first_name,
+            $this->middle_name,
+            $this->last_name,
+            $this->suffix
+        ])->filter()->implode(' ');
     }
 
-    public function divisions()
+    /*
+    |--------------------------------------------------------------------------
+    | Employee Info
+    |--------------------------------------------------------------------------
+    */
+
+    public function info()
     {
-        return $this->belongsToMany(Division::class, 'division_employee')
-            ->withPivot(['is_primary'])
-            ->withTimestamps();
+        return $this->hasOne(EmployeeInfo::class, 'employee_id');
     }
 
-        public function plantillaItem()
+    /*
+    |--------------------------------------------------------------------------
+    | Hierarchy (Using employee table)
+    |--------------------------------------------------------------------------
+    */
+
+    // Where this employee is a child
+    public function hierarchy()
     {
-        return $this->belongsTo(PlantillaItem::class, 'plantilla_item_id');
+        return $this->hasMany(EmployeeHierarchy::class, 'employee_id');
+    }
+
+    // Where this employee is a parent
+    public function parentHierarchy()
+    {
+        return $this->hasMany(EmployeeHierarchy::class, 'parent_id');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | StepIncrement
+    |--------------------------------------------------------------------------
+    */
+    public function stepIncrement()
+    {
+        return $this->belongsTo(StepIncrement::class);
     }
 }
