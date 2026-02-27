@@ -11,6 +11,13 @@ class DivisionSeeder extends Seeder
     {
         $divisions = [
             [
+                'code' => 'CH',   
+                'name' => 'OFFICE OF THE CHIEF OF HOSPITAL', 
+                'description' => 'Directs hospital management and operations.',
+                'head_employee_id' => 4,
+                // 'parent_id' => '1',
+            ],
+            [
                 'code' => 'MED',  
                 'name' => 'MEDICAL SERVICE', 
                 'description' => 'Handles medical services for patients.',
@@ -22,21 +29,21 @@ class DivisionSeeder extends Seeder
                 'name' => 'OFFICE OF THE ADMINISTRATIVE OFFICER', 
                 'description' => 'Manages administrative operations and support services.',
                 'head_employee_id' => 6,
-                'parent_id' => 1
+                // 'parent_id' => 1
+            ],
+            [
+                'code' => 'FD',   
+                'name' => 'Finance Department', 
+                'description' => 'Directs financial planning, budgeting, accounting, and revenue management to ensure efficient and transparent use of hospital funds.',
+                'head_employee_id' => 4,
+                // 'parent_id' => 1
             ],
             [
                 'code' => 'CN',   
                 'name' => 'OFFICE OF THE CHIEF NURSE', 
                 'description' => 'Oversees nursing staff and patient care standards.',
                 'head_employee_id' => 8,
-                'parent_id' => 1
-            ],
-            [
-                'code' => 'CH',   
-                'name' => 'OFFICE OF THE CHIEF OF HOSPITAL', 
-                'description' => 'Directs hospital management and operations.',
-                'head_employee_id' => 4,
-                'parent_id' => 1
+                // 'parent_id' => 1
             ],
         ];
 
@@ -47,7 +54,7 @@ class DivisionSeeder extends Seeder
             'name' => $d['name'],
             'description' => $d['description'] ?? null,
             'head_employee_id' => $d['head_employee_id'],
-            'parent_id' => $d['parent_id'],
+            // 'parent_id' => $d['parent_id'],
             'created_at' => $now,
             'updated_at' => $now,
         ], $divisions);
@@ -55,7 +62,7 @@ class DivisionSeeder extends Seeder
         DB::table('divisions')->upsert(
             $rows,
             ['code'],
-            ['name', 'description', 'parent_id', 'updated_at']
+            ['name', 'description', 'updated_at']
         );
     }
 }

@@ -24,9 +24,12 @@ class EmployeeController extends Controller
 
             $query->where(function ($q) use ($s) {
                 $q->where('employee_number', 'like', "%{$s}%")
+                ->orWhere('prefix', 'like', "%{$s}%")
                   ->orWhere('role_position', 'like', "%{$s}%")
                   ->orWhere('first_name', 'like', "%{$s}%")
+                  ->orWhere('middle_name', 'like', "%{$s}%")
                   ->orWhere('last_name', 'like', "%{$s}%")
+                  ->orWhere('suffix', 'like', "%{$s}%")
                   ->orWhere('position_designation', 'like', "%{$s}%")
                   ->orWhere('title', 'like', "%{$s}%");
             });
@@ -119,5 +122,28 @@ class EmployeeController extends Controller
         $employee->delete();
 
         return response()->json(['message' => 'Deleted successfully']);
+    }
+
+    public function all(Request $request)
+    {
+        $query = Employee::with([
+            'info',
+            'primaryAssignment.plantillaItem.department',
+            'primaryAssignment.plantillaItem.division'
+        ]);
+
+        if ($request->filled('search')) {
+            $s = trim($request->search);
+            $query->where(function ($q) use ($s) {
+                $q->where('employee_number', 'like', "%{$s}%")
+                ->orWhere('role_position', 'like', "%{$s}%")
+                ->orWhere('first_name', 'like', "%{$s}%")
+                ->orWhere('last_name', 'like', "%{$s}%")
+                ->orWhere('position_designation', 'like', "%{$s}%")
+                ->orWhere('title', 'like', "%{$s}%");
+            });
+        }
+
+        return $query->orderBy('last_name')->get();
     }
 }

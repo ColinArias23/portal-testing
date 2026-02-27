@@ -10,7 +10,7 @@ class DepartmentController extends Controller
 {
     public function index()
     {
-        return Department::with(['head:id,first_name,last_name', 'division'])->orderBy('name')->paginate(20);
+        return Department::with(['head:id,first_name,last_name', 'division'])->orderBy('name')->get();
     }
 
     public function store(Request $request)

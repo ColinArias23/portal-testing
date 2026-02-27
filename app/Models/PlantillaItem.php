@@ -31,8 +31,23 @@ class PlantillaItem extends Model
         return $this->belongsTo(Division::class);
     }
 
+    public function assignments()
+    {
+        return $this->hasMany(EmployeeAssignment::class, 'plantilla_item_id');
+    }
+
+    public function activeAssignments()
+    {
+        return $this->assignments()->whereNull('end_date');
+    }
+
+    public function isFilled(): bool
+    {
+        return $this->activeAssignments()->exists();
+    }
+
     public function isOverstaffed(): bool
     {
-        return $this->assignments()->active()->count() > 1;
+        return $this->activeAssignments()->count() > 1;
     }
 }

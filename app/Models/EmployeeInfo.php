@@ -11,9 +11,11 @@ class EmployeeInfo extends Model
 
     protected $fillable = [
         'employee_id',
-        'email','contact','address','birthdate','gender',
-        'status','department','designation',
-        'annual_salary','monthly_salary','sg_level',
+        'email',
+        'contact',
+        'address',
+        'birthdate',
+        'gender',
     ];
 
     public function employee(): BelongsTo

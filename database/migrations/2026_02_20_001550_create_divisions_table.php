@@ -21,15 +21,15 @@ return new class extends Migration {
                    ->nullOnDelete();
 
             // $table->unsignedBigInteger('parent_id')->nullable();
-            $table->foreignId('parent_id')
-                   ->nullable()
-                   ->constrained('divisions')
-                   ->nullOnDelete();
+            // $table->foreignId('parent_id')
+            //        ->nullable()
+            //        ->constrained('divisions')
+            //        ->nullOnDelete();
 
             $table->timestamps();
 
             $table->index('head_employee_id');
-            $table->index('parent_id');
+            // $table->index('parent_id');
         });
     }
 

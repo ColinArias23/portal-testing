@@ -14,9 +14,6 @@ return new class extends Migration {
             $table->string('role_position')->nullable();
             // $table->string('parent');
 
-            // if you still want SG snapshot on employee (optional)
-            $table->unsignedSmallInteger('sg_level')->nullable();
-
             // ✅ This is the FK that errored before — now OK
             $table->foreignId('step_increment_id')
                 ->nullable()
@@ -30,9 +27,10 @@ return new class extends Migration {
             $table->string('suffix')->nullable();
 
             $table->string('title')->nullable();
-            $table->string('position_designation')->nullable();
+            // $table->string('position_designation')->nullable();
 
-            $table->string('employment_type')->nullable();
+            $table->enum('employment_type', ['Plantilla', 'Consultant', 'COS'])
+                  ->default('COS');
             $table->enum('employment_status', ['Active', 'Inactive', 'Resign'])
                   ->default('Active');
 

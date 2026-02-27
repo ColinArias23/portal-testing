@@ -1,0 +1,82 @@
+<?php
+
+namespace Database\Seeders;
+
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+
+class EmployeeHierarchySeeder extends Seeder
+{
+    public function run(): void
+    {
+        DB::table('employee_hierarchy')->insert([
+            ['parent_id' => null, 'employee_id' => 1,],
+            ['parent_id' => 1, 'employee_id' => 4,],
+            ['parent_id' => 1, 'employee_id' => 2,],
+            ['parent_id' => 1, 'employee_id' => 3,],
+            ['parent_id' => 4, 'employee_id' => 5,],
+            ['parent_id' => 4, 'employee_id' => 6,],
+            ['parent_id' => 4, 'employee_id' => 7,],
+            ['parent_id' => 4, 'employee_id' => 8,],
+            ['parent_id' => 5, 'employee_id' => 55,],
+            ['parent_id' => 5, 'employee_id' => 106,],
+            ['parent_id' => 5, 'employee_id' => 99,],
+            ['parent_id' => 55, 'employee_id' => 133,],
+            ['parent_id' => 55, 'employee_id' => 189,],
+            ['parent_id' => 55, 'employee_id' => 36,],
+            ['parent_id' => 55, 'employee_id' => 182,],
+            ['parent_id' => 55, 'employee_id' => 241,],
+            ['parent_id' => 55, 'employee_id' => 230,],
+            ['parent_id' => 55, 'employee_id' => 260,],
+            ['parent_id' => 55, 'employee_id' => 5,],
+            ['parent_id' => 106, 'employee_id' => 161,],
+            ['parent_id' => 106, 'employee_id' => 160,],
+            ['parent_id' => 106, 'employee_id' => 152,],
+            ['parent_id' => 106, 'employee_id' => 106,],
+            ['parent_id' => 99, 'employee_id' => 99,],
+            ['parent_id' => 99, 'employee_id' => 279,],
+            ['parent_id' => 99, 'employee_id' => 169,],
+            ['parent_id' => 99, 'employee_id' => 5,],
+            ['parent_id' => 99, 'employee_id' => 164,],
+            ['parent_id' => 99, 'employee_id' => 197,],
+            ['parent_id' => 99, 'employee_id' => 365,],
+            ['parent_id' => 6, 'employee_id' => 146,],
+            ['parent_id' => 6, 'employee_id' => 200,],
+            ['parent_id' => 6, 'employee_id' => 198,],
+            ['parent_id' => 6, 'employee_id' => 158,],
+            ['parent_id' => 146, 'employee_id' => 139,],
+            ['parent_id' => 146, 'employee_id' => 440,],
+            ['parent_id' => 146, 'employee_id' => 146,],
+            ['parent_id' => 146, 'employee_id' => 40,],
+            ['parent_id' => 146, 'employee_id' => 361,],
+            ['parent_id' => 200, 'employee_id' => 111,],
+            ['parent_id' => 200, 'employee_id' => 85,],
+            ['parent_id' => 200, 'employee_id' => 73,],
+            ['parent_id' => 198, 'employee_id' => 189,],
+            ['parent_id' => 198, 'employee_id' => 134,],
+            ['parent_id' => 158, 'employee_id' => 138,],
+            ['parent_id' => 158, 'employee_id' => 12,],
+            ['parent_id' => 7, 'employee_id' => 114,],
+            ['parent_id' => 7, 'employee_id' => 101,],
+            ['parent_id' => 7, 'employee_id' => 103,],
+            ['parent_id' => 7, 'employee_id' => 199,],
+            ['parent_id' => 7, 'employee_id' => 63,],
+            ['parent_id' => 8, 'employee_id' => 91,],
+            ['parent_id' => 8, 'employee_id' => 100,],
+            ['parent_id' => 91, 'employee_id' => 472,],
+            ['parent_id' => 8, 'employee_id' => 116,],
+            ['parent_id' => 8, 'employee_id' => 175,],
+            ['parent_id' => 8, 'employee_id' => 171,],
+            ['parent_id' => 8, 'employee_id' => 69,],
+            ['parent_id' => 8, 'employee_id' => 167,],
+            ['parent_id' => 8, 'employee_id' => 117,],
+            ['parent_id' => 91, 'employee_id' => 91,],
+            ['parent_id' => 85, 'employee_id' => 447,],
+            ['parent_id' => 85, 'employee_id' => 191,],
+            ['parent_id' => 85, 'employee_id' => 400,],
+            ['parent_id' => 85, 'employee_id' => 607,],
+            ['parent_id' => 85, 'employee_id' => 608,],
+            ['parent_id' => 85, 'employee_id' => 609,],
+        ]);
+    }
+}

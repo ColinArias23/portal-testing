@@ -9,14 +9,12 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call([
+            EmployeeSeeder::class,
             DivisionSeeder::class,
             DepartmentSeeder::class,
             PlantillaItemsSeeder::class,
-
-            EmployeeSeeder::class,
-            // EmployeeHierarchySeeder::class,
-
-            RbacSeeder::class,
+            EmployeeHierarchySeeder::class,
+            // RbacSeeder::class,
             UserSeeder::class,
             EmployeeAssignmentSeeder::class,
         ]);

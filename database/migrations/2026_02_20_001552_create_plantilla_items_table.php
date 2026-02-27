@@ -10,13 +10,25 @@ return new class extends Migration {
     Schema::create('plantilla_items', function (Blueprint $table) {
       $table->id();
 
-      // ✅ unit links (must exist first: departments/divisions)
-      $table->foreignId('department_id')->nullable()
-        ->constrained('departments')->nullOnDelete();
+      /*
+      |--------------------------------------------------------------------------
+      | ORGANIZATIONAL LINK
+      |--------------------------------------------------------------------------
+      | Every plantilla item must belong to a Department.
+      | Division is already linked through Department.
+      */
+      $table->foreignId('department_id')
+            ->constrained('departments')
+            ->cascadeOnDelete();
 
-      $table->foreignId('division_id')->nullable()
-        ->constrained('divisions')->nullOnDelete();
+      // $table->foreignId('division_id')->nullable()
+      //   ->constrained('divisions')->nullOnDelete();
 
+      /*
+      |--------------------------------------------------------------------------
+      | POSITION DETAILS
+      |--------------------------------------------------------------------------
+      */
       $table->string('item_number')->unique();
 
       $table->enum('status', [
@@ -36,8 +48,15 @@ return new class extends Migration {
 
       $table->timestamps();
 
-      $table->index(['department_id']);
-      $table->index(['division_id']);
+      /*
+      |--------------------------------------------------------------------------
+      | INDEXES
+      |--------------------------------------------------------------------------
+      */
+      $table->index('department_id');
+      $table->index('status');
+
+    //   $table->index(['division_id']);
     });
   }
 

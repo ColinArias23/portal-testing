@@ -15,10 +15,10 @@ return new class extends Migration {
                 ->cascadeOnDelete();
 
             // $table->unsignedBigInteger('parent_id')->nullable();
-            $table->foreignId('parent_id')
-                   ->nullable()
-                   ->constrained('departments')
-                   ->nullOnDelete();
+            // $table->foreignId('parent_id')
+            //        ->nullable()
+            //        ->constrained('departments')
+            //        ->nullOnDelete();
 
             $table->enum('type', ['DEPARTMENT', 'SECTION', 'UNIT'])
                 ->default('DEPARTMENT');
@@ -38,7 +38,7 @@ return new class extends Migration {
             $table->unique(['division_id', 'code']);
 
             $table->index('head_employee_id');
-            $table->index('parent_id');
+            // $table->index('parent_id');
             $table->index('type');
         });
     }

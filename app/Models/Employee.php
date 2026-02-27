@@ -11,7 +11,6 @@ class Employee extends Model
     protected $fillable = [
         'employee_number',
         'role_position',
-        'sg_level',
         'step_increment_id',
         'prefix',
         'first_name',
@@ -85,5 +84,30 @@ class Employee extends Model
     public function stepIncrement()
     {
         return $this->belongsTo(StepIncrement::class);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Assignments
+    |--------------------------------------------------------------------------
+    */
+
+    public function assignments()
+    {
+        return $this->hasMany(EmployeeAssignment::class);
+    }
+
+    public function activeAssignment()
+    {
+        return $this->hasOne(EmployeeAssignment::class)
+                    ->whereNull('end_date')
+                    ->where('is_primary', true);
+    }
+
+    public function primaryAssignment()
+    {
+        return $this->hasOne(EmployeeAssignment::class)
+                    ->whereNull('end_date')
+                    ->where('is_primary', true);
     }
 }

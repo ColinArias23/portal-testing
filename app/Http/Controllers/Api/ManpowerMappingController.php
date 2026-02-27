@@ -8,17 +8,37 @@ use Illuminate\Http\Request;
 
 class ManpowerMappingController extends Controller
 {
+    /*
+    |--------------------------------------------------------------------------
+    | TREE (Org Chart + Staff Modal)
+    |--------------------------------------------------------------------------
+    */
     public function tree()
     {
-        $employees = DB::table('employees')->get()->keyBy('id');
+        // Load all employees
+        $employees = DB::table('employees')
+            ->get()
+            ->keyBy('id');
+
+        // Load hierarchy
         $edges = DB::table('employee_hierarchy')->get();
 
-        // Build parent → children map
         $childrenMap = [];
         foreach ($edges as $e) {
+
+            // Prevent self loop
+            if ($e->parent_id !== null && $e->parent_id == $e->employee_id) {
+                continue;
+            }
+
             $childrenMap[$e->parent_id][] = $e->employee_id;
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | NAME FORMATTER
+        |--------------------------------------------------------------------------
+        */
         $makeName = function ($emp) {
             return trim(collect([
                 $emp->prefix,
@@ -29,39 +49,69 @@ class ManpowerMappingController extends Controller
             ])->filter()->implode(' '));
         };
 
-        // ✅ Build staff modal data
-        $buildStaff = function ($managerId) use ($childrenMap, $employees, $makeName) {
+        /*
+        |--------------------------------------------------------------------------
+        | STAFF MODAL (ONLY Staff & Employee)
+        |--------------------------------------------------------------------------
+        */
+        $buildStaff = function ($managerId) use ($childrenMap, $employees) {
 
-            $staff = [];
-            $childIds = $childrenMap[$managerId] ?? [];
+        $staff = [];
+        $childIds = $childrenMap[$managerId] ?? [];
 
-            foreach ($childIds as $childId) {
-                $emp = $employees[$childId] ?? null;
-                if (!$emp) continue;
+        foreach ($childIds as $childId) {
 
-                if (($emp->role_position ?? '') !== 'Staff') continue;
+            $emp = $employees[$childId] ?? null;
+            if (!$emp) continue;
 
-                $staff[] = [
-                    'id' => uniqid('staff-'),
-                    'employeeId' => $emp->id,
-                    'name' => $makeName($emp),
-                    'role' => $emp->role_position ?? '',
-                    'employmentType' => $emp->employment_type ?? '',
-                    'image' => $emp->avatar
-                        ?: 'https://cdn3.iconfinder.com/data/icons/avatars-flat/33/man_5-1024.png',
-                ];
-            }
+            // Skip self
+            if ((int)$emp->id === (int)$managerId) continue;
 
-            return $staff;
-        };
+            $role = strtolower(trim($emp->role_position ?? ''));
 
-        $buildTree = function ($parentId, $path = []) use (
+            // ONLY staff & employee
+            if (!in_array($role, ['staff', 'employee'])) continue;
+
+            $staff[] = [
+                'id' => 'staff-' . $emp->id,
+                'employeeId' => $emp->id,
+
+                // 🔥 NEW — Full name parts
+                'prefix' => $emp->prefix,
+                'first_name' => $emp->first_name,
+                'middle_name' => $emp->middle_name,
+                'last_name' => $emp->last_name,
+                'suffix' => $emp->suffix,
+                'title' => $emp->title,
+
+                'role' => $emp->role_position,
+                'employmentType' => $emp->employment_type,
+                'image' => $emp->avatar
+                    ?: 'https://cdn3.iconfinder.com/data/icons/avatars-flat/33/man_5-1024.png',
+            ];
+        }
+
+        return $staff;
+    };
+
+        /*
+        |--------------------------------------------------------------------------
+        | SAFE TREE BUILDER (Managers Only)
+        |--------------------------------------------------------------------------
+        */
+        $buildTree = function ($parentId, $visited = []) use (
             &$buildTree,
             $childrenMap,
             $employees,
             $makeName,
             $buildStaff
         ) {
+
+            if (in_array($parentId, $visited, true)) {
+                return [];
+            }
+
+            $visited[] = $parentId;
 
             $nodes = [];
             $childIds = $childrenMap[$parentId] ?? [];
@@ -71,73 +121,75 @@ class ManpowerMappingController extends Controller
                 $emp = $employees[$childId] ?? null;
                 if (!$emp) continue;
 
-                // ❌ Skip staff as main node
-                if (($emp->role_position ?? '') === 'Staff') {
-                    continue;
-                }
+                $role = strtolower(trim($emp->role_position ?? ''));
 
-                $isCircular = in_array($childId, $path, true);
+                // Hide staff & employee in main tree
+                if (in_array($role, ['staff', 'employee'])) continue;
 
-                $node = [
-                    'key' => uniqid('node-'),
+                $isExpanded = (bool) ($emp->expanded ?? false);
+
+                $nodes[] = [
+                    'key' => 'node-' . $emp->id,
                     'type' => 'person',
-                    'expanded' => true,
+                    'expanded' => $isExpanded,
                     'data' => [
-                        'id' => uniqid('ui-'),
                         'employeeId' => $emp->id,
                         'name' => $makeName($emp),
-                        'role' => $emp->role_position ?? '',
-                        'employmentType' => $emp->employment_type ?? '',
+                        'role' => $emp->role_position,
+                        'employmentType' => $emp->employment_type,
                         'image' => $emp->avatar
                             ?: 'https://cdn3.iconfinder.com/data/icons/avatars-flat/33/man_5-1024.png',
+                        'border_color' => $emp->border_color ?? 'gray',
+                        'aligned' => (bool) ($emp->aligned ?? false),
+                        'expanded' => $isExpanded,
 
-                        // ✅ modal data preserved
+                        // Staff modal
                         'staff' => $buildStaff($emp->id),
                     ],
+                    'children' => $buildTree($childId, $visited),
                 ];
-
-                if (!$isCircular) {
-                    $node['children'] = $buildTree(
-                        $childId,
-                        array_merge($path, [$childId])
-                    );
-                } else {
-                    $node['children'] = [];
-                }
-
-                $nodes[] = $node;
             }
 
             return $nodes;
         };
 
-        $nodes = $buildTree(null);
+        $rootParentId = isset($childrenMap[null]) ? null : 0;
 
         return response()->json([
-            'nodes' => $nodes
+            'nodes' => $buildTree($rootParentId)
         ]);
     }
 
-
     /*
     |--------------------------------------------------------------------------
-    | REPORT (BASED ON MAPPING - NO DUPLICATES)
+    | SUMMARY (UNCHANGED)
     |--------------------------------------------------------------------------
     */
-
-    public function report(Request $request)
+    public function summary()
     {
-        $query = DB::table('employees');
+        $plantilla = DB::table('employees')
+            ->whereRaw("LOWER(employment_type) LIKE '%plantilla%'")
+            ->count();
 
-        // Optional department filter
-        if ($request->filled('department') && $request->department !== 'All') {
-            $query->where('department', $request->department);
-        }
+        $cos = DB::table('employees')
+            ->where(function ($q) {
+                $q->whereRaw("LOWER(employment_type) LIKE '%cos%'")
+                  ->orWhereRaw("LOWER(employment_type) LIKE '%contract%'");
+            })
+            ->count();
 
-        $employees = $query->orderBy('id')->get();
+        $consultant = DB::table('employees')
+            ->whereRaw("LOWER(employment_type) LIKE '%consultant%'")
+            ->count();
+
+        $vacant = DB::table('plantilla_items')->count();
 
         return response()->json([
-            'report' => $employees
+            'plantilla'  => $plantilla,
+            'cos'        => $cos,
+            'consultant' => $consultant,
+            'vacant'     => $vacant,
+            'total'      => $plantilla + $cos + $consultant + $vacant,
         ]);
     }
 }
