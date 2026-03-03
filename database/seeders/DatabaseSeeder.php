@@ -14,6 +14,8 @@ class DatabaseSeeder extends Seeder
             DepartmentSeeder::class,
             PlantillaItemsSeeder::class,
             EmployeeHierarchySeeder::class,
+            SalaryGradeSeeder::class,
+            StepIncrementSeeder::class,
             // RbacSeeder::class,
             UserSeeder::class,
             EmployeeAssignmentSeeder::class,

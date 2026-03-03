@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
+use App\Models\Employee;
 
 class ManpowerMappingController extends Controller
 {
@@ -16,9 +17,10 @@ class ManpowerMappingController extends Controller
     public function tree()
     {
         // Load all employees
-        $employees = DB::table('employees')
-            ->get()
-            ->keyBy('id');
+        // $employees = DB::table('employees')
+        //     ->get()
+        //     ->keyBy('id');
+        $employees = Employee::all()->keyBy('id');
 
         // Load hierarchy
         $edges = DB::table('employee_hierarchy')->get();
@@ -86,7 +88,7 @@ class ManpowerMappingController extends Controller
 
                 'role' => $emp->role_position,
                 'employmentType' => $emp->employment_type,
-                'image' => $emp->avatar
+                'image' => $emp->avatar_url
                     ?: 'https://cdn3.iconfinder.com/data/icons/avatars-flat/33/man_5-1024.png',
             ];
         }
@@ -134,11 +136,24 @@ class ManpowerMappingController extends Controller
                     'expanded' => $isExpanded,
                     'data' => [
                         'employeeId' => $emp->id,
+
+                        // 🔥 ADD THESE (ITO ANG KULANG MO)
+                        'prefix' => $emp->prefix,
+                        'first_name' => $emp->first_name,
+                        'middle_name' => $emp->middle_name,
+                        'last_name' => $emp->last_name,
+                        'suffix' => $emp->suffix,
+                        'title' => $emp->title,
+
+                        // Keep formatted name also
                         'name' => $makeName($emp),
+
                         'role' => $emp->role_position,
                         'employmentType' => $emp->employment_type,
-                        'image' => $emp->avatar
+
+                        'image' => $emp->avatar_url
                             ?: 'https://cdn3.iconfinder.com/data/icons/avatars-flat/33/man_5-1024.png',
+
                         'border_color' => $emp->border_color ?? 'gray',
                         'aligned' => (bool) ($emp->aligned ?? false),
                         'expanded' => $isExpanded,
@@ -153,7 +168,12 @@ class ManpowerMappingController extends Controller
             return $nodes;
         };
 
-        $rootParentId = isset($childrenMap[null]) ? null : 0;
+        // $rootParentId = isset($childrenMap[null]) ? null : 0;
+        $rootParentId = null;
+
+        if (!array_key_exists(null, $childrenMap) && !array_key_exists('', $childrenMap)) {
+            $rootParentId = 0;
+        }
 
         return response()->json([
             'nodes' => $buildTree($rootParentId)
@@ -190,6 +210,66 @@ class ManpowerMappingController extends Controller
             'consultant' => $consultant,
             'vacant'     => $vacant,
             'total'      => $plantilla + $cos + $consultant + $vacant,
+        ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | REPORT (BASED ON MAPPING - NO DUPLICATES)
+    |--------------------------------------------------------------------------
+    */
+   public function report(Request $request)
+    {
+        $deptId = $request->get('department_id');
+
+        $query = \App\Models\Employee::query()
+            ->with([
+                'division.department',
+                'plantillaItem.salaryGrade',
+                'stepIncrement'
+            ]);
+
+        if ($deptId && $deptId !== 'All' && is_numeric($deptId)) {
+            $query->whereHas('division', function ($q) use ($deptId) {
+                $q->where('department_id', $deptId);
+            });
+        }
+
+        $rows = $query->get()->map(function ($emp) {
+
+            // ✅ Combine First + Middle + Last + Suffix
+            $fullName = collect([
+                $emp->first_name,
+                $emp->middle_name
+                    ? strtoupper(substr($emp->middle_name, 0, 1)) . '.'
+                    : null,
+                $emp->last_name,
+                $emp->suffix
+            ])->filter()->implode(' ');
+
+            return [
+                'Employee Number' => $emp->employee_number,
+
+                // Separate Prefix
+                'Prefix' => $emp->prefix ?? '',
+
+                // Combined Name
+                'Full Name' => $fullName,
+
+                'Title' => $emp->title ?? '',
+                'Department' => $emp->division->department->name ?? '',
+                'Division' => $emp->division->name ?? '',
+                'Position Title' => $emp->plantillaItem->title ?? '',
+                // 'Salary Grade' => $emp->plantillaItem->salaryGrade->salary_grade ?? '',
+                'Salary Grade' => optional(optional($emp->plantillaItem)->salaryGrade)->salary_grade ?? '',
+                'Step Increment' => $emp->stepIncrement->step ?? '',
+                'Employment Type' => $emp->employment_type,
+                'Employment Status' => $emp->employment_status,
+            ];
+        });
+
+        return response()->json([
+            'report' => $rows
         ]);
     }
 }

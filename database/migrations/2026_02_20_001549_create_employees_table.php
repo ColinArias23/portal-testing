@@ -34,7 +34,7 @@ return new class extends Migration {
             $table->enum('employment_status', ['Active', 'Inactive', 'Resign'])
                   ->default('Active');
 
-            $table->string('avatar')->nullable();
+            $table->string('avatar_url')->nullable();
             $table->string('border_color')->nullable();
             $table->boolean('aligned')->default(false);
             $table->boolean('expanded')->default(false);

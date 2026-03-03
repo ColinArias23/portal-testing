@@ -35,7 +35,6 @@ class DepartmentSeeder extends Seeder
             ['division_code' => 'CN','code' => 'ICU',  'name' => 'INTENSIVE CARE UNIT','type' => 'DEPARTMENT', 'head_employee_id' => null],
             ['division_code' => 'AAO','code' => 'MM',   'name' => 'MATERIALS MANAGEMENT','type' => 'DEPARTMENT', 'head_employee_id' => null],
             ['division_code' => 'MED','code' => 'MED',  'name' => 'MEDICAL SERVICE','type' => 'DEPARTMENT', 'head_employee_id' => 55],
-            ['division_code' => 'MED','code' => 'MSW',  'name' => 'MEDICAL SOCIAL WORK','type' => 'DEPARTMENT', 'head_employee_id' => null],
             ['division_code' => 'CN','code' => 'NICU', 'name' => 'NEONATAL INTENSIVE CARE UNIT (NICU)','type' => 'DEPARTMENT', 'head_employee_id' => 230],
             ['division_code' => 'MED','code' => 'ND',   'name' => 'NUTRITION AND DIETETICS','type' => 'DEPARTMENT', 'head_employee_id' => 365],
             ['division_code' => 'AAO','code' => 'AAO',  'name' => 'OFFICE OF THE ADMINISTRATIVE OFFICER','type' => 'DEPARTMENT', 'head_employee_id' => null],

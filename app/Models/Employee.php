@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\EmployeeHierarchy;
 use App\Models\EmployeeInfo;
+use App\Models\Division;
+use App\Models\PlantillaItem;
+use App\Models\StepIncrement;
 
 class Employee extends Model
 {
@@ -21,7 +24,7 @@ class Employee extends Model
         'position_designation',
         'employment_type',
         'employment_status',
-        'avatar',
+        'avatar_url',
         'border_color',
         'aligned',
         'expanded',
@@ -49,6 +52,26 @@ class Employee extends Model
 
     /*
     |--------------------------------------------------------------------------
+    | Avatar
+    |--------------------------------------------------------------------------
+    */
+    // public function getAvatarUrlAttribute()
+    // {
+    //     return $this->avatar_url
+    //         ? asset('storage/' . $this->avatar_url)
+    //         : null;
+    // }   
+    public function getAvatarUrlAttribute($value)
+    {
+        if (!$value) {
+            return null;
+        }
+
+        return asset('storage/' . $value);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | Employee Info
     |--------------------------------------------------------------------------
     */
@@ -56,6 +79,27 @@ class Employee extends Model
     public function info()
     {
         return $this->hasOne(EmployeeInfo::class, 'employee_id');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Plantilla
+    |--------------------------------------------------------------------------
+    */
+
+    public function plantillaItem()
+    {
+        return $this->belongsTo(PlantillaItem::class);
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Division
+    |--------------------------------------------------------------------------
+    */
+
+    public function division()
+    {
+        return $this->belongsTo(Division::class);
     }
 
     /*
@@ -74,6 +118,32 @@ class Employee extends Model
     public function parentHierarchy()
     {
         return $this->hasMany(EmployeeHierarchy::class, 'parent_id');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Parent / Children (Many-to-Many via employee_hierarchy)
+    |--------------------------------------------------------------------------
+    */
+
+    public function parents()
+    {
+        return $this->belongsToMany(
+            Employee::class,
+            'employee_hierarchy',
+            'employee_id',  // current employee
+            'parent_id'     // parent employee
+        );
+    }
+
+    public function children()
+    {
+        return $this->belongsToMany(
+            Employee::class,
+            'employee_hierarchy',
+            'parent_id',    // current employee as parent
+            'employee_id'   // child employee
+        );
     }
 
     /*

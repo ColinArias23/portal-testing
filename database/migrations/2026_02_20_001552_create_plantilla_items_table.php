@@ -17,9 +17,9 @@ return new class extends Migration {
       | Every plantilla item must belong to a Department.
       | Division is already linked through Department.
       */
-      $table->foreignId('department_id')
-            ->constrained('departments')
-            ->cascadeOnDelete();
+      // $table->foreignId('department_id')
+      //       ->constrained('departments')
+      //       ->cascadeOnDelete();
 
       // $table->foreignId('division_id')->nullable()
       //   ->constrained('divisions')->nullOnDelete();
@@ -53,7 +53,7 @@ return new class extends Migration {
       | INDEXES
       |--------------------------------------------------------------------------
       */
-      $table->index('department_id');
+      // $table->index('department_id');
       $table->index('status');
 
     //   $table->index(['division_id']);
