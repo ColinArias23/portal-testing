@@ -180,4 +180,24 @@ class Employee extends Model
                     ->whereNull('end_date')
                     ->where('is_primary', true);
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Scope
+    |--------------------------------------------------------------------------
+    */
+    public function scopeSearch($query, $s)
+    {
+        return $query->where(function ($q) use ($s) {
+            $q->where('employee_number', 'like', "%{$s}%")
+            ->orWhere('prefix', 'like', "%{$s}%")
+            ->orWhere('role_position', 'like', "%{$s}%")
+            ->orWhere('first_name', 'like', "%{$s}%")
+            ->orWhere('middle_name', 'like', "%{$s}%")
+            ->orWhere('last_name', 'like', "%{$s}%")
+            ->orWhere('suffix', 'like', "%{$s}%")
+            ->orWhere('position_designation', 'like', "%{$s}%")
+            ->orWhere('title', 'like', "%{$s}%");
+        });
+    }
 }

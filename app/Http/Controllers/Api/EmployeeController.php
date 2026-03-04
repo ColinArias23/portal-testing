@@ -12,7 +12,12 @@ use Illuminate\Validation\Rule;
 
 class EmployeeController extends Controller
 {
-    public function index(Request $request)
+    /*
+    |--------------------------------------------------------------------------
+    | BASE QUERY (Shared by index + all)
+    |--------------------------------------------------------------------------
+    */
+    private function employeeQuery(Request $request)
     {
         $query = Employee::with([
             'info',
@@ -22,24 +27,56 @@ class EmployeeController extends Controller
         ]);
 
         if ($request->filled('search')) {
-            $s = trim($request->search);
+
+            $s = strtolower(trim($request->input('search')));
 
             $query->where(function ($q) use ($s) {
-                $q->where('employee_number', 'like', "%{$s}%")
-                ->orWhere('prefix', 'like', "%{$s}%")
-                  ->orWhere('role_position', 'like', "%{$s}%")
-                  ->orWhere('first_name', 'like', "%{$s}%")
-                  ->orWhere('middle_name', 'like', "%{$s}%")
-                  ->orWhere('last_name', 'like', "%{$s}%")
-                  ->orWhere('suffix', 'like', "%{$s}%")
-                  ->orWhere('position_designation', 'like', "%{$s}%")
-                  ->orWhere('title', 'like', "%{$s}%");
+
+                $q->whereRaw("LOWER(first_name) LIKE ?", ["%{$s}%"])
+                  ->orWhereRaw("LOWER(middle_name) LIKE ?", ["%{$s}%"])
+                  ->orWhereRaw("LOWER(last_name) LIKE ?", ["%{$s}%"])
+                  ->orWhereRaw("
+                      LOWER(CONCAT(
+                          COALESCE(first_name,''),' ',
+                          COALESCE(middle_name,''),' ',
+                          COALESCE(last_name,'')
+                      )) LIKE ?
+                  ", ["%{$s}%"]);
             });
         }
 
-        return $query->orderBy('last_name')->paginate(1000);
+        return $query->orderBy('last_name');
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | PAGINATED EMPLOYEES
+    |--------------------------------------------------------------------------
+    */
+    public function index(Request $request)
+    {
+        $query = $this->employeeQuery($request);
+
+        return $query->paginate(20);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ALL EMPLOYEES
+    |--------------------------------------------------------------------------
+    */
+    public function all(Request $request)
+    {
+        $query = $this->employeeQuery($request);
+
+        return $query->get();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | STORE
+    |--------------------------------------------------------------------------
+    */
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -54,10 +91,10 @@ class EmployeeController extends Controller
 
         return DB::transaction(function () use ($request, &$data) {
 
-        if ($request->hasFile('avatar_url')) {
-            $path = $request->file('avatar_url')->store('avatars', 'public');
-            $data['avatar_url'] = $path;
-        }
+            if ($request->hasFile('avatar_url')) {
+                $path = $request->file('avatar_url')->store('avatars', 'public');
+                $data['avatar_url'] = $path;
+            }
 
             $employee = Employee::create(
                 collect($data)->except('parent_ids')->toArray()
@@ -80,6 +117,11 @@ class EmployeeController extends Controller
         });
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | UPDATE
+    |--------------------------------------------------------------------------
+    */
     public function update(Request $request, Employee $employee)
     {
         $data = $request->validate([
@@ -132,6 +174,11 @@ class EmployeeController extends Controller
         });
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | DELETE
+    |--------------------------------------------------------------------------
+    */
     public function destroy(Employee $employee)
     {
         EmployeeHierarchy::where('employee_id', $employee->id)
@@ -141,28 +188,5 @@ class EmployeeController extends Controller
         $employee->delete();
 
         return response()->json(['message' => 'Deleted successfully']);
-    }
-
-    public function all(Request $request)
-    {
-        $query = Employee::with([
-            'info',
-            'primaryAssignment.plantillaItem.department',
-            'primaryAssignment.plantillaItem.division'
-        ]);
-
-        if ($request->filled('search')) {
-            $s = trim($request->search);
-            $query->where(function ($q) use ($s) {
-                $q->where('employee_number', 'like', "%{$s}%")
-                ->orWhere('role_position', 'like', "%{$s}%")
-                ->orWhere('first_name', 'like', "%{$s}%")
-                ->orWhere('last_name', 'like', "%{$s}%")
-                ->orWhere('position_designation', 'like', "%{$s}%")
-                ->orWhere('title', 'like', "%{$s}%");
-            });
-        }
-
-        return $query->orderBy('last_name')->get();
     }
 }
