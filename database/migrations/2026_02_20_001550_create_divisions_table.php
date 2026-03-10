@@ -14,22 +14,17 @@ return new class extends Migration {
             $table->string('name');
             $table->text('description')->nullable();
 
-            // $table->unsignedBigInteger('head_employee_id')->nullable();
-            $table->foreignId('head_employee_id')
-                   ->nullable()
-                   ->constrained('employees')
-                   ->nullOnDelete();
-
-            // $table->unsignedBigInteger('parent_id')->nullable();
-            // $table->foreignId('parent_id')
+            // $table->foreignId('head_employee_id')
             //        ->nullable()
-            //        ->constrained('divisions')
+            //        ->constrained('employees')
             //        ->nullOnDelete();
 
+            // remove FK to avoid circular dependency
+            $table->unsignedBigInteger('head_employee_id')->nullable();
+            
             $table->timestamps();
 
             $table->index('head_employee_id');
-            // $table->index('parent_id');
         });
     }
 

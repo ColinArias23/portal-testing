@@ -10,29 +10,42 @@ class DepartmentController extends Controller
 {
     public function index()
     {
-        return Department::with(['head:id,first_name,last_name', 'division'])->orderBy('name')->get();
+        return Department::with([
+            'head:id,first_name,last_name',
+            'division'
+        ])
+        ->orderBy('name')
+        ->get();
     }
 
     public function store(Request $request)
     {
         $data = $request->validate([
+            'division_id' => ['required','exists:divisions,id'],
             'code' => ['required','string','max:50','unique:departments,code'],
             'name' => ['required','string','max:255'],
             'description' => ['nullable','string'],
             'head_employee_id' => ['nullable','exists:employees,id'],
         ]);
 
-        return Department::create($data);
+        return Department::create($data)->load([
+            'head',
+            'division'
+        ]);
     }
 
     public function show(Department $department)
     {
-        return $department->load(['head', 'division']);
+        return $department->load([
+            'head',
+            'division'
+        ]);
     }
 
     public function update(Request $request, Department $department)
     {
         $data = $request->validate([
+            'division_id' => ['sometimes','exists:divisions,id'],
             'code' => ['sometimes','string','max:50','unique:departments,code,'.$department->id],
             'name' => ['sometimes','string','max:255'],
             'description' => ['nullable','string'],
@@ -41,12 +54,18 @@ class DepartmentController extends Controller
 
         $department->update($data);
 
-        return $department->fresh(['head','division']);
+        return $department->fresh([
+            'head',
+            'division'
+        ]);
     }
 
     public function destroy(Department $department)
     {
         $department->delete();
-        return response()->json(['message' => 'Department deleted.']);
+
+        return response()->json([
+            'message' => 'Department deleted.'
+        ]);
     }
 }

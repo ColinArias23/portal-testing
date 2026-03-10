@@ -25,17 +25,10 @@ class DivisionSeeder extends Seeder
                 'parent_id' => 1
             ],
             [
-                'code' => 'AAO',  
-                'name' => 'OFFICE OF THE ADMINISTRATIVE OFFICER', 
+                'code' => 'HOPSS',  
+                'name' => 'HOSPITAL ADMINISTRATION DIVISION', 
                 'description' => 'Manages administrative operations and support services.',
                 'head_employee_id' => 6,
-                // 'parent_id' => 1
-            ],
-            [
-                'code' => 'FD',   
-                'name' => 'Finance Department', 
-                'description' => 'Directs financial planning, budgeting, accounting, and revenue management to ensure efficient and transparent use of hospital funds.',
-                'head_employee_id' => 4,
                 // 'parent_id' => 1
             ],
             [
@@ -43,6 +36,14 @@ class DivisionSeeder extends Seeder
                 'name' => 'OFFICE OF THE CHIEF NURSE', 
                 'description' => 'Oversees nursing staff and patient care standards.',
                 'head_employee_id' => 8,
+                // 'parent_id' => 1
+            ],
+            [
+                'code' => 'MCC',   
+                'name' => 'MEDICAL CENTER CHIEF', 
+                'description' => 'Responsible for the overall management, supervision, and strategic direction of the medical center, 
+                                  ensuring quality healthcare services, efficient operations, and compliance with healthcare standards.',
+                'head_employee_id' => 1,
                 // 'parent_id' => 1
             ],
         ];

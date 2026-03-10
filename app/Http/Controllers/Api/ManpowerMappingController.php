@@ -9,266 +9,354 @@ use App\Models\Employee;
 
 class ManpowerMappingController extends Controller
 {
+    const DEFAULT_AVATAR = 'https://cdn3.iconfinder.com/data/icons/avatars-flat/33/man_5-1024.png';
+
     /*
     |--------------------------------------------------------------------------
-    | TREE (Org Chart + Staff Modal)
+    | TREE
     |--------------------------------------------------------------------------
     */
-    public function tree()
+
+    public function tree(Request $request)
     {
-        // Load all employees
-        // $employees = DB::table('employees')
-        //     ->get()
-        //     ->keyBy('id');
-        $employees = Employee::all()->keyBy('id');
+        $deptId = $request->get('department_id');
+        $showStaffAsNode = $deptId && $deptId !== 'All';
 
-        // Load hierarchy
-        $edges = DB::table('employee_hierarchy')->get();
+        /*
+        |--------------------------------------------------------------------------
+        | EMPLOYEES
+        |--------------------------------------------------------------------------
+        */
 
-        $childrenMap = [];
-        foreach ($edges as $e) {
+        $employees = Employee::select(
+            'id',
+            'department_id',
+            'prefix',
+            'first_name',
+            'middle_name',
+            'last_name',
+            'suffix',
+            'title',
+            'role_position',
+            'employment_type',
+            'avatar_url',
+            'border_color',
+            'aligned',
+            'expanded'
+        )
+        ->when($deptId && $deptId !== 'All', fn($q) => $q->where('department_id', $deptId))
+        ->get();
 
-            // Prevent self loop
-            if ($e->parent_id !== null && $e->parent_id == $e->employee_id) {
-                continue;
+        $employeeMap = $employees->keyBy('id');
+
+        /*
+        |--------------------------------------------------------------------------
+        | HIERARCHY
+        |--------------------------------------------------------------------------
+        */
+
+        $edges = DB::table('employee_hierarchy')
+            ->select('parent_id','employee_id')
+            ->get();
+
+        /*
+        |--------------------------------------------------------------------------
+        | INCLUDE PARENTS (WHEN FILTERED)
+        |--------------------------------------------------------------------------
+        */
+
+        if ($deptId && $deptId !== 'All') {
+
+            $ids = $employees->pluck('id')->toArray();
+            $parentLookup = $edges->keyBy('employee_id');
+
+            $queue = $ids;
+
+            while ($queue) {
+
+                $current = array_shift($queue);
+
+                if (!isset($parentLookup[$current])) continue;
+
+                $parentId = $parentLookup[$current]->parent_id;
+
+                if ($parentId && !in_array($parentId, $ids)) {
+                    $ids[] = $parentId;
+                    $queue[] = $parentId;
+                }
             }
 
-            $childrenMap[$e->parent_id][] = $e->employee_id;
+            Employee::whereIn('id', $ids)
+                ->get()
+                ->each(fn($emp) => $employeeMap[$emp->id] = $emp);
         }
 
         /*
         |--------------------------------------------------------------------------
-        | NAME FORMATTER
+        | BUILD MAPS
         |--------------------------------------------------------------------------
         */
+
+        $childrenMap = [];
+        $parentMap = [];
+
+        foreach ($edges as $edge) {
+
+            if ($edge->parent_id == $edge->employee_id) continue;
+
+            $childrenMap[$edge->parent_id][] = $edge->employee_id;
+            $parentMap[$edge->employee_id] = $edge->parent_id;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | HELPERS
+        |--------------------------------------------------------------------------
+        */
+
         $makeName = function ($emp) {
-            return trim(collect([
-                $emp->prefix,
-                $emp->first_name,
-                $emp->middle_name,
-                $emp->last_name,
-                $emp->suffix
-            ])->filter()->implode(' '));
+
+            return strtoupper(
+                trim(collect([
+                    $emp->prefix,
+                    $emp->first_name,
+                    $emp->middle_name,
+                    $emp->last_name,
+                    $emp->suffix
+                ])->filter()->implode(' '))
+            );
+        };
+
+        $formatEmployee = function ($emp, $name) {
+
+            return [
+                'employeeId' => $emp->id,
+                'name' => $name,
+                'prefix' => strtoupper($emp->prefix ?? ''),
+                'first_name' => strtoupper($emp->first_name ?? ''),
+                'middle_name' => strtoupper($emp->middle_name ?? ''),
+                'last_name' => strtoupper($emp->last_name ?? ''),
+                'suffix' => strtoupper($emp->suffix ?? ''),
+                'title' => strtoupper($emp->title ?? ''),
+                'role' => strtoupper($emp->role_position ?? ''),
+                'employmentType' => strtoupper($emp->employment_type ?? ''),
+                'image' => $emp->avatar_url ?: self::DEFAULT_AVATAR,
+                'border_color' => $emp->border_color ?? 'gray',
+                'aligned' => (bool) $emp->aligned
+            ];
         };
 
         /*
         |--------------------------------------------------------------------------
-        | STAFF MODAL (ONLY Staff & Employee)
+        | STAFF BUILDER
         |--------------------------------------------------------------------------
         */
-        $buildStaff = function ($managerId) use ($childrenMap, $employees) {
 
-        $staff = [];
-        $childIds = $childrenMap[$managerId] ?? [];
+        $buildStaff = function ($managerId) use ($childrenMap,$employeeMap,$showStaffAsNode,$formatEmployee,$makeName){
 
-        foreach ($childIds as $childId) {
+            if ($showStaffAsNode) return [];
 
-            $emp = $employees[$childId] ?? null;
-            if (!$emp) continue;
+            $staff = [];
 
-            // Skip self
-            if ((int)$emp->id === (int)$managerId) continue;
+            foreach ($childrenMap[$managerId] ?? [] as $childId) {
 
-            $role = strtolower(trim($emp->role_position ?? ''));
+                $emp = $employeeMap[$childId] ?? null;
+                if (!$emp) continue;
 
-            // ONLY staff & employee
-            if (!in_array($role, ['staff', 'employee'])) continue;
+                $role = strtolower($emp->role_position ?? '');
 
-            $staff[] = [
-                'id' => 'staff-' . $emp->id,
-                'employeeId' => $emp->id,
+                if (!in_array($role, ['staff','employee'])) continue;
 
-                // 🔥 NEW — Full name parts
-                'prefix' => $emp->prefix,
-                'first_name' => $emp->first_name,
-                'middle_name' => $emp->middle_name,
-                'last_name' => $emp->last_name,
-                'suffix' => $emp->suffix,
-                'title' => $emp->title,
+                $staff[] = [
+                    'id' => 'staff-'.$emp->id,
+                    ...$formatEmployee($emp,$makeName($emp))
+                ];
+            }
 
-                'role' => $emp->role_position,
-                'employmentType' => $emp->employment_type,
-                'image' => $emp->avatar_url
-                    ?: 'https://cdn3.iconfinder.com/data/icons/avatars-flat/33/man_5-1024.png',
-            ];
-        }
-
-        return $staff;
-    };
+            return $staff;
+        };
 
         /*
         |--------------------------------------------------------------------------
-        | SAFE TREE BUILDER (Managers Only)
+        | TREE BUILDER
         |--------------------------------------------------------------------------
         */
-        $buildTree = function ($parentId, $visited = []) use (
+
+        $visited = [];
+
+        $buildTree = function ($parentId) use (
             &$buildTree,
+            &$visited,
             $childrenMap,
-            $employees,
+            $employeeMap,
             $makeName,
-            $buildStaff
-        ) {
+            $buildStaff,
+            $formatEmployee,
+            $showStaffAsNode
+        ){
 
-            if (in_array($parentId, $visited, true)) {
-                return [];
-            }
+            if(isset($visited[$parentId])) return [];
 
-            $visited[] = $parentId;
+            $visited[$parentId] = true;
 
             $nodes = [];
-            $childIds = $childrenMap[$parentId] ?? [];
 
-            foreach ($childIds as $childId) {
+            foreach ($childrenMap[$parentId] ?? [] as $childId){
 
-                $emp = $employees[$childId] ?? null;
-                if (!$emp) continue;
+                $emp = $employeeMap[$childId] ?? null;
+                if(!$emp) continue;
 
-                $role = strtolower(trim($emp->role_position ?? ''));
+                $role = strtolower($emp->role_position ?? '');
 
-                // Hide staff & employee in main tree
-                if (in_array($role, ['staff', 'employee'])) continue;
-
-                $isExpanded = (bool) ($emp->expanded ?? false);
+                if(!$showStaffAsNode && in_array($role,['staff','employee'])) continue;
 
                 $nodes[] = [
-                    'key' => 'node-' . $emp->id,
+
+                    'key' => 'node-'.$emp->id,
                     'type' => 'person',
-                    'expanded' => $isExpanded,
+                    'expanded' => $showStaffAsNode ? true : (bool)$emp->expanded,
+
                     'data' => [
-                        'employeeId' => $emp->id,
-
-                        // 🔥 ADD THESE (ITO ANG KULANG MO)
-                        'prefix' => $emp->prefix,
-                        'first_name' => $emp->first_name,
-                        'middle_name' => $emp->middle_name,
-                        'last_name' => $emp->last_name,
-                        'suffix' => $emp->suffix,
-                        'title' => $emp->title,
-
-                        // Keep formatted name also
-                        'name' => $makeName($emp),
-
-                        'role' => $emp->role_position,
-                        'employmentType' => $emp->employment_type,
-
-                        'image' => $emp->avatar_url
-                            ?: 'https://cdn3.iconfinder.com/data/icons/avatars-flat/33/man_5-1024.png',
-
-                        'border_color' => $emp->border_color ?? 'gray',
-                        'aligned' => (bool) ($emp->aligned ?? false),
-                        'expanded' => $isExpanded,
-
-                        // Staff modal
-                        'staff' => $buildStaff($emp->id),
+                        ...$formatEmployee($emp,$makeName($emp)),
+                        'staff' => $buildStaff($emp->id)
                     ],
-                    'children' => $buildTree($childId, $visited),
+
+                    'children' => $buildTree($childId)
                 ];
             }
 
             return $nodes;
         };
 
-        // $rootParentId = isset($childrenMap[null]) ? null : 0;
-        $rootParentId = null;
+        /*
+        |--------------------------------------------------------------------------
+        | ROOTS
+        |--------------------------------------------------------------------------
+        */
 
-        if (!array_key_exists(null, $childrenMap) && !array_key_exists('', $childrenMap)) {
-            $rootParentId = 0;
+        $roots = collect($employeeMap)->filter(fn($emp) => !isset($parentMap[$emp->id]));
+
+        $nodes = [];
+
+        foreach ($roots as $root) {
+
+            $nodes[] = [
+
+                'key' => 'node-'.$root->id,
+                'type' => 'person',
+                'expanded' => $showStaffAsNode ? true : (bool)$root->expanded,
+
+                'data' => [
+                    ...$formatEmployee($root,$makeName($root)),
+                    'staff' => $buildStaff($root->id)
+                ],
+
+                'children' => $buildTree($root->id)
+            ];
         }
 
         return response()->json([
-            'nodes' => $buildTree($rootParentId)
+            'nodes' => $nodes
         ]);
     }
 
     /*
     |--------------------------------------------------------------------------
-    | SUMMARY (UNCHANGED)
+    | SUMMARY
     |--------------------------------------------------------------------------
     */
+
     public function summary()
     {
-        $plantilla = DB::table('employees')
-            ->whereRaw("LOWER(employment_type) LIKE '%plantilla%'")
-            ->count();
-
-        $cos = DB::table('employees')
-            ->where(function ($q) {
-                $q->whereRaw("LOWER(employment_type) LIKE '%cos%'")
-                  ->orWhereRaw("LOWER(employment_type) LIKE '%contract%'");
-            })
-            ->count();
-
-        $consultant = DB::table('employees')
-            ->whereRaw("LOWER(employment_type) LIKE '%consultant%'")
-            ->count();
+        $employees = DB::table('employees')
+            ->selectRaw("
+                SUM(CASE WHEN LOWER(employment_type) LIKE '%plantilla%' THEN 1 ELSE 0 END) as plantilla,
+                SUM(CASE WHEN LOWER(employment_type) LIKE '%cos%' OR LOWER(employment_type) LIKE '%contract%' THEN 1 ELSE 0 END) as cos,
+                SUM(CASE WHEN LOWER(employment_type) LIKE '%consultant%' THEN 1 ELSE 0 END) as consultant
+            ")
+            ->first();
 
         $vacant = DB::table('plantilla_items')->count();
 
         return response()->json([
-            'plantilla'  => $plantilla,
-            'cos'        => $cos,
-            'consultant' => $consultant,
-            'vacant'     => $vacant,
-            'total'      => $plantilla + $cos + $consultant + $vacant,
+            'plantilla' => $employees->plantilla,
+            'cos' => $employees->cos,
+            'consultant' => $employees->consultant,
+            'vacant' => $vacant,
+            'total' => $employees->plantilla + $employees->cos + $employees->consultant + $vacant
         ]);
     }
 
     /*
     |--------------------------------------------------------------------------
-    | REPORT (BASED ON MAPPING - NO DUPLICATES)
+    | REPORT
     |--------------------------------------------------------------------------
     */
-   public function report(Request $request)
+
+    public function report(Request $request)
     {
         $deptId = $request->get('department_id');
 
-        $query = \App\Models\Employee::query()
-            ->with([
-                'division.department',
-                'plantillaItem.salaryGrade',
-                'stepIncrement'
-            ]);
+        $employees = Employee::with([
+            'department.division',
+            'plantillaItem.salaryGrade',
+            'stepIncrement'
+        ])
+        ->when($deptId && $deptId !== 'All', fn ($q) => $q->where('department_id', $deptId))
+        ->orderByRaw("
+            CASE
+                WHEN LOWER(employment_type) LIKE '%plantilla%' THEN 1
+                WHEN LOWER(employment_type) LIKE '%cos%' OR LOWER(employment_type) LIKE '%contract%' THEN 2
+                WHEN LOWER(employment_type) LIKE '%consultant%' THEN 3
+                ELSE 4
+            END
+        ")
+        ->orderBy('last_name')
+        ->get();
 
-        if ($deptId && $deptId !== 'All' && is_numeric($deptId)) {
-            $query->whereHas('division', function ($q) use ($deptId) {
-                $q->where('department_id', $deptId);
-            });
-        }
-
-        $rows = $query->get()->map(function ($emp) {
-
-            // ✅ Combine First + Middle + Last + Suffix
-            $fullName = collect([
-                $emp->first_name,
-                $emp->middle_name
-                    ? strtoupper(substr($emp->middle_name, 0, 1)) . '.'
-                    : null,
-                $emp->last_name,
-                $emp->suffix
-            ])->filter()->implode(' ');
+        $rows = $employees->map(function ($emp) {
 
             return [
-                'Employee Number' => $emp->employee_number,
-
-                // Separate Prefix
-                'Prefix' => $emp->prefix ?? '',
-
-                // Combined Name
-                'Full Name' => $fullName,
-
-                'Title' => $emp->title ?? '',
-                'Department' => $emp->division->department->name ?? '',
-                'Division' => $emp->division->name ?? '',
-                'Position Title' => $emp->plantillaItem->title ?? '',
-                // 'Salary Grade' => $emp->plantillaItem->salaryGrade->salary_grade ?? '',
-                'Salary Grade' => optional(optional($emp->plantillaItem)->salaryGrade)->salary_grade ?? '',
-                'Step Increment' => $emp->stepIncrement->step ?? '',
-                'Employment Type' => $emp->employment_type,
-                'Employment Status' => $emp->employment_status,
+                'EMPLOYEE NUMBER' => strtoupper($emp->employee_number ?? ''),
+                'PREFIX' => strtoupper($emp->prefix ?? ''),
+                'FIRST NAME' => strtoupper($emp->first_name ?? ''),
+                'MIDDLE NAME' => strtoupper($emp->middle_name ?? ''),
+                'LAST NAME' => strtoupper($emp->last_name ?? ''),
+                'TITLE' => strtoupper($emp->title ?? ''),
+                'DIVISION' => strtoupper(optional(optional($emp->department)->division)->name ?? ''),
+                'DEPARTMENT' => strtoupper(optional($emp->department)->name ?? ''),
+                'POSITION TITLE' => strtoupper(optional($emp->plantillaItem)->title ?? ''),
+                'SALARY GRADE' => strtoupper(optional(optional($emp->plantillaItem)->salaryGrade)->salary_grade ?? ''),
+                'STEP' => strtoupper(optional($emp->stepIncrement)->step ?? ''),
+                'EMPLOYMENT TYPE' => strtoupper($emp->employment_type ?? ''),
+                'EMPLOYMENT STATUS' => strtoupper($emp->employment_status ?? '')
             ];
         });
 
+        /*
+        |--------------------------------------------------------------------------
+        | HEADER / TITLE (same behavior as your old code)
+        |--------------------------------------------------------------------------
+        */
+
+        $title = "EMPLOYEE MAPPING";
+        $divisionName = "";
+        $departmentName = "";
+
+        if ($deptId && $deptId !== 'All' && $employees->isNotEmpty()) {
+
+            $first = $employees->first();
+
+            $departmentName = strtoupper(optional($first->department)->name ?? '');
+            $divisionName = strtoupper(optional(optional($first->department)->division)->name ?? '');
+
+            $title = trim($divisionName . " - " . $departmentName);
+        }
+
         return response()->json([
+            'title' => $title,
+            'division' => $divisionName,
+            'department' => $departmentName,
             'report' => $rows
         ]);
     }

@@ -33,11 +33,8 @@ return new class extends Migration {
 
       $table->enum('status', [
         'FILLED',
-        'UNFILLED',
-        'FOR_PSB',
-        'PENDING_APPOINTMENT',
-        'IMPENDING',
-      ])->default('UNFILLED');
+        'VACANT',
+      ])->default('VACANT');
 
       $table->foreignId('salary_grade_id')
         ->constrained('salary_grades')

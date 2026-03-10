@@ -13,7 +13,7 @@ return new class extends Migration {
       $table->foreignId('employee_id')
         ->constrained('employees')
         ->cascadeOnDelete()
-        ->unique(); // 1:1
+        ->unique();
 
       $table->string('email')->nullable();
       $table->string('contact')->nullable();

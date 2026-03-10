@@ -14,34 +14,32 @@ class EmployeeController extends Controller
 {
     /*
     |--------------------------------------------------------------------------
-    | BASE QUERY (Shared by index + all)
+    | BASE QUERY
     |--------------------------------------------------------------------------
     */
+
     private function employeeQuery(Request $request)
     {
         $query = Employee::with([
             'info',
             'parents',
-            'primaryAssignment.plantillaItem.department',
-            'primaryAssignment.plantillaItem.division'
+            'department',
+            'primaryAssignment.plantillaItem.salaryGrade',
+            'primaryAssignment.stepIncrement'
         ]);
 
         if ($request->filled('search')) {
 
-            $s = strtolower(trim($request->input('search')));
+            $s = trim($request->search);
 
             $query->where(function ($q) use ($s) {
 
-                $q->whereRaw("LOWER(first_name) LIKE ?", ["%{$s}%"])
-                  ->orWhereRaw("LOWER(middle_name) LIKE ?", ["%{$s}%"])
-                  ->orWhereRaw("LOWER(last_name) LIKE ?", ["%{$s}%"])
-                  ->orWhereRaw("
-                      LOWER(CONCAT(
-                          COALESCE(first_name,''),' ',
-                          COALESCE(middle_name,''),' ',
-                          COALESCE(last_name,'')
-                      )) LIKE ?
-                  ", ["%{$s}%"]);
+                $q->where('first_name', 'LIKE', "%{$s}%")
+                ->orWhere('middle_name', 'LIKE', "%{$s}%")
+                ->orWhere('last_name', 'LIKE', "%{$s}%")
+                ->orWhereRaw("
+                    CONCAT_WS(' ', first_name, middle_name, last_name) LIKE ?
+                ", ["%{$s}%"]);
             });
         }
 
@@ -50,14 +48,56 @@ class EmployeeController extends Controller
 
     /*
     |--------------------------------------------------------------------------
+    | VALIDATION RULES
+    |--------------------------------------------------------------------------
+    */
+
+    private function rules($employeeId = null)
+    {
+        return [
+
+            'employee_number' => [
+                'sometimes',
+                Rule::unique('employees','employee_number')->ignore($employeeId)
+            ],
+
+            'role_position' => ['sometimes','string'],
+            'department_id' => ['sometimes','exists:departments,id'],
+
+            'first_name' => ['sometimes'],
+            'middle_name' => ['nullable'],
+            'last_name' => ['sometimes'],
+            'suffix' => ['nullable'],
+
+            'employment_type' => ['nullable'],
+            'employment_status' => ['nullable'],
+
+            'position_designation' => ['nullable'],
+
+            'plantilla_item_id' => ['nullable','exists:plantilla_items,id'],
+
+            'annual_salary' => ['nullable','numeric'],
+            'monthly_salary' => ['nullable','numeric'],
+
+            'address' => ['nullable'],
+            'birthdate' => ['nullable','date'],
+
+            'avatar_url' => ['nullable','image','mimes:jpg,jpeg,png','max:10240'],
+
+            'parent_ids' => ['nullable','array'],
+            'parent_ids.*' => ['exists:employees,id'],
+        ];
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | PAGINATED EMPLOYEES
     |--------------------------------------------------------------------------
     */
+
     public function index(Request $request)
     {
-        $query = $this->employeeQuery($request);
-
-        return $query->paginate(20);
+        return $this->employeeQuery($request)->paginate(20);
     }
 
     /*
@@ -65,11 +105,10 @@ class EmployeeController extends Controller
     | ALL EMPLOYEES
     |--------------------------------------------------------------------------
     */
+
     public function all(Request $request)
     {
-        $query = $this->employeeQuery($request);
-
-        return $query->get();
+        return $this->employeeQuery($request)->get();
     }
 
     /*
@@ -77,37 +116,24 @@ class EmployeeController extends Controller
     | STORE
     |--------------------------------------------------------------------------
     */
+
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'employee_number' => ['required','unique:employees,employee_number'],
-            'role_position' => ['required','string'],
-            'first_name' => ['required'],
-            'last_name' => ['required'],
-            'avatar_url' => ['nullable','image','mimes:jpg,jpeg,png','max:10240'],
-            'parent_ids' => ['nullable','array'],
-            'parent_ids.*' => ['exists:employees,id'],
-        ]);
+        $data = $request->validate($this->rules());
 
-        return DB::transaction(function () use ($request, &$data) {
+        return DB::transaction(function () use ($request, $data) {
 
             if ($request->hasFile('avatar_url')) {
-                $path = $request->file('avatar_url')->store('avatars', 'public');
-                $data['avatar_url'] = $path;
+                $data['avatar_url'] = $request
+                    ->file('avatar_url')
+                    ->store('avatars', 'public');
             }
 
             $employee = Employee::create(
                 collect($data)->except('parent_ids')->toArray()
             );
 
-            if (!empty($data['parent_ids'])) {
-                foreach ($data['parent_ids'] as $parentId) {
-                    EmployeeHierarchy::create([
-                        'employee_id' => $employee->id,
-                        'parent_id' => $parentId,
-                    ]);
-                }
-            }
+            $this->syncParents($employee, $data['parent_ids'] ?? []);
 
             return $employee->load([
                 'info',
@@ -122,22 +148,12 @@ class EmployeeController extends Controller
     | UPDATE
     |--------------------------------------------------------------------------
     */
+
     public function update(Request $request, Employee $employee)
     {
-        $data = $request->validate([
-            'employee_number' => [
-                'sometimes',
-                Rule::unique('employees','employee_number')->ignore($employee->id)
-            ],
-            'role_position' => ['sometimes','string'],
-            'first_name' => ['sometimes'],
-            'last_name' => ['sometimes'],
-            'avatar_url' => ['nullable','image','mimes:jpg,jpeg,png','max:10240'],
-            'parent_ids' => ['nullable','array'],
-            'parent_ids.*' => ['exists:employees,id'],
-        ]);
+        $data = $request->validate($this->rules($employee->id));
 
-        return DB::transaction(function () use ($employee, $request, &$data) {
+        return DB::transaction(function () use ($request, $employee, $data) {
 
             if ($request->hasFile('avatar_url')) {
 
@@ -145,8 +161,9 @@ class EmployeeController extends Controller
                     Storage::disk('public')->delete($employee->avatar_url);
                 }
 
-                $path = $request->file('avatar_url')->store('avatars', 'public');
-                $data['avatar_url'] = $path;
+                $data['avatar_url'] = $request
+                    ->file('avatar_url')
+                    ->store('avatars', 'public');
             }
 
             $employee->update(
@@ -154,16 +171,7 @@ class EmployeeController extends Controller
             );
 
             if (array_key_exists('parent_ids', $data)) {
-
-                EmployeeHierarchy::where('employee_id', $employee->id)
-                    ->delete();
-
-                foreach ($data['parent_ids'] ?? [] as $parentId) {
-                    EmployeeHierarchy::create([
-                        'employee_id' => $employee->id,
-                        'parent_id' => $parentId,
-                    ]);
-                }
+                $this->syncParents($employee, $data['parent_ids']);
             }
 
             return $employee->fresh()->load([
@@ -176,9 +184,29 @@ class EmployeeController extends Controller
 
     /*
     |--------------------------------------------------------------------------
+    | SYNC PARENTS
+    |--------------------------------------------------------------------------
+    */
+
+    private function syncParents(Employee $employee, array $parents)
+    {
+        EmployeeHierarchy::where('employee_id', $employee->id)->delete();
+
+        foreach ($parents as $parentId) {
+
+            EmployeeHierarchy::create([
+                'employee_id' => $employee->id,
+                'parent_id' => $parentId
+            ]);
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | DELETE
     |--------------------------------------------------------------------------
     */
+
     public function destroy(Employee $employee)
     {
         EmployeeHierarchy::where('employee_id', $employee->id)
@@ -187,6 +215,8 @@ class EmployeeController extends Controller
 
         $employee->delete();
 
-        return response()->json(['message' => 'Deleted successfully']);
+        return response()->json([
+            'message' => 'Deleted successfully'
+        ]);
     }
 }

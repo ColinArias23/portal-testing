@@ -18,8 +18,8 @@ class AuthController extends Controller
         ]);
 
         $user = User::with([
-            'employee.primaryAssignment.plantillaItem.department',
-            'employee.primaryAssignment.plantillaItem.division'
+            'employee.department.division',
+            'employee.primaryAssignment.plantillaItem.salaryGrade'
         ])->where('email', $data['email'])->first();
 
         if (!$user || !Hash::check($data['password'], $user->password)) {
@@ -29,9 +29,12 @@ class AuthController extends Controller
         }
 
         $user->tokens()->delete();
+
         $token = $user->createToken('api-token')->plainTextToken;
 
-        $primary = $user->employee?->primaryAssignment;
+        $primaryAssignment = $user->employee?->primaryAssignment;
+        $department = $user->employee?->department;
+        $division = $department?->division;
 
         return response()->json([
             'success' => true,
@@ -42,7 +45,9 @@ class AuthController extends Controller
                 'roles' => $user->getRoleNames(),
                 'permissions' => $user->getAllPermissions()->pluck('name'),
                 'employee' => $user->employee,
-                'primary_unit' => $primary?->division?->name,
+                'department' => $department?->name,
+                'division' => $division?->name,
+                'position' => $primaryAssignment?->plantillaItem?->title,
             ],
         ]);
     }
@@ -51,6 +56,8 @@ class AuthController extends Controller
     {
         $request->user()?->currentAccessToken()?->delete();
 
-        return response()->json(['success' => true]);
+        return response()->json([
+            'success' => true
+        ]);
     }
 }

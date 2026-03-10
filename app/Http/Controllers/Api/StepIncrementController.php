@@ -16,7 +16,7 @@ class StepIncrementController extends Controller
             $q->where('salary_grade_id', $request->integer('salary_grade_id'));
         }
 
-        return $q->orderBy('salary_grade_id')->orderBy('step')->paginate(50);
+        return $q->orderBy('salary_grade_id')->orderBy('step')->get();
     }
 
     public function store(Request $request)

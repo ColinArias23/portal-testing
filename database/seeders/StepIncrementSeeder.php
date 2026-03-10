@@ -10,6 +10,7 @@ class StepIncrementSeeder extends Seeder
 {
     public function run(): void
     {
+
         $data = [
 
 1 => [11068,11160,11254,11348,11443,11538,11635,11732],
@@ -47,19 +48,33 @@ class StepIncrementSeeder extends Seeder
 33 => [388096,399739],
         ];
 
+
         foreach ($data as $grade => $steps) {
 
-            $salaryGrade = SalaryGrade::where('salary_grade', $grade)->first();
+            // make sure salary grade exists
+            $salaryGrade = SalaryGrade::firstOrCreate([
+                'salary_grade' => $grade
+            ]);
 
             foreach ($steps as $index => $amount) {
 
-                StepIncrement::create([
-                    'salary_grade_id' => $salaryGrade->id,
-                    'step' => $index + 1,
-                    'description' => "Step " . ($index + 1),
-                    'increment_amount' => $amount,
-                ]);
+                StepIncrement::updateOrCreate(
+
+                    [
+                        'salary_grade_id' => $salaryGrade->id,
+                        'step' => $index + 1
+                    ],
+
+                    [
+                        'description' => 'Step ' . ($index + 1),
+                        'increment_amount' => $amount
+                    ]
+
+                );
+
             }
+
         }
+
     }
 }

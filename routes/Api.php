@@ -62,6 +62,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
         'plantilla-items'  => PlantillaItemController::class,
     ]);
 
+    /*
+    |--------------------------------------------------------------------------
+    | PLANTILLA EXTRA
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get('/plantilla-items/{id}/steps',[PlantillaItemController::class, 'steps']);
 
     /*
     |--------------------------------------------------------------------------
@@ -88,13 +95,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
         Route::get('/tree', [ManpowerMappingController::class, 'tree']);
         Route::get('/report', [ManpowerMappingController::class, 'report']);
-
+        
         Route::get('/department/{id}', [ManpowerMappingController::class, 'departmentHierarchy']);
 
-        Route::get('/plantilla/count', [ManpowerController::class, 'plantillaCount']);
-        Route::get('/cos/count', [ManpowerController::class, 'cosCount']);
-        Route::get('/consultant/count', [ManpowerController::class, 'consultantCount']);
-        Route::get('/vacant/count', [ManpowerController::class, 'vacantCount']);
+        // Route::get('/plantilla/count', [ManpowerController::class, 'plantillaCount']);
+        // Route::get('/cos/count', [ManpowerController::class, 'cosCount']);
+        // Route::get('/consultant/count', [ManpowerController::class, 'consultantCount']);
+        // Route::get('/vacant/count', [ManpowerController::class, 'vacantCount']);
 
         Route::get('/summary', [ManpowerController::class, 'summary']);
         Route::get('/overstaffed', [ManpowerController::class, 'overstaffed']);

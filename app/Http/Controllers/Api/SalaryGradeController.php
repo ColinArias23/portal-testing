@@ -24,7 +24,7 @@ class SalaryGradeController extends Controller
         return SalaryGrade::create($data);
     }
 
-    public function show(SalaryGrade $salaryGrade)
+    public function show(SalaryGrade $salaryGrade): SalaryGrade
     {
         return $salaryGrade->load('stepIncrements');
     }
