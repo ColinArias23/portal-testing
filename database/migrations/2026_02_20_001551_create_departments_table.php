@@ -21,13 +21,7 @@ return new class extends Migration {
             $table->string('name');
             $table->text('description')->nullable();
 
-            // remove FK to avoid circular dependency
             $table->unsignedBigInteger('head_employee_id')->nullable();
-            // $table->foreignId('head_employee_id')
-            //        ->nullable()
-            //        ->constrained('employees')
-            //        ->nullOnDelete();
-
             $table->timestamps();
 
             $table->unique(['division_id', 'code']);

@@ -5,60 +5,54 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
-  public function up(): void
-  {
-    Schema::create('plantilla_items', function (Blueprint $table) {
-      $table->id();
 
-      /*
-      |--------------------------------------------------------------------------
-      | ORGANIZATIONAL LINK
-      |--------------------------------------------------------------------------
-      | Every plantilla item must belong to a Department.
-      | Division is already linked through Department.
-      */
-      // $table->foreignId('department_id')
-      //       ->constrained('departments')
-      //       ->cascadeOnDelete();
+    public function up(): void
+    {
+        Schema::create('plantilla_items', function (Blueprint $table) {
 
-      // $table->foreignId('division_id')->nullable()
-      //   ->constrained('divisions')->nullOnDelete();
+            $table->id();
 
-      /*
-      |--------------------------------------------------------------------------
-      | POSITION DETAILS
-      |--------------------------------------------------------------------------
-      */
-      $table->string('item_number')->unique();
+            $table->string('item_number')->unique();
 
-      $table->enum('status', [
-        'FILLED',
-        'VACANT',
-      ])->default('VACANT');
+            $table->string('title');
 
-      $table->foreignId('salary_grade_id')
-        ->constrained('salary_grades')
-        ->restrictOnDelete();
+            $table->text('description')->nullable();
 
-      $table->string('title');
-      $table->text('description')->nullable();
+            $table->enum('status', [
+                'FILLED',
+                'VACANT',
+            ])->default('VACANT');
 
-      $table->timestamps();
+            /*
+            |--------------------------------
+            | SALARY GRADE
+            |--------------------------------
+            */
 
-      /*
-      |--------------------------------------------------------------------------
-      | INDEXES
-      |--------------------------------------------------------------------------
-      */
-      // $table->index('department_id');
-      $table->index('status');
+            $table->foreignId('salary_grade_id')
+                ->nullable()
+                ->constrained('salary_grades')
+                ->restrictOnDelete();
 
-    //   $table->index(['division_id']);
-    });
-  }
+            /*
+            |--------------------------------
+            | STEP
+            |--------------------------------
+            */
 
-  public function down(): void
-  {
-    Schema::dropIfExists('plantilla_items');
-  }
+            $table->foreignId('step_increment_id')
+                ->nullable()
+                ->constrained('step_increments')
+                ->restrictOnDelete();
+
+            $table->timestamps();
+
+            $table->index('status');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('plantilla_items');
+    }
 };

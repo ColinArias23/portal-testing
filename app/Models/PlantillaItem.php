@@ -10,6 +10,7 @@ class PlantillaItem extends Model
         'item_number',
         'status',
         'salary_grade_id',
+        'step_increment_id',
         'title',
         'description',
     ];
@@ -23,6 +24,11 @@ class PlantillaItem extends Model
     public function salaryGrade()
     {
         return $this->belongsTo(SalaryGrade::class);
+    }
+
+    public function stepIncrement()
+    {
+        return $this->belongsTo(StepIncrement::class);
     }
 
     public function assignments()
@@ -76,7 +82,7 @@ class PlantillaItem extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | AUTO STATUS
+    | COMPUTED STATUS
     |--------------------------------------------------------------------------
     */
 
@@ -111,7 +117,8 @@ class PlantillaItem extends Model
 
     public function scopeOverstaffed($query)
     {
-        return $query->withCount(['activeAssignments'])
+        return $query
+            ->withCount('activeAssignments')
             ->having('active_assignments_count', '>', 1);
     }
 }

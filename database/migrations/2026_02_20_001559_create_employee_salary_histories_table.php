@@ -8,70 +8,52 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('employees', function (Blueprint $table) {
+        Schema::create('employee_salary_histories', function (Blueprint $table) {
 
             $table->id();
 
             /*
             |--------------------------------------------------------------------------
-            | BASIC INFO
+            | EMPLOYEE
             |--------------------------------------------------------------------------
             */
 
-            $table->string('employee_number')->unique();
-            $table->string('role_position')->nullable();
+            $table->foreignId('employee_id')
+                ->constrained('employees')
+                ->cascadeOnDelete();
 
             /*
             |--------------------------------------------------------------------------
-            | ORGANIZATIONAL ASSIGNMENT
+            | SALARY RECORD
             |--------------------------------------------------------------------------
             */
 
-            // Employee belongs to a department
-            $table->foreignId('department_id')
-                ->nullable()
-                ->constrained('departments')
-                ->nullOnDelete();
+            $table->decimal('gross_salary', 12, 2);
+            $table->decimal('annual_salary', 12, 2);
 
             /*
             |--------------------------------------------------------------------------
-            | NAME FIELDS
+            | OPTIONAL REFERENCES
             |--------------------------------------------------------------------------
             */
 
-            $table->string('prefix')->nullable();
-            $table->string('first_name');
-            $table->string('middle_name')->nullable();
-            $table->string('last_name');
-            $table->string('suffix')->nullable();
-
-            $table->string('position_designation')->nullable();
-            $table->string('title')->nullable();
-
+            $table->unsignedTinyInteger('salary_grade')->nullable();
+            $table->unsignedTinyInteger('step')->nullable();
 
             /*
             |--------------------------------------------------------------------------
-            | EMPLOYMENT INFO
+            | DATE RANGE
             |--------------------------------------------------------------------------
             */
 
-            $table->enum('employment_type', ['Plantilla', 'Consultant', 'COS'])
-                ->default('COS');
-
-            $table->enum('employment_status', ['Active', 'Inactive', 'Resign'])
-                ->default('Active');
+            $table->date('effective_date');
+            $table->date('end_date')->nullable();
 
             /*
             |--------------------------------------------------------------------------
-            | ORG CHART SETTINGS
+            | NOTES
             |--------------------------------------------------------------------------
             */
-
-            $table->string('avatar_url')->nullable();
-            $table->string('border_color')->nullable();
-
-            $table->boolean('aligned')->default(false);
-            $table->boolean('expanded')->default(false);
 
             $table->text('notes')->nullable();
 
@@ -83,12 +65,12 @@ return new class extends Migration
             |--------------------------------------------------------------------------
             */
 
-            $table->index('department_id');
+            $table->index(['employee_id','effective_date']);
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('employees');
+        Schema::dropIfExists('employee_salary_histories');
     }
 };

@@ -10,7 +10,11 @@ class SalaryGradeController extends Controller
 {
     public function index()
     {
-        return SalaryGrade::orderBy('salary_grade')->paginate(50);
+        return SalaryGrade::orderBy('salary_grade')
+            ->get([
+                'id',
+                'salary_grade'
+            ]);
     }
 
     public function store(Request $request)

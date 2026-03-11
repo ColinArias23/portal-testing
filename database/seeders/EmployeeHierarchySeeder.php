@@ -11,14 +11,14 @@ class EmployeeHierarchySeeder extends Seeder
     {
         DB::table('employee_hierarchy')->insert([
             ['parent_id' => null, 'employee_id' => 1,],
+            ['parent_id' => 1, 'employee_id' => 5,],
             ['parent_id' => 1, 'employee_id' => 4,],
+            ['parent_id' => 1, 'employee_id' => 7,],
+            ['parent_id' => 1, 'employee_id' => 8,],
             ['parent_id' => 1, 'employee_id' => 2,],
             ['parent_id' => 1, 'employee_id' => 3,],
             ['parent_id' => 1, 'employee_id' => 189,],
-            ['parent_id' => 4, 'employee_id' => 5,],
             ['parent_id' => 4, 'employee_id' => 6,],
-            ['parent_id' => 4, 'employee_id' => 7,],
-            ['parent_id' => 4, 'employee_id' => 8,],
             ['parent_id' => 5, 'employee_id' => 55,],
             ['parent_id' => 5, 'employee_id' => 106,],
             ['parent_id' => 5, 'employee_id' => 99,],

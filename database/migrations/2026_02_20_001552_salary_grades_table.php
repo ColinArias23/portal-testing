@@ -9,7 +9,7 @@ return new class extends Migration {
     {
         Schema::create('salary_grades', function (Blueprint $table) {
             $table->id();
-            $table->unsignedSmallInteger('salary_grade')->unique(); // SG number
+            $table->unsignedSmallInteger('salary_grade')->unique();
             $table->decimal('monthly_salary', 12, 2)->nullable();
             $table->decimal('annual_salary', 12, 2)->nullable();
             $table->timestamps();

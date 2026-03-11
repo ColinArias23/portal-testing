@@ -13,13 +13,6 @@ return new class extends Migration {
             $table->string('code')->unique();
             $table->string('name');
             $table->text('description')->nullable();
-
-            // $table->foreignId('head_employee_id')
-            //        ->nullable()
-            //        ->constrained('employees')
-            //        ->nullOnDelete();
-
-            // remove FK to avoid circular dependency
             $table->unsignedBigInteger('head_employee_id')->nullable();
             
             $table->timestamps();

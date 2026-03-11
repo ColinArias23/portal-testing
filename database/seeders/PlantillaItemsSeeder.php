@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\PlantillaItem;
 use App\Models\SalaryGrade;
+use App\Models\StepIncrement;
 
 class PlantillaItemsSeeder extends Seeder
 {
@@ -203,7 +204,7 @@ class PlantillaItemsSeeder extends Seeder
       [   'status' => 'FILLED',              'item_no' => '81-3',   'sg' => 16, 'title' => 'NURSE II'],
       [   'status' => 'FILLED',              'item_no' => '81-4',   'sg' => 16, 'title' => 'NURSE II'],
       [   'status' => 'FILLED',              'item_no' => '82-1',   'sg' => 15, 'title' => 'NURSE I'],
-      [   'status' => 'VACANT '   ,           'item_no' => '82-2',   'sg' => 15, 'title' => 'NURSE I'],
+      [   'status' => 'VACANT',              'item_no' => '82-2',   'sg' => 15, 'title' => 'NURSE I'],
       [   'status' => 'FILLED',              'item_no' => '82-3',   'sg' => 15, 'title' => 'NURSE I'],
       [   'status' => 'VACANT',              'item_no' => '82-4',   'sg' => 15, 'title' => 'NURSE I'],
       [   'status' => 'FILLED',              'item_no' => '82-5',   'sg' => 15, 'title' => 'NURSE I'],
@@ -378,11 +379,11 @@ class PlantillaItemsSeeder extends Seeder
       [   'status' => 'VACANT',              'item_no' => '108-5',  'sg' => 4,  'title' => 'NURSING ATTENDANT I'],
       [   'status' => 'VACANT',              'item_no' => '109',    'sg' => 24, 'title' => 'CHIEF ADMINISTRATIVE OFFICER (ADMINISTRATIVE OFFICER V)'],
       [   'status' => 'FILLED',              'item_no' => '110',    'sg' => 7,  'title' => 'ADMINISTRATIVE ASSISTANT I'],
-      [   'status' => 'VACANT '   ,           'item_no' => '111',    'sg' => 6,  'title' => 'ADMINISTRATIVE AIDE VI (CLERK III)'],
+      [   'status' => 'VACANT',              'item_no' => '111',    'sg' => 6,  'title' => 'ADMINISTRATIVE AIDE VI (CLERK III)'],
       [   'status' => 'VACANT',              'item_no' => '112',    'sg' => 18, 'title' => 'ADMINISTRATIVE OFFICER V (HUMAN RESOURCE MANAGEMENT OFFICER III)'],
       [   'status' => 'VACANT',              'item_no' => '113',    'sg' => 15, 'title' => 'ADMINISTRATIVE OFFICER IV (HUMAN RESOURCE MANAGEMENT OFFICER II)'],
-      [   'status' => 'VACANT '   ,           'item_no' => '114',    'sg' => 14, 'title' => 'ADMINISTRATIVE OFFICER III'],
-      [   'status' => 'VACANT '   ,           'item_no' => '115',    'sg' => 11, 'title' => 'ADMINISTRATIVE OFFICER II (HUMAN RESOURCE MANAGEMENT OFFICER I)'],
+      [   'status' => 'VACANT',              'item_no' => '114',    'sg' => 14, 'title' => 'ADMINISTRATIVE OFFICER III'],
+      [   'status' => 'VACANT',              'item_no' => '115',    'sg' => 11, 'title' => 'ADMINISTRATIVE OFFICER II (HUMAN RESOURCE MANAGEMENT OFFICER I)'],
       [   'status' => 'VACANT',              'item_no' => '116-1',  'sg' => 8,  'title' => 'ADMINISTRATIVE ASSISTANT II (HUMAN RESOURCE MANAGEMENT ASSISTANT I)'],
       [   'status' => 'VACANT',              'item_no' => '116-2',  'sg' => 8,  'title' => 'ADMINISTRATIVE ASSISTANT II (HUMAN RESOURCE MANAGEMENT ASSISTANT I)'],
       [   'status' => 'VACANT',              'item_no' => '117',    'sg' => 18, 'title' => 'ADMINISTRATIVE OFFICER V (SUPPLY OFFICER III)'],
@@ -391,7 +392,7 @@ class PlantillaItemsSeeder extends Seeder
       [   'status' => 'VACANT',              'item_no' => '120-1',  'sg' => 7,  'title' => 'ADMINISTRATIVE ASSISTANT I (COMPUTER OPERATOR I)'],
       [   'status' => 'VACANT',              'item_no' => '120-2',  'sg' => 7,  'title' => 'ADMINISTRATIVE ASSISTANT I (COMPUTER OPERATOR I)'],
       [   'status' => 'VACANT',              'item_no' => '121',    'sg' => 18, 'title' => 'ADMINISTRATIVE OFFICER V (BUDGET OFFICER III)'],
-      [   'status' => 'VACANT '   ,           'item_no' => '122',    'sg' => 15, 'title' => 'ADMINISTRATIVE OFFICER IV (BUDGET OFFICER II)'],
+      [   'status' => 'VACANT',              'item_no' => '122',    'sg' => 15, 'title' => 'ADMINISTRATIVE OFFICER IV (BUDGET OFFICER II)'],
       [   'status' => 'VACANT',              'item_no' => '123',    'sg' => 8,  'title' => 'ADMINISTRATIVE ASSISTANT II (BUDGETING ASSISTANT)'],
       [   'status' => 'VACANT',              'item_no' => '124',    'sg' => 18, 'title' => 'ADMINISTRATIVE OFFICER V (SUPPLY OFFICER III)'],
       [   'status' => 'VACANT',              'item_no' => '125',    'sg' => 8,  'title' => 'WAREHOUSEMAN II'],
@@ -419,12 +420,12 @@ class PlantillaItemsSeeder extends Seeder
       [   'status' => 'FILLED',              'item_no' => '137-3',  'sg' => 3,  'title' => 'ADMINISTRATIVE AIDE III'],
       [   'status' => 'VACANT',              'item_no' => '138-1',  'sg' => 6,  'title' => 'ADMINISTRATIVE AIDE VI (UTILITY FOREMAN)'],
       [   'status' => 'VACANT',              'item_no' => '138-2',  'sg' => 6,  'title' => 'ADMINISTRATIVE AIDE VI (UTILITY FOREMAN)'],
-      [   'status' => 'VACANT '   ,           'item_no' => '139-1',  'sg' => 3,  'title' => 'LAUNDRY WORKER II'],
+      [   'status' => 'VACANT',              'item_no' => '139-1',  'sg' => 3,  'title' => 'LAUNDRY WORKER II'],
       [   'status' => 'FILLED',              'item_no' => '139-2',  'sg' => 3,  'title' => 'LAUNDRY WORKER II'],
-      [   'status' => 'VACANT '   ,           'item_no' => '140',    'sg' => 2,  'title' => 'SEAMSTRESS'],
+      [   'status' => 'VACANT',              'item_no' => '140',    'sg' => 2,  'title' => 'SEAMSTRESS'],
       [   'status' => 'VACANT',              'item_no' => '141',    'sg' => 19, 'title' => 'ACCOUNTANT III'],
       [   'status' => 'FILLED',              'item_no' => '142',    'sg' => 16, 'title' => 'ACCOUNTANT II'],
-      [   'status' => 'VACANT '   ,           'item_no' => '143-1',  'sg' => 8,  'title' => 'ADMINISTRATIVE ASSISTANT II (ACCOUNTING CLERK III)'],
+      [   'status' => 'VACANT',              'item_no' => '143-1',  'sg' => 8,  'title' => 'ADMINISTRATIVE ASSISTANT II (ACCOUNTING CLERK III)'],
       [   'status' => 'FILLED',              'item_no' => '143-2',  'sg' => 8,  'title' => 'ADMINISTRATIVE ASSISTANT II (ACCOUNTING CLERK III)'],
       [   'status' => 'FILLED',              'item_no' => '143-3',  'sg' => 8,  'title' => 'ADMINISTRATIVE ASSISTANT II (ACCOUNTING CLERK III)'],
       [   'status' => 'VACANT',              'item_no' => '143-4',  'sg' => 8,  'title' => 'ADMINISTRATIVE ASSISTANT II (ACCOUNTING CLERK III)'],
@@ -445,14 +446,18 @@ class PlantillaItemsSeeder extends Seeder
     ];
        foreach ($rows as $r) {
 
-            // ✅ Normalize status (handles "VACANT"  etc.)
             $status = strtoupper(str_replace(' ', '_', trim($r['status'])));
 
-            // ✅ Find salary grade id
+            /*
+            ===============================
+            GET SALARY GRADE
+            ===============================
+            */
+
             $sg = SalaryGrade::where('salary_grade', $r['sg'])->first();
 
             if (!$sg) {
-                // if wala pang salary grade seed, skip or create
+
                 $sg = SalaryGrade::create([
                     'salary_grade' => $r['sg'],
                     'monthly_salary' => null,
@@ -460,12 +465,28 @@ class PlantillaItemsSeeder extends Seeder
                 ]);
             }
 
+            /*
+            ===============================
+            GET STEP 1
+            ===============================
+            */
+
+            $step = StepIncrement::where('salary_grade_id', $sg->id)
+                ->where('step', 1)
+                ->first();
+
+            /*
+            ===============================
+            CREATE PLANTILLA
+            ===============================
+            */
+
             PlantillaItem::updateOrCreate(
-                ['item_number' => $r['item_no']], // ✅ unique key
+                ['item_number' => $r['item_no']],
                 [
-                    // 'department_id' => $r['department_id'],
-                    'status' => $status,            // ✅ enum value
-                    'salary_grade_id' => $sg->id,   // ✅ required FKs
+                    'status' => $status,
+                    'salary_grade_id' => $sg->id,
+                    'step_increment_id' => $step?->id, // auto step 1
                     'title' => $r['title'],
                     'description' => $r['description'] ?? null,
                 ]

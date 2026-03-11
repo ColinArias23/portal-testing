@@ -25,7 +25,6 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
 
 // Public utilities (if needed)
-Route::get('/employees/all', [EmployeeController::class, 'all']);
 Route::get('/pending-users/count', [UserController::class, 'pendingCount']);
 
 
@@ -97,11 +96,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/report', [ManpowerMappingController::class, 'report']);
         
         Route::get('/department/{id}', [ManpowerMappingController::class, 'departmentHierarchy']);
-
-        // Route::get('/plantilla/count', [ManpowerController::class, 'plantillaCount']);
-        // Route::get('/cos/count', [ManpowerController::class, 'cosCount']);
-        // Route::get('/consultant/count', [ManpowerController::class, 'consultantCount']);
-        // Route::get('/vacant/count', [ManpowerController::class, 'vacantCount']);
 
         Route::get('/summary', [ManpowerController::class, 'summary']);
         Route::get('/overstaffed', [ManpowerController::class, 'overstaffed']);

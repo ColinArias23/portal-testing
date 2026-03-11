@@ -53,10 +53,6 @@ class Employee extends Model
 
         static::created(function ($employee) {
 
-            if (!$employee->plantilla_item_id) {
-                return;
-            }
-
             // Prevent 2 employees in same plantilla
             $exists = EmployeeAssignment::where('plantilla_item_id', $employee->plantilla_item_id)
                 ->whereNull('end_date')
@@ -87,12 +83,8 @@ class Employee extends Model
                 return;
             }
 
-            if (!$employee->plantilla_item_id) {
-                return;
-            }
-
-            // Prevent duplicate assignment
             $exists = EmployeeAssignment::where('plantilla_item_id', $employee->plantilla_item_id)
+                ->whereNull('end_date')
                 ->whereNull('end_date')
                 ->exists();
 
@@ -100,7 +92,6 @@ class Employee extends Model
                 throw new \Exception("Plantilla item already occupied.");
             }
 
-            // Close previous assignment
             EmployeeAssignment::where('employee_id', $employee->id)
                 ->whereNull('end_date')
                 ->update([
@@ -108,7 +99,6 @@ class Employee extends Model
                     'is_primary' => false
                 ]);
 
-            // Create new assignment
             EmployeeAssignment::create([
                 'employee_id' => $employee->id,
                 'plantilla_item_id' => $employee->plantilla_item_id,
@@ -266,6 +256,11 @@ class Employee extends Model
             'parent_id',
             'employee_id'
         );
+    }
+
+    public function salaryHistories()
+    {
+        return $this->hasMany(EmployeeSalaryHistory::class);
     }
 
     /*
