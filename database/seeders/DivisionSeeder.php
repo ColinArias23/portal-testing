@@ -19,7 +19,7 @@ class DivisionSeeder extends Seeder
             ],
             [
                 'code' => 'MED',  
-                'name' => 'MEDICAL SERVICE', 
+                'name' => 'MEDICAL DIRECTOR', 
                 'description' => 'Handles medical services for patients.',
                 'head_employee_id' => 5,
                 'parent_id' => 1

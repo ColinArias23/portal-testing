@@ -14,6 +14,11 @@ class Division extends Model
         'parent_id',
     ];
 
+    public function employees()
+    {
+        return $this->hasMany(Employee::class);
+    }
+    
     public function head()
     {
         return $this->belongsTo(Employee::class, 'head_employee_id');

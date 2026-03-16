@@ -18,85 +18,92 @@ class EmployeeController extends Controller
         $query = Employee::with([
             'info',
             'parents',
-            'department',
+            'division',
             'primaryAssignment.plantillaItem.salaryGrade',
-            'primaryAssignment.stepIncrement'
+            'primaryAssignment.stepIncrement',
         ]);
+
+        // ── Full-text search ──────────────────────────────────────────────
         if ($request->filled('search')) {
             $s = trim($request->search);
             $query->where(function ($q) use ($s) {
                 $q->where('first_name', 'LIKE', "%{$s}%")
-                ->orWhere('middle_name', 'LIKE', "%{$s}%")
-                ->orWhere('last_name', 'LIKE', "%{$s}%")
-                ->orWhereRaw("
-                    CONCAT_WS(' ', first_name, middle_name, last_name) LIKE ?
-                ", ["%{$s}%"]);
+                    ->orWhere('middle_name', 'LIKE', "%{$s}%")
+                    ->orWhere('last_name', 'LIKE', "%{$s}%")
+                    ->orWhereRaw("CONCAT_WS(' ', first_name, middle_name, last_name) LIKE ?", ["%{$s}%"])
+                    ->orWhereRaw("JSON_SEARCH(role_position, 'one', ?) IS NOT NULL", ["%{$s}%"]);
             });
         }
+
+        // ── Division filter ───────────────────────────────────────────────
+        if ($request->filled('division_id')) {
+            $query->where('division_id', $request->division_id);
+        }
+
+        // ── Department filter ─────────────────────────────────────────────
+        if ($request->filled('department_id')) {
+            $deptId = (int) $request->department_id;
+            $query->where(function ($q) use ($deptId) {
+                $q->whereRaw('JSON_CONTAINS(department_ids, ?)', [json_encode($deptId)])
+                  ->orWhereRaw('JSON_CONTAINS(department_ids, ?)', [json_encode((string) $deptId)]);
+            });
+        }
+
         return $query->orderBy('last_name');
     }
+
     private function rules($employeeId = null)
     {
         return [
-            'employee_number' => [
-                'sometimes',
-                Rule::unique('employees','employee_number')->ignore($employeeId)
-            ],
-            'role_position' => ['sometimes','string'],
-            'department_id' => ['sometimes','exists:departments,id'],
-            'first_name' => ['sometimes'],
-            'middle_name' => ['nullable'],
-            'last_name' => ['sometimes'],
-            'suffix' => ['nullable'],
-            'employment_type' => ['nullable','string'],
-            'employment_status' => ['nullable','string'],
-            'position_designation' => ['nullable'],
-            'plantilla_item_id' => ['nullable','exists:plantilla_items,id'],
-            'step_increment_id' => ['nullable','exists:step_increments,id'],
-            'annual_salary' => ['nullable','numeric'],
-            'monthly_salary' => ['nullable','numeric'],
-            'address' => ['nullable'],
-            'birthdate' => ['nullable','date'],
-            'avatar_url' => ['nullable','image','mimes:jpg,jpeg,png','max:10240'],
-            'parent_ids' => ['nullable','array'],
-            'parent_ids.*' => ['exists:employees,id'],
+            'employee_number'        => ['sometimes', Rule::unique('employees', 'employee_number')->ignore($employeeId)],
+            'role_position'          => ['nullable', 'array'],
+            'role_position.*'        => ['string'],
+            'department_ids'         => ['nullable', 'array'],
+            'department_ids.*'       => ['exists:departments,id'],
+            'division_id'            => ['nullable', 'exists:divisions,id'],
+            'first_name'             => ['sometimes'],
+            'middle_name'            => ['nullable'],
+            'last_name'              => ['sometimes'],
+            'suffix'                 => ['nullable'],
+            'title'                  => ['nullable', 'array'],
+            'title.*'                => ['string'],
+            'employment_type'        => ['nullable', 'in:Plantilla,Contract of Service,Consultant'],
+            'employment_status'      => ['nullable', 'string'],
+            'position_designation'   => ['nullable', 'array'],
+            'position_designation.*' => ['string'],
+            'plantilla_item_id'      => ['nullable', 'exists:plantilla_items,id'],
+            'step_increment_id'      => ['nullable', 'exists:step_increments,id'],
+            'annual_salary'          => ['nullable', 'numeric'],
+            'monthly_salary'         => ['nullable', 'numeric'],
+            'address'                => ['nullable'],
+            'birthdate'              => ['nullable', 'date'],
+            'avatar_url'             => ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:10240'],
+            'parent_ids'             => ['nullable', 'array'],
+            'parent_ids.*'           => ['exists:employees,id'],
         ];
     }
-        public function index(Request $request)
-        {
-            $query = Employee::with([
-                'info',
-                'department',
-                'parents',
-                'primaryAssignment.plantillaItem.salaryGrade',
-                'primaryAssignment.stepIncrement'
-            ]);
 
-            if ($request->filled('search')) {
+    public function index(Request $request)
+    {
+        return $this->employeeQuery($request)->paginate($request->per_page ?? 10);
+    }
 
-                $s = trim($request->search);
-
-                $query->where(function ($q) use ($s) {
-                    $q->where('first_name','LIKE',"%{$s}%")
-                    ->orWhere('middle_name','LIKE',"%{$s}%")
-                    ->orWhere('last_name','LIKE',"%{$s}%")
-                    ->orWhereRaw("
-                        CONCAT_WS(' ', first_name, middle_name, last_name) LIKE ?
-                    ", ["%{$s}%"]);
-                });
-            }
-
-            return $this->employeeQuery($request)->paginate(10);
-        }
     public function store(Request $request)
     {
         $data = $request->validate($this->rules());
+
         return DB::transaction(function () use ($request, $data) {
             if ($request->hasFile('avatar_url')) {
                 $data['avatar_url'] = $request
                     ->file('avatar_url')
                     ->store('avatars', 'public');
             }
+
+            $data['department_ids']       = array_map('intval', $request->department_ids ?? []);
+            $data['role_position']        = $request->role_position         ?? [];
+            $data['title']                = $request->title                 ?? [];
+            $data['position_designation'] = $request->position_designation  ?? [];
+
             $employee = Employee::create(
                 collect($data)->except([
                     'parent_ids',
@@ -106,44 +113,55 @@ class EmployeeController extends Controller
                     'address',
                     'birthdate',
                     'contact',
-                    'email'
+                    'email',
                 ])->toArray()
             );
+
             $employee->info()->create([
                 'gender'    => $request->gender,
                 'address'   => $request->address,
                 'birthdate' => $request->birthdate,
                 'contact'   => $request->contact,
-                'email'     => $request->email
+                'email'     => $request->email,
             ]);
-            $this->syncAssignment($employee, $request);
 
+            $this->syncAssignment($employee, $request);
             $this->syncParents($employee, $data['parent_ids'] ?? []);
 
             return $employee->fresh()->load([
                 'info',
                 'parents',
-                'department',
+                'division',
                 'primaryAssignment.plantillaItem.salaryGrade',
-                'primaryAssignment.stepIncrement'
+                'primaryAssignment.stepIncrement',
             ]);
         });
     }
+
     public function update(Request $request, Employee $employee)
     {
         $data = $request->validate($this->rules($employee->id));
 
         return DB::transaction(function () use ($request, $employee, $data) {
             if ($request->hasFile('avatar_url')) {
+                $rawAvatar = DB::table('employees')
+                    ->where('id', $employee->id)
+                    ->value('avatar_url');
 
-                if ($employee->avatar_url) {
-                    Storage::disk('public')->delete($employee->avatar_url);
+                if ($rawAvatar) {
+                    Storage::disk('public')->delete($rawAvatar);
                 }
 
                 $data['avatar_url'] = $request
                     ->file('avatar_url')
                     ->store('avatars', 'public');
             }
+
+            $data['department_ids']       = array_map('intval', $request->department_ids ?? []);
+            $data['role_position']        = $request->role_position         ?? [];
+            $data['title']                = $request->title                 ?? [];
+            $data['position_designation'] = $request->position_designation  ?? [];
+
             $employee->update(
                 collect($data)->except([
                     'parent_ids',
@@ -153,9 +171,10 @@ class EmployeeController extends Controller
                     'address',
                     'birthdate',
                     'contact',
-                    'email'
+                    'email',
                 ])->toArray()
             );
+
             $employee->info()->updateOrCreate(
                 ['employee_id' => $employee->id],
                 [
@@ -163,52 +182,83 @@ class EmployeeController extends Controller
                     'address'   => $request->address,
                     'birthdate' => $request->birthdate,
                     'contact'   => $request->contact,
-                    'email'     => $request->email
+                    'email'     => $request->email,
                 ]
             );
+
             $this->syncAssignment($employee, $request);
-            if (array_key_exists('parent_ids', $data)) {
-                $this->syncParents($employee, $data['parent_ids']);
+
+            // ── Sync parents ──────────────────────────────────────────────
+            // The frontend sends "_sync_parents=1" on every update so we know
+            // this request intends to sync parents — even when clearing all.
+            // Using a dedicated flag avoids issues with Laravel's
+            // ConvertEmptyStringsToNull middleware swallowing empty parent_ids.
+            if ($request->input('_sync_parents') === '1') {
+                $parentIds = array_filter(
+                    array_map('intval', (array) ($request->input('parent_ids') ?? []))
+                );
+                $this->syncParents($employee, $parentIds);
             }
+
             return $employee->fresh()->load([
                 'info',
                 'parents',
-                'department',
+                'division',
                 'primaryAssignment.plantillaItem.salaryGrade',
-                'primaryAssignment.stepIncrement'
+                'primaryAssignment.stepIncrement',
             ]);
         });
     }
+
     private function syncParents(Employee $employee, array $parents)
     {
         EmployeeHierarchy::where('employee_id', $employee->id)->delete();
 
         foreach ($parents as $parentId) {
-
+            if (!$parentId) continue;
             EmployeeHierarchy::create([
                 'employee_id' => $employee->id,
-                'parent_id' => $parentId
+                'parent_id'   => $parentId,
             ]);
         }
     }
+
     private function syncAssignment(Employee $employee, Request $request)
     {
         if (!$request->has('plantilla_item_id')) {
             return;
         }
 
+        $newPlantillaId = $request->plantilla_item_id ?: null;
+        $newStepId      = $request->step_increment_id ?: null;
+
+        if (!$newPlantillaId) {
+            return;
+        }
+
+        $occupied = EmployeeAssignment::where('plantilla_item_id', $newPlantillaId)
+            ->where('employee_id', '!=', $employee->id)
+            ->whereNull('end_date')
+            ->exists();
+
+        if ($occupied) {
+            throw new \Exception("Plantilla item is already occupied by another employee.");
+        }
+
         EmployeeAssignment::updateOrCreate(
             [
                 'employee_id' => $employee->id,
-                'is_primary' => true
+                'is_primary'  => true,
             ],
             [
-                'plantilla_item_id' => $request->plantilla_item_id,
-                'step_increment_id' => $request->step_increment_id,
-                'start_date' => now()
+                'plantilla_item_id' => $newPlantillaId,
+                'step_increment_id' => $newStepId,
+                'start_date'        => now(),
+                'end_date'          => null,
             ]
         );
     }
+
     public function destroy(Employee $employee)
     {
         EmployeeHierarchy::where('employee_id', $employee->id)
@@ -217,8 +267,6 @@ class EmployeeController extends Controller
 
         $employee->delete();
 
-        return response()->json([
-            'message' => 'Deleted successfully'
-        ]);
+        return response()->json(['message' => 'Deleted successfully']);
     }
 }

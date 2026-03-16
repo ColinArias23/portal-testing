@@ -14,8 +14,9 @@ class Employee extends Model
 {
     protected $fillable = [
         'employee_number',
-        'role_position',
-        'department_id',
+        'role_position',        // JSON array
+        'division_id',
+        'department_ids',       // JSON array
         'plantilla_item_id',
         'step_increment_id',
         'prefix',
@@ -34,83 +35,18 @@ class Employee extends Model
         'notes',
     ];
 
-    protected $appends = ['full_name'];
+    protected $casts = [
+    'title'                => 'array',
+    'role_position'        => 'array',
+    'position_designation' => 'array',
+    'department_ids'       => 'array',
+    ];
+
+    protected $appends = ['full_name', 'departments'];
 
     /*
     |--------------------------------------------------------------------------
-    | AUTO CREATE EMPLOYEE ASSIGNMENT
-    |--------------------------------------------------------------------------
-    */
-
-    protected static function booted()
-    {
-
-        /*
-        |--------------------------------------------------------------------------
-        | WHEN EMPLOYEE CREATED
-        |--------------------------------------------------------------------------
-        */
-
-        static::created(function ($employee) {
-
-            // Prevent 2 employees in same plantilla
-            $exists = EmployeeAssignment::where('plantilla_item_id', $employee->plantilla_item_id)
-                ->whereNull('end_date')
-                ->exists();
-
-            if ($exists) {
-                throw new \Exception("Plantilla item already occupied.");
-            }
-
-            EmployeeAssignment::create([
-                'employee_id' => $employee->id,
-                'plantilla_item_id' => $employee->plantilla_item_id,
-                'start_date' => now(),
-                'is_primary' => true
-            ]);
-        });
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | WHEN PLANTILLA CHANGES
-        |--------------------------------------------------------------------------
-        */
-
-        static::updated(function ($employee) {
-
-            if (!$employee->wasChanged('plantilla_item_id')) {
-                return;
-            }
-
-            $exists = EmployeeAssignment::where('plantilla_item_id', $employee->plantilla_item_id)
-                ->whereNull('end_date')
-                ->whereNull('end_date')
-                ->exists();
-
-            if ($exists) {
-                throw new \Exception("Plantilla item already occupied.");
-            }
-
-            EmployeeAssignment::where('employee_id', $employee->id)
-                ->whereNull('end_date')
-                ->update([
-                    'end_date' => now(),
-                    'is_primary' => false
-                ]);
-
-            EmployeeAssignment::create([
-                'employee_id' => $employee->id,
-                'plantilla_item_id' => $employee->plantilla_item_id,
-                'start_date' => now(),
-                'is_primary' => true
-            ]);
-        });
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Accessor
+    | Accessors
     |--------------------------------------------------------------------------
     */
 
@@ -121,15 +57,9 @@ class Employee extends Model
             $this->first_name,
             $this->middle_name,
             $this->last_name,
-            $this->suffix
+            $this->suffix,
         ])->filter()->implode(' ');
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Avatar
-    |--------------------------------------------------------------------------
-    */
 
     public function getAvatarUrlAttribute($value)
     {
@@ -140,9 +70,18 @@ class Employee extends Model
         return asset('storage/' . $value);
     }
 
+    /**
+     * Returns role_position as a comma-separated string for display.
+     * e.g. ["CHIEF", "OIC"] → "CHIEF, OIC"
+     */
+    public function getRolePositionLabelAttribute(): string
+    {
+        return collect($this->role_position)->filter()->implode(', ');
+    }
+
     /*
     |--------------------------------------------------------------------------
-    | Employee Info
+    | Relationships
     |--------------------------------------------------------------------------
     */
 
@@ -151,15 +90,13 @@ class Employee extends Model
         return $this->hasOne(EmployeeInfo::class);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Department / Division
-    |--------------------------------------------------------------------------
-    */
-
-    public function department()
+    public function getDepartmentsAttribute()
     {
-        return $this->belongsTo(\App\Models\Department::class);
+        if (!$this->department_ids) {
+            return [];
+        }
+
+        return \App\Models\Department::whereIn('id', $this->department_ids)->get();
     }
 
     public function division()
@@ -167,33 +104,16 @@ class Employee extends Model
         return $this->belongsTo(Division::class);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Plantilla
-    |--------------------------------------------------------------------------
-    */
-
     public function plantillaItem()
     {
         return $this->belongsTo(PlantillaItem::class, 'plantilla_item_id');
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Assignments
-    |--------------------------------------------------------------------------
-    */
 
     public function assignments()
     {
         return $this->hasMany(EmployeeAssignment::class);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Primary Assignment (used by EmployeeController)
-    |--------------------------------------------------------------------------
-    */
     public function primaryAssignment()
     {
         return $this->hasOne(EmployeeAssignment::class)
@@ -201,32 +121,15 @@ class Employee extends Model
             ->where('is_primary', true);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Active Assignment (optional alias)
-    |--------------------------------------------------------------------------
-    */
     public function activeAssignment()
     {
         return $this->primaryAssignment();
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Step Increment
-    |--------------------------------------------------------------------------
-    */
-
     public function stepIncrement()
     {
         return $this->belongsTo(StepIncrement::class);
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Hierarchy
-    |--------------------------------------------------------------------------
-    */
 
     public function hierarchy()
     {
@@ -265,21 +168,20 @@ class Employee extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | Search
+    | Scopes
     |--------------------------------------------------------------------------
     */
 
     public function scopeSearch($query, $s)
     {
         return $query->where(function ($q) use ($s) {
-
             $q->where('employee_number', 'like', "%{$s}%")
               ->orWhere('first_name', 'like', "%{$s}%")
               ->orWhere('middle_name', 'like', "%{$s}%")
               ->orWhere('last_name', 'like', "%{$s}%")
-              ->orWhere('role_position', 'like', "%{$s}%")
               ->orWhere('title', 'like', "%{$s}%");
-
+            // NOTE: JSON search for role_position — use JSON_CONTAINS or LIKE on the raw column
+            // ->orWhereRaw("JSON_SEARCH(role_position, 'one', ?) IS NOT NULL", ["%{$s}%"])
         });
     }
 }

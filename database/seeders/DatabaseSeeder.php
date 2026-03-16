@@ -18,7 +18,7 @@ class DatabaseSeeder extends Seeder
             EmployeeHierarchySeeder::class,
             // RbacSeeder::class,
             UserSeeder::class,
-            EmployeeAssignmentSeeder::class,
+            // EmployeeAssignmentSeeder::class,
         ]);
     }
 }

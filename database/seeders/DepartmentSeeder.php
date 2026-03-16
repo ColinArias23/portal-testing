@@ -66,7 +66,7 @@ class DepartmentSeeder extends Seeder
             ['division_code' => 'HOPSS','code' => 'SEC&P', 'name' => 'SECURITY','type' => 'DEPARTMENT', 'head_employee_id' => 361],
             ['division_code' => 'HOPSS','code' => 'MEDREC', 'name' => 'MEDICAL RECORDS','type' => 'DEPARTMENT', 'head_employee_id' => 111],
             ['division_code' => 'HOPSS','code' => 'IT', 'name' => 'INFORMATION TECHNOLOGY','type' => 'DEPARTMENT', 'head_employee_id' => 85],
-            ['division_code' => 'HOPSS','code' => 'DP', 'name' => 'DATA PROTECTION','type' => 'DEPARTMENT', 'head_employee_id' => 189],
+            ['division_code' => 'HOPSS','code' => 'DPO', 'name' => 'DATA PROTECTION OFFICE','type' => 'DEPARTMENT', 'head_employee_id' => 189],
             ['division_code' => 'HOPSS','code' => 'CRM', 'name' => 'CUSTOMER RELATIONS MANAGEMENT','type' => 'DEPARTMENT', 'head_employee_id' => 134],
             ['division_code' => 'HOPSS','code' => 'PCS', 'name' => 'PATIENT CARE SUPPORT SERVICES CLUSTER','type' => 'DEPARTMENT', 'head_employee_id' => 158],
             ['division_code' => 'HOPSS','code' => 'MSS', 'name' => 'MEDICAL SOCIAL SERVICE','type' => 'DEPARTMENT', 'head_employee_id' => 138],
@@ -78,7 +78,8 @@ class DepartmentSeeder extends Seeder
             ['division_code' => 'CN','code' => 'IP&CNS', 'name' => 'INFECTION PREVENTION & CONTROL NURSE','type' => 'DEPARTMENT', 'head_employee_id' => 100],
             ['division_code' => 'CN','code' => 'NQ&AN', 'name' => 'NURSING QUALITY & ASSURANCE NURSE','type' => 'DEPARTMENT', 'head_employee_id' => 472],
             ['division_code' => 'CH','code' => 'FIN', 'name' => 'FINANCE DEPARTMENT','type' => 'DEPARTMENT', 'head_employee_id' => 7],
-            ['division_code' => 'MED','code' => 'MED-DIR', 'name' => 'MEDICAL DIRECTOR','type' => 'DEPARTMENT', 'head_employee_id' => 5],
+            ['division_code' => 'MCC','code' => 'PHU', 'name' => 'PUBLIC HEALTH UNIT','type' => 'DEPARTMENT', 'head_employee_id' => 2],
+            ['division_code' => 'MCC','code' => 'QRMRCO', 'name' => 'QUALITY, RISK MANAGEMENT & REGULATION COMPLIANCE OFFICE','type' => 'DEPARTMENT', 'head_employee_id' => 3],
         ];
 
 

@@ -19,7 +19,7 @@ return new class extends Migration
             */
 
             $table->string('employee_number')->unique();
-            $table->string('role_position')->nullable();
+            $table->json('role_position')->nullable();   // ← now JSON array
 
             /*
             |--------------------------------------------------------------------------
@@ -27,11 +27,13 @@ return new class extends Migration
             |--------------------------------------------------------------------------
             */
 
-            // Employee belongs to a department
-            $table->foreignId('department_id')
+            $table->foreignId('division_id')
                 ->nullable()
-                ->constrained('departments')
+                ->constrained('divisions')
                 ->nullOnDelete();
+
+            // Employee can belong to many departments (stored as JSON array)
+            $table->json('department_ids')->nullable();  // ← replaces department_id
 
             /*
             |--------------------------------------------------------------------------
@@ -45,9 +47,8 @@ return new class extends Migration
             $table->string('last_name');
             $table->string('suffix')->nullable();
 
-            $table->string('position_designation')->nullable();
+            $table->json('position_designation')->nullable();
             $table->string('title')->nullable();
-
 
             /*
             |--------------------------------------------------------------------------
@@ -55,8 +56,8 @@ return new class extends Migration
             |--------------------------------------------------------------------------
             */
 
-            $table->enum('employment_type', ['Plantilla', 'Consultant', 'COS'])
-                ->default('COS');
+            $table->enum('employment_type', ['Plantilla', 'Consultant', 'Contract of Service'])
+                ->default('Contract of Service');
 
             $table->enum('employment_status', ['Active', 'Inactive', 'Resign'])
                 ->default('Active');
@@ -83,7 +84,7 @@ return new class extends Migration
             |--------------------------------------------------------------------------
             */
 
-            $table->index('department_id');
+            $table->index('division_id');
         });
     }
 
