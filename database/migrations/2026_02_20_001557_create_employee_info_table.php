@@ -15,11 +15,11 @@ return new class extends Migration {
         ->cascadeOnDelete()
         ->unique();
 
-      $table->string('email')->nullable();
       $table->string('contact')->nullable();
       $table->string('address')->nullable();
       $table->date('birthdate')->nullable();
       $table->string('gender')->nullable();
+      $table->enum('status', ['COMPLETE', 'INCOMPLETE', 'EMPTY'])->default('EMPTY');
       $table->timestamps();
     });
   }

@@ -23,6 +23,8 @@ return new class extends Migration {
                 'VACANT',
             ])->default('VACANT');
 
+            $table->date('date_of_assumption')->nullable();
+
             /*
             |--------------------------------
             | SALARY GRADE

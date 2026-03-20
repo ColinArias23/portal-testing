@@ -6,19 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\Employee;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class DepartmentController extends Controller
 {
     public function index()
     {
-        // Use a consistent eager-load across all actions — load the full
-        // head relationship so callers always get the same shape.
         return Department::with(['head', 'division'])
             ->orderBy('name')
             ->get();
     }
-
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -31,12 +27,10 @@ class DepartmentController extends Controller
 
         return Department::create($data)->load(['head', 'division']);
     }
-
     public function show(Department $department)
     {
         return $department->load(['head', 'division']);
     }
-
     public function update(Request $request, Department $department)
     {
         $data = $request->validate([
@@ -46,31 +40,23 @@ class DepartmentController extends Controller
             'description'      => ['nullable', 'string'],
             'head_employee_id' => ['nullable', 'exists:employees,id'],
         ]);
-
         $department->update($data);
-
         return $department->fresh(['head', 'division']);
     }
-
     public function destroy(Department $department)
     {
-        // Remove this department's ID from every employee's JSON department_ids
-        // array.  MySQL's JSON_REMOVE needs the exact path; we locate it first
-        // via JSON_SEARCH and then strip it in a single UPDATE per row.
-        //
-        // Because JSON_SEARCH returns the path of the *first* match and
-        // department_ids should never hold duplicate IDs, one pass is enough.
-        DB::statement("
-            UPDATE employees
-            SET department_ids = JSON_REMOVE(
-                department_ids,
-                JSON_UNQUOTE(JSON_SEARCH(department_ids, 'one', ?))
-            )
-            WHERE JSON_CONTAINS(department_ids, ?)
-        ", [$department->id, json_encode($department->id)]);
-
+        $deptId = $department->id;
+        Employee::select('id', 'department_ids')
+            ->get()
+            ->each(function ($emp) use ($deptId) {
+                $ids = $emp->department_ids ?? [];
+                if (!in_array($deptId, $ids)) return; 
+                $emp->department_ids = array_values(
+                    array_filter($ids, fn($id) => $id !== $deptId)
+                );
+                $emp->save();
+            });
         $department->delete();
-
         return response()->json(['message' => 'Department deleted.']);
     }
 }

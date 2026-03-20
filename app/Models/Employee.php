@@ -14,9 +14,9 @@ class Employee extends Model
 {
     protected $fillable = [
         'employee_number',
-        'role_position',        // JSON array
+        'role_position',
         'division_id',
-        'department_ids',       // JSON array
+        'department_ids',
         'plantilla_item_id',
         'step_increment_id',
         'prefix',
@@ -36,21 +36,17 @@ class Employee extends Model
     ];
 
     protected $casts = [
-    'title'                => 'array',
-    'role_position'        => 'array',
-    'position_designation' => 'array',
-    'department_ids'       => 'array',
+        'role_position'        => 'array',
+        'position_designation' => 'array',
+        'department_ids'       => 'array',
+        'title'                => 'array',
+        'aligned'              => 'boolean',
+        'expanded'             => 'boolean',
     ];
 
-    protected $appends = ['full_name', 'departments'];
+    protected $appends = ['full_name'];
 
-    /*
-    |--------------------------------------------------------------------------
-    | Accessors
-    |--------------------------------------------------------------------------
-    */
-
-    public function getFullNameAttribute()
+    public function getFullNameAttribute(): string
     {
         return collect([
             $this->prefix,
@@ -61,42 +57,36 @@ class Employee extends Model
         ])->filter()->implode(' ');
     }
 
-    public function getAvatarUrlAttribute($value)
+    public function getAvatarUrlAttribute($value): ?string
     {
-        if (!$value) {
-            return null;
-        }
-
-        return asset('storage/' . $value);
+        return $value ?: null;
     }
 
-    /**
-     * Returns role_position as a comma-separated string for display.
-     * e.g. ["CHIEF", "OIC"] → "CHIEF, OIC"
-     */
     public function getRolePositionLabelAttribute(): string
     {
         return collect($this->role_position)->filter()->implode(', ');
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Relationships
-    |--------------------------------------------------------------------------
-    */
 
     public function info()
     {
         return $this->hasOne(EmployeeInfo::class);
     }
 
-    public function getDepartmentsAttribute()
+    protected static function booted(): void
     {
-        if (!$this->department_ids) {
-            return [];
-        }
+        static::updated(function (Employee $employee) {
+            if ($employee->wasChanged(['first_name', 'last_name', 'avatar_url'])) {
+                $employee->info?->save();
+            }
+        });
+    }
 
-        return \App\Models\Department::whereIn('id', $this->department_ids)->get();
+    public function getDepartmentsAttribute(): array
+    {
+        if (!$this->department_ids) return [];
+        return \App\Models\Department::whereIn('id', $this->department_ids)
+            ->get(['id', 'name'])
+            ->toArray();
     }
 
     public function division()
@@ -166,22 +156,9 @@ class Employee extends Model
         return $this->hasMany(EmployeeSalaryHistory::class);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Scopes
-    |--------------------------------------------------------------------------
-    */
-
     public function scopeSearch($query, $s)
     {
         return $query->where(function ($q) use ($s) {
-            $q->where('employee_number', 'like', "%{$s}%")
-              ->orWhere('first_name', 'like', "%{$s}%")
-              ->orWhere('middle_name', 'like', "%{$s}%")
-              ->orWhere('last_name', 'like', "%{$s}%")
-              ->orWhere('title', 'like', "%{$s}%");
-            // NOTE: JSON search for role_position — use JSON_CONTAINS or LIKE on the raw column
-            // ->orWhereRaw("JSON_SEARCH(role_position, 'one', ?) IS NOT NULL", ["%{$s}%"])
         });
     }
 }

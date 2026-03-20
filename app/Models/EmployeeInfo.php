@@ -11,12 +11,45 @@ class EmployeeInfo extends Model
 
     protected $fillable = [
         'employee_id',
-        'email',
         'contact',
         'address',
         'birthdate',
         'gender',
+        'status',
     ];
+
+    private const REQUIRED_FIELDS = ['contact', 'address', 'birthdate', 'gender'];
+
+    protected static function booted(): void
+    {
+        static::saving(function (EmployeeInfo $info) {
+            $info->status = $info->computeStatus();
+        });
+    }
+
+    public function computeStatus(): string
+    {
+        // Check info fields
+        $infoFilled = collect(self::REQUIRED_FIELDS)
+            ->filter(fn($field) => !empty($this->$field))
+            ->count();
+
+        $employee     = $this->employee;
+        $nameFilled   = !empty($employee?->first_name) && !empty($employee?->last_name);
+        $avatarFilled = !empty($employee?->avatar_url);
+
+        $totalRequired = count(self::REQUIRED_FIELDS) + 3; 
+        $totalFilled   = $infoFilled
+            + ($nameFilled ? 2 : (
+                (!empty($employee?->first_name) ? 1 : 0) +
+                (!empty($employee?->last_name)  ? 1 : 0)
+            ))
+            + ($avatarFilled ? 1 : 0);
+
+        if ($totalFilled === 0)              return 'EMPTY';
+        if ($totalFilled === $totalRequired) return 'COMPLETE';
+        return 'INCOMPLETE';
+    }
 
     public function employee(): BelongsTo
     {
