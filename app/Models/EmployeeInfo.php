@@ -29,22 +29,21 @@ class EmployeeInfo extends Model
 
     public function computeStatus(): string
     {
-        // Check info fields
         $infoFilled = collect(self::REQUIRED_FIELDS)
             ->filter(fn($field) => !empty($this->$field))
             ->count();
 
-        $employee     = $this->employee;
-        $nameFilled   = !empty($employee?->first_name) && !empty($employee?->last_name);
-        $avatarFilled = !empty($employee?->avatar_url);
+        $employee = $this->employee;
 
-        $totalRequired = count(self::REQUIRED_FIELDS) + 3; 
-        $totalFilled   = $infoFilled
-            + ($nameFilled ? 2 : (
-                (!empty($employee?->first_name) ? 1 : 0) +
-                (!empty($employee?->last_name)  ? 1 : 0)
-            ))
-            + ($avatarFilled ? 1 : 0);
+        $firstNameFilled = !empty($employee?->first_name) ? 1 : 0;
+        $lastNameFilled  = !empty($employee?->last_name)  ? 1 : 0;
+
+        // Check avatar the same way ProfileController does — via file_exists
+        $rawAvatarPath = $employee?->getRawOriginal('avatar_url');
+        $avatarFilled  = ($rawAvatarPath && file_exists(storage_path('app/public/' . $rawAvatarPath))) ? 1 : 0;
+
+        $totalRequired = count(self::REQUIRED_FIELDS) + 3; // contact, address, birthdate, gender + first_name, last_name, avatar
+        $totalFilled   = $infoFilled + $firstNameFilled + $lastNameFilled + $avatarFilled;
 
         if ($totalFilled === 0)              return 'EMPTY';
         if ($totalFilled === $totalRequired) return 'COMPLETE';

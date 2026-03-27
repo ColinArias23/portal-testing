@@ -14,41 +14,37 @@ class RbacSeeder extends Seeder
     {
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        // ✅ Use web guard (Sanctum typically authenticates as web guard)
         $guard = 'web';
 
         $permissions = [
             'dashboard.view',
-
-            'departments.view',
-            'departments.manage',
-
-            'divisions.view',
-            'divisions.manage',
-
             'employees.view',
             'employees.manage',
-
+            'analytics.view',
+            'trainings.view',
+            'trainings.manage',
+            'trainings.join',
+            'team.view',
+            'leave.view',
+            'leave.manage',
+            'leave.approve',
+            'accounts.view',
+            'accounts.manage',
+            'departments.view',
+            'departments.manage',
             'plantilla_items.view',
             'plantilla_items.manage',
-
-            'salary_grades.view',
-            'salary_grades.manage',
-
-            'step_increments.view',
-            'step_increments.manage',
-
-            'item_numbers.view',
-            'item_numbers.manage',
-
-            'users.view',
-            'users.manage',
-
+            'hiring.view',
+            'hiring.manage',
+            'announcements.view',
+            'announcements.manage',
             'manpower.view',
             'manpower.manage',
-
-            'roles.manage',
-            'permissions.manage',
+            'spms.view',
+            'spms.manage',
+            'users.view',
+            'users.manage',
+            'notifications.view',
         ];
 
         foreach ($permissions as $name) {
@@ -58,48 +54,143 @@ class RbacSeeder extends Seeder
             ]);
         }
 
-        // Roles
+        // ── Roles ──────────────────────────────────────────────────────────
         $superAdmin = Role::firstOrCreate(['name' => 'SuperAdmin', 'guard_name' => $guard]);
-        $admin      = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => $guard]);
-        $hr         = Role::firstOrCreate(['name' => 'HR', 'guard_name' => $guard]);
-        $employee   = Role::firstOrCreate(['name' => 'Employee', 'guard_name' => $guard]);
+        $admin      = Role::firstOrCreate(['name' => 'Admin',      'guard_name' => $guard]);
+        $director   = Role::firstOrCreate(['name' => 'Director',   'guard_name' => $guard]);
+        $hr         = Role::firstOrCreate(['name' => 'HR',         'guard_name' => $guard]);
+        $head       = Role::firstOrCreate(['name' => 'Head',       'guard_name' => $guard]);
+        $supervisor = Role::firstOrCreate(['name' => 'Supervisor', 'guard_name' => $guard]);
+        $staff      = Role::firstOrCreate(['name' => 'Staff',      'guard_name' => $guard]);
 
-        // SuperAdmin = all permissions
-        $superAdmin->syncPermissions(Permission::where('guard_name', $guard)->get());
+        $allPermissions = Permission::where('guard_name', $guard)->get();
 
-        // Admin
-        $admin->syncPermissions(
+        // ── SuperAdmin — all permissions ───────────────────────────────────
+        $superAdmin->syncPermissions($allPermissions);
+
+        // ── Admin — all permissions ────────────────────────────────────────
+        $admin->syncPermissions($allPermissions);
+
+        // ── Director ───────────────────────────────────────────────────────
+        $director->syncPermissions([
             'dashboard.view',
-            'manpower.view',
-        );
-
-        // HR
-        $hr->syncPermissions(
+            'employees.view',
+            'analytics.view',
+            'trainings.view',
+            'trainings.join',
+            'team.view',
+            'leave.view',
+            'leave.approve',
+            'accounts.view',
+            'departments.view',
+            'plantilla_items.view',
+            'hiring.view',
+            'announcements.view',
+            'announcements.manage',
             'manpower.view',
             'manpower.manage',
-        );
+            'spms.view',
+            'spms.manage',
+            'notifications.view',
+        ]);
 
-        // Employee
-        $employee->syncPermissions(
+        // ── HR ─────────────────────────────────────────────────────────────
+        $hr->syncPermissions([
             'dashboard.view',
-        );
+            'employees.view',
+            'employees.manage',
+            'analytics.view',
+            'trainings.view',
+            'trainings.manage',
+            'trainings.join',
+            'team.view',
+            'leave.view',
+            'leave.manage',
+            'leave.approve',
+            'accounts.view',
+            'accounts.manage',
+            'departments.view',
+            'departments.manage',
+            'plantilla_items.view',
+            'plantilla_items.manage',
+            'hiring.view',
+            'hiring.manage',
+            'announcements.view',
+            'announcements.manage',
+            'manpower.view',
+            'manpower.manage',
+            'spms.view',
+            'spms.manage',
+            'users.view',
+            'users.manage',
+            'notifications.view',
+        ]);
 
-        // Assign roles by email (only if they exist)
+        // ── Head ───────────────────────────────────────────────────────────
+        $head->syncPermissions([
+            'dashboard.view',
+            'employees.view',
+            'analytics.view',
+            'trainings.view',
+            'trainings.join',
+            'team.view',
+            'leave.view',
+            'leave.approve',
+            'accounts.view',
+            'departments.view',
+            'plantilla_items.view',
+            'hiring.view',
+            'announcements.view',
+            'announcements.manage',
+            'manpower.view',
+            'spms.view',
+            'spms.manage',
+            'notifications.view',
+        ]);
+
+        // ── Supervisor ─────────────────────────────────────────────────────
+        $supervisor->syncPermissions([
+            'dashboard.view',
+            'employees.view',
+            'trainings.view',
+            'trainings.join',
+            'team.view',
+            'leave.view',
+            'leave.approve',
+            'announcements.view',
+            'announcements.manage',
+            'spms.view',
+            'spms.manage',
+            'notifications.view',
+        ]);
+
+        // ── Staff ──────────────────────────────────────────────────────────
+        $staff->syncPermissions([
+            'dashboard.view',
+            'trainings.view',
+            'trainings.join',
+            'team.view',
+            'leave.view',
+            'announcements.view',
+            'announcements.manage',
+            'spms.view',
+            'spms.manage',
+            'notifications.view',
+        ]);
+
+        // ── Assign roles by email ──────────────────────────────────────────
         $this->assignRoleByEmail('superadmin@local.test', 'SuperAdmin');
-        $this->assignRoleByEmail('admin@local.test', 'Admin');
-        $this->assignRoleByEmail('hr@local.test', 'HR');
-        $this->assignRoleByEmail('employee@local.test', 'Employee');
+        $this->assignRoleByEmail('admin@local.test',      'Admin');
+        $this->assignRoleByEmail('hr@local.test',         'HR');
+        $this->assignRoleByEmail('staff@local.test',      'Staff');
 
-        // ✅ clear permission cache again to be safe
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 
     private function assignRoleByEmail(string $email, string $role): void
     {
         $user = User::where('email', $email)->first();
-
         if ($user) {
-            // make sure roles are attached with correct guard
             $user->syncRoles([$role]);
         }
     }

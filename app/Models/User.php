@@ -10,7 +10,7 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasRoles;
 
-    protected $guard_name = 'sanctum';
+    protected $guard_name = 'web';
 
     protected $fillable = ['employee_id','email','password','approval_status','approved_at','approved_by'];
 

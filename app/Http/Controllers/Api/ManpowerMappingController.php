@@ -16,6 +16,77 @@ class ManpowerMappingController extends Controller
 
     /*
     |--------------------------------------------------------------------------
+    | HELPER — Resolve avatar URL
+    |--------------------------------------------------------------------------
+    */
+
+    private function resolveAvatar(?string $avatarUrl): string
+    {
+        if (!$avatarUrl) {
+            return self::DEFAULT_AVATAR;
+        }
+
+        if (str_starts_with($avatarUrl, 'http://') || str_starts_with($avatarUrl, 'https://')) {
+            return $avatarUrl;
+        }
+
+        return asset('storage/' . $avatarUrl);
+    }
+
+    /**
+     * Decode a column that may be stored as a JSON string or already cast to array.
+     * Returns a plain PHP array of strings.
+     */
+    private function decodeJsonArray(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+        if (is_string($value) && str_starts_with(trim($value), '[')) {
+            $decoded = json_decode($value, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        if (is_string($value) && $value !== '') {
+            return [$value];
+        }
+        return [];
+    }
+
+    /**
+     * Build the display name in the format:
+     *   PREFIX. FIRSTNAME MIDDLEINITIAL. LASTNAME SUFFIX, TITLE1, TITLE2
+     *
+     * e.g. "DR. JUAN C. DELA CRUZ JR., MD, FPCS"
+     */
+    private function makeName(object $emp): string
+    {
+        $parts = array_filter([
+            $emp->prefix     ? strtoupper(trim($emp->prefix))     : null,
+            $emp->first_name ? strtoupper(trim($emp->first_name)) : null,
+            $emp->middle_name
+                ? strtoupper(substr(trim($emp->middle_name), 0, 1)) . '.'
+                : null,
+            $emp->last_name  ? strtoupper(trim($emp->last_name))  : null,
+            $emp->suffix     ? strtoupper(trim($emp->suffix))     : null,
+        ]);
+
+        $fullName = implode(' ', $parts);
+
+        // Append titles if present
+        $titles = collect($this->decodeJsonArray($emp->title))
+            ->map(fn($t) => strtoupper(trim($t)))
+            ->filter()
+            ->values();
+
+        if ($titles->isNotEmpty()) {
+            $fullName .= ', ' . $titles->implode(', ');
+        }
+
+        return $fullName;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | TREE
     |--------------------------------------------------------------------------
     */
@@ -79,7 +150,7 @@ class ManpowerMappingController extends Controller
                     ->each(fn($emp) => $employeeMap[$emp->id] = $emp);
             }
 
-            // ── Deduplicate & clean edges (remove self-loops & bidirectional) ─
+            // ── Deduplicate & clean edges ───────────────────────────────────
             $edgePairs  = [];
             $cleanEdges = [];
 
@@ -107,13 +178,8 @@ class ManpowerMappingController extends Controller
             }
 
             // ── Helpers ─────────────────────────────────────────────────────
-            $makeName = fn($emp) => strtoupper(trim(
-                collect([$emp->prefix, $emp->first_name, $emp->middle_name, $emp->last_name, $emp->suffix])
-                    ->filter()->implode(' ')
-            ));
-
             $resolveIsStaff = function ($emp): bool {
-                $roles = collect($emp->role_position ?? [])
+                $roles = collect($this->decodeJsonArray($emp->role_position))
                     ->map(fn($r) => trim(strtolower($r)))->filter()->values();
                 return $roles->isEmpty() || $roles->every(fn($r) => in_array($r, ['staff', 'employee']));
             };
@@ -125,25 +191,34 @@ class ManpowerMappingController extends Controller
             )->map(fn($id) => strtoupper($departmentMap[$id] ?? ''))->filter()->implode(', ');
 
             $formatEmployee = function ($emp, string $name) use (
-                $resolveIsStaff, $resolveDept, $allParentMap, $employeeMap, $makeName
+                $resolveIsStaff, $resolveDept, $allParentMap, $employeeMap
             ) {
                 $isStaff = $resolveIsStaff($emp);
 
+                $titleArray = $this->decodeJsonArray($emp->title);
+                $titleStr   = collect($titleArray)->map(fn($t) => strtoupper(trim($t)))->filter()->implode(', ');
+
                 $supervisors = collect($allParentMap[$emp->id] ?? [])
-                    ->map(fn($pid) => isset($employeeMap[$pid]) ? [
-                        'employeeId'     => $employeeMap[$pid]->id,
-                        'name'           => $makeName($employeeMap[$pid]),
-                        'prefix'         => strtoupper($employeeMap[$pid]->prefix ?? ''),
-                        'first_name'     => strtoupper($employeeMap[$pid]->first_name ?? ''),
-                        'middle_name'    => strtoupper($employeeMap[$pid]->middle_name ?? ''),
-                        'last_name'      => strtoupper($employeeMap[$pid]->last_name ?? ''),
-                        'suffix'         => strtoupper($employeeMap[$pid]->suffix ?? ''),
-                        'title'          => strtoupper(is_array($employeeMap[$pid]->title) ? implode(', ', $employeeMap[$pid]->title) : ($employeeMap[$pid]->title ?? '')),
-                        'role'           => strtoupper(collect($employeeMap[$pid]->role_position ?? [])->filter()->implode(', ')),
-                        'department'     => $resolveDept($employeeMap[$pid]),
-                        'employmentType' => strtoupper($employeeMap[$pid]->employment_type ?? ''),
-                        'image'          => $employeeMap[$pid]->avatar_url ?: self::DEFAULT_AVATAR,
-                    ] : null)
+                    ->map(function ($pid) use ($employeeMap, $resolveDept) {
+                        if (!isset($employeeMap[$pid])) return null;
+                        $p = $employeeMap[$pid];
+                        $pTitle = collect($this->decodeJsonArray($p->title))
+                            ->map(fn($t) => strtoupper(trim($t)))->filter()->implode(', ');
+                        return [
+                            'employeeId'     => $p->id,
+                            'name'           => $this->makeName($p),
+                            'prefix'         => strtoupper($p->prefix ?? ''),
+                            'first_name'     => strtoupper($p->first_name ?? ''),
+                            'middle_name'    => strtoupper($p->middle_name ?? ''),
+                            'last_name'      => strtoupper($p->last_name ?? ''),
+                            'suffix'         => strtoupper($p->suffix ?? ''),
+                            'title'          => $pTitle,
+                            'role'           => strtoupper(collect($this->decodeJsonArray($p->role_position))->filter()->implode(', ')),
+                            'department'     => $resolveDept($p),
+                            'employmentType' => strtoupper($p->employment_type ?? ''),
+                            'image'          => $this->resolveAvatar($p->avatar_url),
+                        ];
+                    })
                     ->filter()->values()->toArray();
 
                 return [
@@ -154,12 +229,12 @@ class ManpowerMappingController extends Controller
                     'middle_name'    => strtoupper($emp->middle_name ?? ''),
                     'last_name'      => strtoupper($emp->last_name ?? ''),
                     'suffix'         => strtoupper($emp->suffix ?? ''),
-                    'title'          => strtoupper(is_array($emp->title) ? implode(', ', $emp->title) : ($emp->title ?? '')),
-                    'role'           => strtoupper(collect($emp->role_position ?? [])->filter()->implode(', ')),
-                    'role_position'  => $emp->role_position ?? [],
+                    'title'          => $titleStr,
+                    'role'           => strtoupper(collect($this->decodeJsonArray($emp->role_position))->filter()->implode(', ')),
+                    'role_position'  => $this->decodeJsonArray($emp->role_position),
                     'department'     => $resolveDept($emp),
                     'employmentType' => strtoupper($emp->employment_type ?? ''),
-                    'image'          => $emp->avatar_url ?: self::DEFAULT_AVATAR,
+                    'image'          => $this->resolveAvatar($emp->avatar_url),
                     'border_color'   => $emp->border_color ?? 'gray',
                     'aligned'        => (bool) $emp->aligned,
                     'isStaff'        => $isStaff,
@@ -171,13 +246,13 @@ class ManpowerMappingController extends Controller
 
             $buildStaff = function ($managerId) use (
                 $childrenMap, $employeeMap, $showStaffAsNode,
-                $formatEmployee, $makeName, $resolveIsStaff
+                $formatEmployee, $resolveIsStaff
             ) {
                 if ($showStaffAsNode) return [];
 
                 return collect($childrenMap[$managerId] ?? [])
                     ->map(fn($childId) => isset($employeeMap[$childId]) && $resolveIsStaff($employeeMap[$childId])
-                        ? ['id' => 'staff-' . $childId, ...$formatEmployee($employeeMap[$childId], $makeName($employeeMap[$childId]))]
+                        ? ['id' => 'staff-' . $childId, ...$formatEmployee($employeeMap[$childId], $this->makeName($employeeMap[$childId]))]
                         : null
                     )
                     ->filter()->values()->toArray();
@@ -186,7 +261,7 @@ class ManpowerMappingController extends Controller
             $buildTree = function ($parentId, array $ancestorChain = []) use (
                 &$buildTree,
                 $childrenMap, $employeeMap,
-                $makeName, $buildStaff, $formatEmployee,
+                $buildStaff, $formatEmployee,
                 $showStaffAsNode, $resolveIsStaff
             ) {
                 return collect($childrenMap[$parentId] ?? [])
@@ -200,7 +275,7 @@ class ManpowerMappingController extends Controller
                         'type'     => 'person',
                         'expanded' => $showStaffAsNode ? true : (bool) $employeeMap[$childId]->expanded,
                         'data'     => [
-                            ...$formatEmployee($employeeMap[$childId], $makeName($employeeMap[$childId])),
+                            ...$formatEmployee($employeeMap[$childId], $this->makeName($employeeMap[$childId])),
                             'staff' => $buildStaff($childId),
                         ],
                         'children' => $buildTree($childId, [...$ancestorChain, $childId]),
@@ -216,7 +291,7 @@ class ManpowerMappingController extends Controller
                     'type'     => 'person',
                     'expanded' => $showStaffAsNode ? true : (bool) $root->expanded,
                     'data'     => [
-                        ...$formatEmployee($root, $makeName($root)),
+                        ...$formatEmployee($root, $this->makeName($root)),
                         'staff' => $buildStaff($root->id),
                     ],
                     'children' => $buildTree($root->id, [$root->id]),
@@ -311,14 +386,17 @@ class ManpowerMappingController extends Controller
                     : json_decode($emp->department_ids ?? '[]', true)
             )->map(fn($id) => strtoupper($departmentMap[$id] ?? ''))->filter()->implode(', ');
 
+            $titleArr = $this->decodeJsonArray($emp->title);
+            $titleStr = collect($titleArr)->map(fn($t) => strtoupper(trim($t)))->filter()->implode(', ');
+
             return [
                 'EMPLOYEE NUMBER'   => strtoupper($emp->employee_number ?? ''),
                 'PREFIX'            => strtoupper($emp->prefix ?? ''),
                 'FIRST NAME'        => strtoupper($emp->first_name ?? ''),
                 'MIDDLE NAME'       => strtoupper($emp->middle_name ?? ''),
                 'LAST NAME'         => strtoupper($emp->last_name ?? ''),
-                'TITLE'             => strtoupper(is_array($emp->title) ? implode(', ', $emp->title) : ($emp->title ?? '')),
-                'ROLE POSITION'     => strtoupper(collect($emp->role_position ?? [])->filter()->implode(', ')),
+                'TITLE'             => $titleStr,
+                'ROLE POSITION'     => strtoupper(collect($this->decodeJsonArray($emp->role_position))->filter()->implode(', ')),
                 'DEPARTMENT'        => $deptLabel,
                 'DIVISION'          => strtoupper(optional($emp->division)->name ?? ''),
                 'POSITION TITLE'    => strtoupper(optional($plantilla)->title ?? ''),

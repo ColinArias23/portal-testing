@@ -15,10 +15,9 @@ class DatabaseSeeder extends Seeder
             DivisionSeeder::class,
             DepartmentSeeder::class,
             EmployeeSeeder::class, 
-            // EmployeeHierarchySeeder::class,
-            // RbacSeeder::class,
+            PermissionSeeder::class,
+            RbacSeeder::class,
             UserSeeder::class,
-            // EmployeeAssignmentSeeder::class,
         ]);
     }
 }

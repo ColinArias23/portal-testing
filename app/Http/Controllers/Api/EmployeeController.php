@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
+use App\Models\EmployeeInfo;
 use App\Models\EmployeeHierarchy;
 use App\Models\EmployeeAssignment;
 use App\Models\Department;
@@ -15,12 +16,6 @@ use Illuminate\Support\Str;
 
 class EmployeeController extends Controller
 {
-    /*
-    |--------------------------------------------------------------------------
-    | AVATAR URL HELPER
-    |--------------------------------------------------------------------------
-    */
-
     private function resolveAvatarUrl(?string $path): ?string
     {
         if (!$path) return null;
@@ -29,11 +24,79 @@ class EmployeeController extends Controller
         return rtrim(config('app.url'), '/') . '/storage/' . $path;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | QUERY BUILDER
-    |--------------------------------------------------------------------------
-    */
+    /**
+     * Serialize an Employee model into a clean, JSON-safe array.
+     */
+    private function formatEmployee(Employee $employee): array
+    {
+        $allDepts = Department::all(['id', 'name'])->keyBy('id');
+
+        $departments = collect($employee->department_ids ?? [])
+            ->map(fn($id) => $allDepts->get($id))
+            ->filter()
+            ->values()
+            ->toArray();
+
+        $avatarUrl = $this->resolveAvatarUrl($employee->getRawOriginal('avatar_url'));
+
+        $assignment = $employee->primaryAssignment;
+        $plantillaItem = $assignment?->plantillaItem;
+        $stepIncrement = $assignment?->stepIncrement;
+
+        return [
+            'id'                  => $employee->id,
+            'employee_number'     => $employee->employee_number,
+            'prefix'              => $employee->prefix,
+            'first_name'          => $employee->first_name,
+            'middle_name'         => $employee->middle_name,
+            'last_name'           => $employee->last_name,
+            'suffix'              => $employee->suffix,
+            'full_name'           => $employee->full_name,
+            'role_position'       => $employee->role_position ?? [],
+            'position_designation'=> $employee->position_designation ?? [],
+            'title'               => $employee->title ?? [],
+            'employment_type'     => $employee->employment_type,
+            'employment_status'   => $employee->employment_status,
+            'division_id'         => $employee->division_id,
+            'division'            => $employee->division?->only(['id', 'name']),
+            'department_ids'      => $employee->department_ids ?? [],
+            'departments'         => $departments,
+            'avatar_url'          => $avatarUrl,
+            'border_color'        => $employee->border_color,
+            'aligned'             => $employee->aligned,
+            'expanded'            => $employee->expanded,
+            'notes'               => $employee->notes,
+            'info'                => $employee->info ? [
+                'gender'    => $employee->info->gender,
+                'address'   => $employee->info->address,
+                'birthdate' => $employee->info->birthdate,
+                'contact'   => $employee->info->contact,
+            ] : null,
+            'parents'             => $employee->parents->map(fn($p) => [
+                'id'        => $p->id,
+                'full_name' => $p->full_name,
+            ])->toArray(),
+            'primary_assignment'  => $assignment ? [
+                'id'              => $assignment->id,
+                'plantilla_item'  => $plantillaItem ? [
+                    'id'           => $plantillaItem->id,
+                    'item_number'  => $plantillaItem->item_number,
+                    'title'        => $plantillaItem->title,
+                    'salary_grade' => $plantillaItem->salaryGrade ? [
+                        'salary_grade' => $plantillaItem->salaryGrade->salary_grade,
+                        'annual_salary'=> $plantillaItem->salaryGrade->annual_salary,
+                    ] : null,
+                ] : null,
+                'step_increment'  => $stepIncrement ? [
+                    'id'           => $stepIncrement->id,
+                    'step'         => $stepIncrement->step,
+                    'annual_salary'=> $stepIncrement->annual_salary,
+                ] : null,
+            ] : null,
+            'created_at'          => $employee->created_at,
+            'updated_at'          => $employee->updated_at,
+        ];
+    }
 
     private function employeeQuery(Request $request)
     {
@@ -41,6 +104,7 @@ class EmployeeController extends Controller
             'info',
             'parents',
             'division',
+            'user',
             'primaryAssignment.plantillaItem.salaryGrade',
             'primaryAssignment.stepIncrement',
         ]);
@@ -56,12 +120,6 @@ class EmployeeController extends Controller
 
         return $query->orderBy('id');
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | VALIDATION RULES
-    |--------------------------------------------------------------------------
-    */
 
     private function rules(): array
     {
@@ -95,12 +153,6 @@ class EmployeeController extends Controller
         ];
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | UNIQUE EMPLOYEE NUMBER CHECK
-    |--------------------------------------------------------------------------
-    */
-
     private function assertUniqueEmployeeNumber(?string $number, $ignoreId = null): void
     {
         if (!$number) return;
@@ -117,6 +169,25 @@ class EmployeeController extends Controller
                 'employee_number' => ['The employee number has already been taken.'],
             ]));
         }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | GENDER COUNT
+    |--------------------------------------------------------------------------
+    */
+
+    public function genderCount()
+    {
+        $male   = EmployeeInfo::where('gender', 'MALE')->count();
+        $female = EmployeeInfo::where('gender', 'FEMALE')->count();
+        $total  = $male + $female;
+
+        return response()->json([
+            'male'   => $male,
+            'female' => $female,
+            'total'  => $total,
+        ]);
     }
 
     /*
@@ -195,7 +266,7 @@ class EmployeeController extends Controller
         $data = $request->validate($this->rules());
         $this->assertUniqueEmployeeNumber($request->employee_number);
 
-        return DB::transaction(function () use ($request, $data) {
+        $employee = DB::transaction(function () use ($request, $data) {
             if ($request->hasFile('avatar_url')) {
                 $data['avatar_url'] = $this->storeAvatar($request->file('avatar_url'));
             }
@@ -212,12 +283,15 @@ class EmployeeController extends Controller
                 ])->toArray()
             );
 
-            $employee->info()->create([
+            $info = $employee->info()->create([
                 'gender'    => $request->gender,
                 'address'   => $request->address,
                 'birthdate' => $request->birthdate,
                 'contact'   => $request->contact,
             ]);
+
+            $info->setRelation('employee', $employee);
+            $info->save();
 
             $this->syncAssignment($employee, $request);
             $this->syncParents($employee, $data['parent_ids'] ?? []);
@@ -228,6 +302,8 @@ class EmployeeController extends Controller
                 'primaryAssignment.stepIncrement',
             ]);
         });
+
+        return response()->json($this->formatEmployee($employee), 201);
     }
 
     /*
@@ -241,7 +317,7 @@ class EmployeeController extends Controller
         $data = $request->validate($this->rules());
         $this->assertUniqueEmployeeNumber($request->employee_number, $employee->id);
 
-        return DB::transaction(function () use ($request, $employee, $data) {
+        $employee = DB::transaction(function () use ($request, $employee, $data) {
             if ($request->hasFile('avatar_url')) {
                 $oldPath = $employee->getRawOriginal('avatar_url');
                 if ($oldPath && file_exists(storage_path('app/public/' . $oldPath))) {
@@ -262,7 +338,7 @@ class EmployeeController extends Controller
                 ])->toArray()
             );
 
-            $employee->info()->updateOrCreate(
+            $info = $employee->info()->updateOrCreate(
                 ['employee_id' => $employee->id],
                 [
                     'gender'    => $request->gender,
@@ -271,6 +347,10 @@ class EmployeeController extends Controller
                     'contact'   => $request->contact,
                 ]
             );
+
+            $employee->refresh();
+            $info->setRelation('employee', $employee);
+            $info->save();
 
             $this->syncAssignment($employee, $request);
 
@@ -287,6 +367,8 @@ class EmployeeController extends Controller
                 'primaryAssignment.stepIncrement',
             ]);
         });
+
+        return response()->json($this->formatEmployee($employee));
     }
 
     /*

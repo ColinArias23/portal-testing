@@ -57,11 +57,6 @@ class Employee extends Model
         ])->filter()->implode(' ');
     }
 
-    public function getAvatarUrlAttribute($value): ?string
-    {
-        return $value ?: null;
-    }
-
     public function getRolePositionLabelAttribute(): string
     {
         return collect($this->role_position)->filter()->implode(', ');
@@ -72,21 +67,9 @@ class Employee extends Model
         return $this->hasOne(EmployeeInfo::class);
     }
 
-    protected static function booted(): void
+    public function user()
     {
-        static::updated(function (Employee $employee) {
-            if ($employee->wasChanged(['first_name', 'last_name', 'avatar_url'])) {
-                $employee->info?->save();
-            }
-        });
-    }
-
-    public function getDepartmentsAttribute(): array
-    {
-        if (!$this->department_ids) return [];
-        return \App\Models\Department::whereIn('id', $this->department_ids)
-            ->get(['id', 'name'])
-            ->toArray();
+        return $this->hasOne(\App\Models\User::class);
     }
 
     public function division()

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Events\UserRegistered;
 use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -57,6 +59,9 @@ class AuthController extends Controller
             'password'        => Hash::make($data['password']),
             'approval_status' => 'PENDING',
         ]);
+
+        broadcast(new UserRegistered($user->id));
+        NotificationService::accountPending($user->email);
 
         return response()->json([
             'success' => true,
@@ -118,13 +123,14 @@ class AuthController extends Controller
             'first_name'      => $employee?->first_name ?? null,
             'last_name'       => $employee?->last_name  ?? null,
             'roles'           => $user->getRoleNames(),
-            'permissions'     => $user->getAllPermissions()->pluck('name'),
+            'permissions'     => $user->getAllPermissions()->pluck('name')->values(), // ✅ fixed
             'employee'        => $employee,
             'avatar_url'      => $avatarUrl,
             'departments'     => $departments,
             'department_ids'  => $employee?->department_ids ?? [],
             'division'        => $division?->name,
             'position'        => $primaryAssignment?->plantillaItem?->title,
+            'employee_id'     => $employee?->id ?? null,
         ];
     }
 }
