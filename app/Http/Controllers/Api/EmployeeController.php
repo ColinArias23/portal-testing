@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\Employee;
 use App\Models\EmployeeInfo;
 use App\Models\EmployeeHierarchy;
@@ -16,6 +17,8 @@ use Illuminate\Support\Str;
 
 class EmployeeController extends Controller
 {
+    private const PER_PAGE = 10;
+
     private function resolveAvatarUrl(?string $path): ?string
     {
         if (!$path) return null;
@@ -24,9 +27,6 @@ class EmployeeController extends Controller
         return rtrim(config('app.url'), '/') . '/storage/' . $path;
     }
 
-    /**
-     * Serialize an Employee model into a clean, JSON-safe array.
-     */
     private function formatEmployee(Employee $employee): array
     {
         $allDepts = Department::all(['id', 'name'])->keyBy('id');
@@ -39,46 +39,46 @@ class EmployeeController extends Controller
 
         $avatarUrl = $this->resolveAvatarUrl($employee->getRawOriginal('avatar_url'));
 
-        $assignment = $employee->primaryAssignment;
+        $assignment    = $employee->primaryAssignment;
         $plantillaItem = $assignment?->plantillaItem;
         $stepIncrement = $assignment?->stepIncrement;
 
         return [
-            'id'                  => $employee->id,
-            'employee_number'     => $employee->employee_number,
-            'prefix'              => $employee->prefix,
-            'first_name'          => $employee->first_name,
-            'middle_name'         => $employee->middle_name,
-            'last_name'           => $employee->last_name,
-            'suffix'              => $employee->suffix,
-            'full_name'           => $employee->full_name,
-            'role_position'       => $employee->role_position ?? [],
-            'position_designation'=> $employee->position_designation ?? [],
-            'title'               => $employee->title ?? [],
-            'employment_type'     => $employee->employment_type,
-            'employment_status'   => $employee->employment_status,
-            'division_id'         => $employee->division_id,
-            'division'            => $employee->division?->only(['id', 'name']),
-            'department_ids'      => $employee->department_ids ?? [],
-            'departments'         => $departments,
-            'avatar_url'          => $avatarUrl,
-            'border_color'        => $employee->border_color,
-            'aligned'             => $employee->aligned,
-            'expanded'            => $employee->expanded,
-            'notes'               => $employee->notes,
-            'info'                => $employee->info ? [
+            'id'                   => $employee->id,
+            'employee_number'      => $employee->employee_number,
+            'prefix'               => $employee->prefix,
+            'first_name'           => $employee->first_name,
+            'middle_name'          => $employee->middle_name,
+            'last_name'            => $employee->last_name,
+            'suffix'               => $employee->suffix,
+            'full_name'            => $employee->full_name,
+            'role_position'        => $employee->role_position        ?? [],
+            'position_designation' => $employee->position_designation ?? [],
+            'title'                => $employee->title                ?? [],
+            'employment_type'      => $employee->employment_type,
+            'employment_status'    => $employee->employment_status,
+            'division_id'          => $employee->division_id,
+            'division'             => $employee->division?->only(['id', 'name']),
+            'department_ids'       => $employee->department_ids       ?? [],
+            'departments'          => $departments,
+            'avatar_url'           => $avatarUrl,
+            'border_color'         => $employee->border_color,
+            'aligned'              => $employee->aligned,
+            'expanded'             => $employee->expanded,
+            'notes'                => $employee->notes,
+            'info'                 => $employee->info ? [
                 'gender'    => $employee->info->gender,
                 'address'   => $employee->info->address,
                 'birthdate' => $employee->info->birthdate,
                 'contact'   => $employee->info->contact,
             ] : null,
-            'parents'             => $employee->parents->map(fn($p) => [
+            'parents'              => $employee->parents->map(fn($p) => [
                 'id'        => $p->id,
                 'full_name' => $p->full_name,
             ])->toArray(),
-            'primary_assignment'  => $assignment ? [
-                'id'              => $assignment->id,
-                'plantilla_item'  => $plantillaItem ? [
+            'primary_assignment'   => $assignment ? [
+                'id'             => $assignment->id,
+                'plantilla_item' => $plantillaItem ? [
                     'id'           => $plantillaItem->id,
                     'item_number'  => $plantillaItem->item_number,
                     'title'        => $plantillaItem->title,
@@ -87,14 +87,14 @@ class EmployeeController extends Controller
                         'annual_salary'=> $plantillaItem->salaryGrade->annual_salary,
                     ] : null,
                 ] : null,
-                'step_increment'  => $stepIncrement ? [
-                    'id'           => $stepIncrement->id,
-                    'step'         => $stepIncrement->step,
-                    'annual_salary'=> $stepIncrement->annual_salary,
+                'step_increment' => $stepIncrement ? [
+                    'id'            => $stepIncrement->id,
+                    'step'          => $stepIncrement->step,
+                    'annual_salary' => $stepIncrement->annual_salary,
                 ] : null,
             ] : null,
-            'created_at'          => $employee->created_at,
-            'updated_at'          => $employee->updated_at,
+            'created_at' => $employee->created_at,
+            'updated_at' => $employee->updated_at,
         ];
     }
 
@@ -198,21 +198,21 @@ class EmployeeController extends Controller
 
     public function index(Request $request)
     {
-        $query = $this->employeeQuery($request);
+        $perPage  = max(1, (int) ($request->per_page ?? self::PER_PAGE));
+        $page     = max(1, (int) ($request->page    ?? 1));
+        $allDepts = Department::all(['id', 'name'])->keyBy('id');
+        $query    = $this->employeeQuery($request);
 
         if ($request->filled('search')) {
-            $s        = strtolower(trim($request->search));
-            $perPage  = (int) ($request->per_page ?? 10);
-            $page     = (int) ($request->page ?? 1);
-            $allDepts = Department::all(['id', 'name'])->keyBy('id');
+            $term = strtolower(trim($request->search));
 
-            $filtered = $query->get()->filter(function ($emp) use ($s) {
-                return str_contains(strtolower($emp->full_name), $s)
+            $all = $query->get()->filter(function ($emp) use ($term) {
+                return str_contains(strtolower($emp->full_name), $term)
                     || collect($emp->role_position ?? [])
-                        ->contains(fn($r) => str_contains(strtolower($r), $s));
+                        ->contains(fn($r) => str_contains(strtolower($r), $term));
             })->values();
 
-            $filtered->each(function ($emp) use ($allDepts) {
+            $all->each(function ($emp) use ($allDepts) {
                 $emp->departments = collect($emp->department_ids ?? [])
                     ->map(fn($id) => $allDepts->get($id))
                     ->filter()->values()->toArray();
@@ -222,9 +222,9 @@ class EmployeeController extends Controller
                 );
             });
 
-            $total    = $filtered->count();
-            $items    = $filtered->slice(($page - 1) * $perPage, $perPage)->values();
+            $total    = $all->count();
             $lastPage = (int) ceil($total / $perPage) ?: 1;
+            $items    = $all->slice(($page - 1) * $perPage, $perPage)->values();
 
             return response()->json([
                 'data'         => $items,
@@ -233,12 +233,11 @@ class EmployeeController extends Controller
                 'per_page'     => $perPage,
                 'total'        => $total,
                 'from'         => $total ? ($page - 1) * $perPage + 1 : null,
-                'to'           => min($page * $perPage, $total),
+                'to'           => $total ? min($page * $perPage, $total) : null,
             ]);
         }
 
-        $allDepts  = Department::all(['id', 'name'])->keyBy('id');
-        $paginator = $query->paginate($request->per_page ?? 10);
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
         $paginator->getCollection()->transform(function ($employee) use ($allDepts) {
             $employee->departments = collect($employee->department_ids ?? [])
@@ -252,7 +251,7 @@ class EmployeeController extends Controller
             return $employee;
         });
 
-        return $paginator;
+        return response()->json($paginator);
     }
 
     /*
@@ -303,6 +302,21 @@ class EmployeeController extends Controller
             ]);
         });
 
+        // ── Audit log ─────────────────────────────────────────────────────────
+        ActivityLog::record(
+            action:       'employee.created',
+            userId:       $request->user()?->id,
+            subjectType:  Employee::class,
+            subjectId:    $employee->id,
+            subjectLabel: $employee->full_name,
+            payload:      [
+                'employee_number' => $employee->employee_number,
+                'employment_type' => $employee->employment_type,
+            ],
+            ip:        $request->ip(),
+            userAgent: $request->userAgent(),
+        );
+
         return response()->json($this->formatEmployee($employee), 201);
     }
 
@@ -316,6 +330,15 @@ class EmployeeController extends Controller
     {
         $data = $request->validate($this->rules());
         $this->assertUniqueEmployeeNumber($request->employee_number, $employee->id);
+
+        // Snapshot before update
+        $before = [
+            'full_name'       => $employee->full_name,
+            'employment_type' => $employee->employment_type,
+            'division_id'     => $employee->division_id,
+            'department_ids'  => $employee->department_ids,
+            'role_position'   => $employee->role_position,
+        ];
 
         $employee = DB::transaction(function () use ($request, $employee, $data) {
             if ($request->hasFile('avatar_url')) {
@@ -368,6 +391,27 @@ class EmployeeController extends Controller
             ]);
         });
 
+        // ── Audit log ─────────────────────────────────────────────────────────
+        ActivityLog::record(
+            action:       'employee.updated',
+            userId:       $request->user()?->id,
+            subjectType:  Employee::class,
+            subjectId:    $employee->id,
+            subjectLabel: $employee->full_name,
+            payload:      [
+                'before' => $before,
+                'after'  => [
+                    'full_name'       => $employee->full_name,
+                    'employment_type' => $employee->employment_type,
+                    'division_id'     => $employee->division_id,
+                    'department_ids'  => $employee->department_ids,
+                    'role_position'   => $employee->role_position,
+                ],
+            ],
+            ip:        $request->ip(),
+            userAgent: $request->userAgent(),
+        );
+
         return response()->json($this->formatEmployee($employee));
     }
 
@@ -377,8 +421,11 @@ class EmployeeController extends Controller
     |--------------------------------------------------------------------------
     */
 
-    public function destroy(Employee $employee)
+    public function destroy(Request $request, Employee $employee)
     {
+        $label = $employee->full_name;
+        $id    = $employee->id;
+
         $path = $employee->getRawOriginal('avatar_url');
         if ($path && file_exists(storage_path('app/public/' . $path))) {
             Storage::disk('public')->delete($path);
@@ -389,6 +436,17 @@ class EmployeeController extends Controller
             ->delete();
 
         $employee->delete();
+
+        // ── Audit log ─────────────────────────────────────────────────────────
+        ActivityLog::record(
+            action:       'employee.deleted',
+            userId:       $request->user()?->id,
+            subjectType:  Employee::class,
+            subjectId:    $id,
+            subjectLabel: $label,
+            ip:           $request->ip(),
+            userAgent:    $request->userAgent(),
+        );
 
         return response()->json(['message' => 'Deleted successfully.']);
     }

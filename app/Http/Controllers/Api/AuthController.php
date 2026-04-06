@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Events\UserRegistered;
+use App\Models\ActivityLog;
 use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
@@ -25,13 +26,32 @@ class AuthController extends Controller
             'employee.primaryAssignment.plantillaItem.salaryGrade',
         ])->where('email', $data['email'])->first();
 
+        // ── Failed login attempt ──────────────────────────────────────────────
         if (!$user || !Hash::check($data['password'], $user->password)) {
+            ActivityLog::record(
+                action:      'auth.login_failed',
+                payload:     ['email' => $data['email']],
+                ip:          $request->ip(),
+                userAgent:   $request->userAgent(),
+            );
+
             throw ValidationException::withMessages([
                 'email' => ['Invalid email or password.'],
             ]);
         }
 
+        // ── Pending account ───────────────────────────────────────────────────
         if ($user->approval_status !== 'APPROVED') {
+            ActivityLog::record(
+                action:      'auth.login_blocked',
+                userId:      $user->id,
+                subjectType: User::class,
+                subjectId:   $user->id,
+                payload:     ['reason' => 'account_not_approved'],
+                ip:          $request->ip(),
+                userAgent:   $request->userAgent(),
+            );
+
             return response()->json([
                 'message' => 'Your account is not yet activated. Please contact the HR Department.',
             ], 403);
@@ -39,6 +59,16 @@ class AuthController extends Controller
 
         $user->tokens()->delete();
         $token = $user->createToken('api-token')->plainTextToken;
+
+        // ── Successful login ──────────────────────────────────────────────────
+        ActivityLog::record(
+            action:      'auth.login',
+            userId:      $user->id,
+            subjectType: User::class,
+            subjectId:   $user->id,
+            ip:          $request->ip(),
+            userAgent:   $request->userAgent(),
+        );
 
         return response()->json([
             'success' => true,
@@ -63,6 +93,15 @@ class AuthController extends Controller
         broadcast(new UserRegistered($user->id));
         NotificationService::accountPending($user->email);
 
+        ActivityLog::record(
+            action:      'auth.register',
+            userId:      $user->id,
+            subjectType: User::class,
+            subjectId:   $user->id,
+            ip:          $request->ip(),
+            userAgent:   $request->userAgent(),
+        );
+
         return response()->json([
             'success' => true,
             'message' => 'Registration successful. Please wait for HR to activate your account.',
@@ -85,10 +124,23 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        $request->user()?->currentAccessToken()?->delete();
+        $user = $request->user();
+
+        ActivityLog::record(
+            action:      'auth.logout',
+            userId:      $user?->id,
+            subjectType: $user ? User::class : null,
+            subjectId:   $user?->id,
+            ip:          $request->ip(),
+            userAgent:   $request->userAgent(),
+        );
+
+        $user?->currentAccessToken()?->delete();
 
         return response()->json(['success' => true]);
     }
+
+    // ── private helpers (unchanged) ──────────────────────────────────────────
 
     private function resolveAvatarUrl(?string $path): ?string
     {
@@ -123,7 +175,7 @@ class AuthController extends Controller
             'first_name'      => $employee?->first_name ?? null,
             'last_name'       => $employee?->last_name  ?? null,
             'roles'           => $user->getRoleNames(),
-            'permissions'     => $user->getAllPermissions()->pluck('name')->values(), // ✅ fixed
+            'permissions'     => $user->getAllPermissions()->pluck('name')->values(),
             'employee'        => $employee,
             'avatar_url'      => $avatarUrl,
             'departments'     => $departments,

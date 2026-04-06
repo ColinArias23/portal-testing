@@ -16,6 +16,13 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\TrainingController;
+use App\Http\Controllers\Api\AuditLogController;
+use App\Http\Controllers\Api\ApplicantController;
+use App\Http\Controllers\Api\ApplicantDocumentController;
+use App\Http\Controllers\Api\InterviewController;
+use App\Http\Controllers\Api\HiringEventController;
+use App\Http\Controllers\Api\ContractController;
+use App\Http\Controllers\Api\OnboardingController;
 
 Route::post('/login',    [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
@@ -36,6 +43,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/users/bulk-activate',              [UserController::class, 'bulkActivate']);
     Route::get('/approved-users',                    [UserController::class, 'approvedUsers']);
     Route::put('/users/{user}/permissions',          [UserController::class, 'updatePermissions']);
+
+    Route::get('/audit-logs', [AuditLogController::class, 'index']);
 
     // Must be before apiResources to avoid route conflicts
     Route::get('/employees/non-root',     [EmployeeController::class, 'nonRoot']);
@@ -75,31 +84,70 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/division-analytics', [ManpowerController::class, 'divisionAnalytics']);
     });
 
-    /*
-    |--------------------------------------------------------------------------
-    | Training Routes
-    |--------------------------------------------------------------------------
-    | Static routes (summary) and sub-resource routes (join, participants)
-    | must be declared BEFORE wildcard {training} routes to avoid conflicts.
-    */
     Route::prefix('trainings')->group(function () {
-        // ── Static ──────────────────────────────────────────────────────────
         Route::get('/summary', [TrainingController::class, 'summary']);
 
-        // ── Collection ──────────────────────────────────────────────────────
         Route::get('/',    [TrainingController::class, 'index']);
         Route::post('/',   [TrainingController::class, 'store']);
 
-        // ── Per-training sub-resources (declare before /{training} wildcard) ─
-        Route::post('/{training}/join',                            [TrainingController::class, 'join']);
-        Route::post('/{training}/participants',                    [TrainingController::class, 'assignParticipants']);
-        Route::patch('/{training}/participants/{employee}',        [TrainingController::class, 'updateParticipant']);
-        Route::delete('/{training}/participants/{employee}',       [TrainingController::class, 'removeParticipant']);
+        Route::post('/{training}/join',                      [TrainingController::class, 'join']);
+        Route::post('/{training}/participants',              [TrainingController::class, 'assignParticipants']);
+        Route::patch('/{training}/participants/{employee}',  [TrainingController::class, 'updateParticipant']);
+        Route::delete('/{training}/participants/{employee}', [TrainingController::class, 'removeParticipant']);
 
-        // ── Single training CRUD (wildcard — must come last) ─────────────────
         Route::get('/{training}',    [TrainingController::class, 'show']);
         Route::put('/{training}',    [TrainingController::class, 'update']);
         Route::delete('/{training}', [TrainingController::class, 'destroy']);
     });
 
+    Route::prefix('hiring')->group(function () {
+
+    // Applicants
+    Route::get('/applicants/summary',          [ApplicantController::class, 'summary']);
+    Route::get('/applicants',                  [ApplicantController::class, 'index']);
+    Route::post('/applicants',                 [ApplicantController::class, 'store']);
+    Route::get('/applicants/{applicant}',      [ApplicantController::class, 'show']);
+    Route::put('/applicants/{applicant}',      [ApplicantController::class, 'update']);
+    Route::delete('/applicants/{applicant}',   [ApplicantController::class, 'destroy']);
+
+    // Documents
+    Route::get('/applicants/{applicant}/documents',                         [ApplicantDocumentController::class, 'index']);
+    Route::post('/applicants/{applicant}/documents',                        [ApplicantDocumentController::class, 'store']);
+    Route::put('/applicants/{applicant}/documents/{document}',              [ApplicantDocumentController::class, 'update']);
+    Route::delete('/applicants/{applicant}/documents/{document}',           [ApplicantDocumentController::class, 'destroy']);
+    Route::post('/applicants/{applicant}/move-to-onboarding', [ApplicantController::class, 'moveToOnboarding']);
+
+    // Interviews
+    Route::get('/interviews',                          [InterviewController::class, 'index']);
+    Route::get('/applicants/{applicant}/interview',    [InterviewController::class, 'show']);
+    Route::put('/applicants/{applicant}/interview',    [InterviewController::class, 'update']);
+
+    // Events / Calendar
+    Route::get('/events',                    [HiringEventController::class, 'index']);
+    Route::post('/events',                   [HiringEventController::class, 'store']);
+    Route::put('/events/{hiringEvent}',      [HiringEventController::class, 'update']);
+    Route::delete('/events/{hiringEvent}',   [HiringEventController::class, 'destroy']);
+
+    // Contracts
+    Route::get('/contracts',                 [ContractController::class, 'index']);
+    Route::post('/contracts',                [ContractController::class, 'store']);
+    Route::put('/contracts/{contract}',      [ContractController::class, 'update']);
+    Route::delete('/contracts/{contract}',   [ContractController::class, 'destroy']);
+    });
+
+    Route::prefix('onboarding')->group(function () {
+        
+    Route::get('/summary',                                          [OnboardingController::class, 'summary']);
+    Route::get('/',                                                 [OnboardingController::class, 'index']);
+    Route::post('/',                                                [OnboardingController::class, 'store']);
+    Route::get('/{onboarding}',                                     [OnboardingController::class, 'show']);
+    Route::put('/{onboarding}',                                     [OnboardingController::class, 'update']);
+    Route::delete('/{onboarding}',                                  [OnboardingController::class, 'destroy']);
+
+   // Tasks
+    Route::post('/{onboarding}/tasks',                    [OnboardingController::class, 'addTask']);
+    Route::patch('/{onboarding}/tasks/{task}/toggle',     [OnboardingController::class, 'toggleTask']);
+    Route::put('/{onboarding}/tasks/{task}',              [OnboardingController::class, 'updateTask']);
+    Route::delete('/{onboarding}/tasks/{task}',           [OnboardingController::class, 'deleteTask']);
+    });
 });

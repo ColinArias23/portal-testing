@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Events\UserActivated;
 use App\Events\PermissionsUpdated;
+use App\Models\ActivityLog;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
@@ -28,10 +30,15 @@ class UserController extends Controller
 
     public function approvedUsers()
     {
+       $currentUserId = Auth::id();
+
         $users = User::with('employee')
             ->where('approval_status', 'APPROVED')
+            ->where('id', '!=', $currentUserId)
             ->orderBy('approved_at', 'desc')
             ->get()
+            ->filter(fn($u) => !$u->hasRole('SuperAdmin')) 
+            ->values()
             ->map(fn($u) => [
                 'id'            => $u->id,
                 'email'         => $u->email,
@@ -52,15 +59,29 @@ class UserController extends Controller
             'permissions.*' => ['string', 'exists:permissions,name'],
         ]);
 
+        $before = $user->getAllPermissions()->pluck('name')->values()->toArray();
+
         $user->syncPermissions($request->permissions);
 
-        // ✅ clear cache first
         app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
-
-        // ✅ unset the in-memory relation so getAllPermissions() re-queries from DB
         $user->unsetRelation('permissions');
 
         $updatedPermissions = $user->getAllPermissions()->pluck('name')->values();
+
+        ActivityLog::record(
+            action:       'user.permissions_updated',
+            userId:       $request->user()?->id,
+            subjectType:  User::class,
+            subjectId:    $user->id,
+            subjectLabel: $user->email,
+            payload:      [
+                'target_email' => $user->email,
+                'before'       => $before,
+                'after'        => $updatedPermissions->toArray(),
+            ],
+            ip:        $request->ip(),
+            userAgent: $request->userAgent(),
+        );
 
         broadcast(new PermissionsUpdated($user->id));
 
@@ -70,7 +91,7 @@ class UserController extends Controller
         ]);
     }
 
-    public function activate(User $user)
+    public function activate(Request $request, User $user)
     {
         DB::transaction(function () use ($user) {
             $this->linkEmployee($user);
@@ -82,6 +103,20 @@ class UserController extends Controller
         });
 
         $fresh = User::with('employee.info')->find($user->id);
+
+        ActivityLog::record(
+            action:       'user.activated',
+            userId:       $request->user()?->id,
+            subjectType:  User::class,
+            subjectId:    $user->id,
+            subjectLabel: $fresh->email,
+            payload:      [
+                'target_email' => $fresh->email,
+                'employee_id'  => $fresh->employee_id,
+            ],
+            ip:        $request->ip(),
+            userAgent: $request->userAgent(),
+        );
 
         broadcast(new UserActivated($user->id, $fresh->employee_id));
 
@@ -115,6 +150,22 @@ class UserController extends Controller
 
         foreach ($users as $user) {
             $fresh = User::find($user->id);
+
+            ActivityLog::record(
+                action:       'user.activated',
+                userId:       $request->user()?->id,
+                subjectType:  User::class,
+                subjectId:    $user->id,
+                subjectLabel: $fresh->email,
+                payload:      [
+                    'target_email' => $fresh->email,
+                    'employee_id'  => $fresh->employee_id,
+                    'bulk'         => true,
+                ],
+                ip:        $request->ip(),
+                userAgent: $request->userAgent(),
+            );
+
             broadcast(new UserActivated($user->id, $fresh->employee_id));
         }
 

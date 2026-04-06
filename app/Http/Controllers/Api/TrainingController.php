@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreTrainingRequest;
 use App\Http\Requests\UpdateTrainingRequest;
+use App\Models\ActivityLog;
 use App\Models\Training;
 use App\Models\Employee;
 use App\Events\TrainingCreated;
@@ -69,8 +70,8 @@ class TrainingController extends Controller
                 'status'            => $e->pivot->status,
                 'certificateIssued' => $e->pivot->certificate_issued,
             ])->values()->toArray(),
-            'createdAt'       => $training->created_at?->toISOString(),
-            'updatedAt'       => $training->updated_at?->toISOString(),
+            'createdAt' => $training->created_at?->toISOString(),
+            'updatedAt' => $training->updated_at?->toISOString(),
         ];
     }
 
@@ -144,11 +145,25 @@ class TrainingController extends Controller
             $formatted = $this->formatTraining($training, $posterId);
 
             NotificationService::trainingCreated($training, $posterId);
-
-            // Single broadcast hits both 'notifications' and 'trainings' channels:
-            //   → 'notifications' channel: NotificationBell picks up the bell payload
-            //   → 'trainings' channel:     TrainingPage picks up e.training to prepend the row
             broadcast(new TrainingCreated($training, $posterId, $formatted));
+
+            // ── Audit log ─────────────────────────────────────────────────
+            ActivityLog::record(
+                action:       'training.created',
+                userId:       $posterId,
+                subjectType:  Training::class,
+                subjectId:    $training->id,
+                subjectLabel: $training->title,
+                payload:      [
+                    'department'   => $training->department,
+                    'category'     => $training->category,
+                    'training_mode'=> $training->training_mode,
+                    'start_date'   => $training->start_date?->toISOString(),
+                    'end_date'     => $training->end_date?->toISOString(),
+                ],
+                ip:        $request->ip(),
+                userAgent: $request->userAgent(),
+            );
 
             return response()->json([
                 'message' => 'Training created successfully.',
@@ -186,19 +201,32 @@ class TrainingController extends Controller
     public function update(UpdateTrainingRequest $request, Training $training)
     {
         try {
+            // Snapshot before update
+            $before = [
+                'title'         => $training->title,
+                'department'    => $training->department,
+                'category'      => $training->category,
+                'instructor'    => $training->instructor,
+                'training_mode' => $training->training_mode,
+                'start_date'    => $training->start_date?->toISOString(),
+                'end_date'      => $training->end_date?->toISOString(),
+                'status'        => $training->status,
+                'progress'      => $training->progress,
+            ];
+
             $training->update([
-                'title'            => $request->title          ?? $training->title,
-                'description'      => $request->description    ?? $training->description,
-                'department'       => $request->department      ?? $training->department,
-                'instructor'       => $request->instructor      ?? $training->instructor,
-                'category'         => $request->category        ?? $training->category,
-                'event_address'    => $request->event_address   ?? $training->event_address,
-                'training_mode'    => $request->training_mode   ?? $training->training_mode,
-                'start_date'       => $request->start_date      ?? $training->start_date,
-                'end_date'         => $request->end_date        ?? $training->end_date,
-                'duration'         => $request->duration        ?? $training->duration,
-                'status'           => $request->status          ?? $training->status,
-                'progress'         => $request->progress        ?? $training->progress,
+                'title'            => $request->title            ?? $training->title,
+                'description'      => $request->description      ?? $training->description,
+                'department'       => $request->department        ?? $training->department,
+                'instructor'       => $request->instructor        ?? $training->instructor,
+                'category'         => $request->category          ?? $training->category,
+                'event_address'    => $request->event_address     ?? $training->event_address,
+                'training_mode'    => $request->training_mode     ?? $training->training_mode,
+                'start_date'       => $request->start_date        ?? $training->start_date,
+                'end_date'         => $request->end_date          ?? $training->end_date,
+                'duration'         => $request->duration          ?? $training->duration,
+                'status'           => $request->status            ?? $training->status,
+                'progress'         => $request->progress          ?? $training->progress,
                 'max_participants' => $request->has('max_participants')
                                         ? (int) $request->max_participants
                                         : $training->max_participants,
@@ -207,8 +235,32 @@ class TrainingController extends Controller
             $training->load('participants');
             $formatted = $this->formatTraining($training, $request->user()?->id);
 
-            // Reuse participant.updated — patches the row on all clients
             broadcast(new TrainingParticipantUpdated($formatted));
+
+            // ── Audit log ─────────────────────────────────────────────────
+            ActivityLog::record(
+                action:       'training.updated',
+                userId:       $request->user()?->id,
+                subjectType:  Training::class,
+                subjectId:    $training->id,
+                subjectLabel: $training->title,
+                payload:      [
+                    'before' => $before,
+                    'after'  => [
+                        'title'         => $training->title,
+                        'department'    => $training->department,
+                        'category'      => $training->category,
+                        'instructor'    => $training->instructor,
+                        'training_mode' => $training->training_mode,
+                        'start_date'    => $training->start_date?->toISOString(),
+                        'end_date'      => $training->end_date?->toISOString(),
+                        'status'        => $training->status,
+                        'progress'      => $training->progress,
+                    ],
+                ],
+                ip:        $request->ip(),
+                userAgent: $request->userAgent(),
+            );
 
             return response()->json([
                 'message' => 'Training updated successfully.',
@@ -226,14 +278,26 @@ class TrainingController extends Controller
     |--------------------------------------------------------------------------
     */
 
-    public function destroy(Training $training)
+    public function destroy(Request $request, Training $training)
     {
         try {
-            $trainingId = $training->id;
+            $trainingId    = $training->id;
+            $trainingTitle = $training->title;
+
             $training->delete();
 
-            // Tell every client to remove this row from their list
             broadcast(new TrainingDeleted($trainingId));
+
+            // ── Audit log ─────────────────────────────────────────────────
+            ActivityLog::record(
+                action:       'training.deleted',
+                userId:       $request->user()?->id,
+                subjectType:  Training::class,
+                subjectId:    $trainingId,
+                subjectLabel: $trainingTitle,
+                ip:           $request->ip(),
+                userAgent:    $request->userAgent(),
+            );
 
             return response()->json(['message' => 'Training deleted successfully.']);
         } catch (\Throwable $e) {
@@ -258,7 +322,9 @@ class TrainingController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($request, $training) {
+            $employeeNames = [];
+
+            DB::transaction(function () use ($request, $training, &$employeeNames) {
                 $employeeIds = $request->employee_ids ?? [];
 
                 if ($training->max_participants > 0 && count($employeeIds) > $training->max_participants) {
@@ -266,6 +332,12 @@ class TrainingController extends Controller
                         "Cannot assign more than {$training->max_participants} participants."
                     );
                 }
+
+                // Collect names for the audit log
+                $employeeNames = Employee::whereIn('id', $employeeIds)
+                    ->get()
+                    ->map(fn($e) => ['id' => $e->id, 'name' => $e->full_name])
+                    ->toArray();
 
                 $sync = collect($employeeIds)
                     ->mapWithKeys(fn($id) => [
@@ -279,6 +351,21 @@ class TrainingController extends Controller
             $training->load('participants');
             $formatted = $this->formatTraining($training, $request->user()?->id);
             broadcast(new TrainingParticipantUpdated($formatted));
+
+            // ── Audit log ─────────────────────────────────────────────────
+            ActivityLog::record(
+                action:       'training.participants_assigned',
+                userId:       $request->user()?->id,
+                subjectType:  Training::class,
+                subjectId:    $training->id,
+                subjectLabel: $training->title,
+                payload:      [
+                    'assigned_count' => count($employeeNames),
+                    'participants'   => $employeeNames,
+                ],
+                ip:        $request->ip(),
+                userAgent: $request->userAgent(),
+            );
 
             return response()->json([
                 'message' => 'Participants updated successfully.',
@@ -313,6 +400,23 @@ class TrainingController extends Controller
             $formatted = $this->formatTraining($training, $request->user()?->id);
             broadcast(new TrainingParticipantUpdated($formatted));
 
+            // ── Audit log ─────────────────────────────────────────────────
+            ActivityLog::record(
+                action:       'training.participant_updated',
+                userId:       $request->user()?->id,
+                subjectType:  Training::class,
+                subjectId:    $training->id,
+                subjectLabel: $training->title,
+                payload:      [
+                    'employee_id'        => $employee->id,
+                    'employee_name'      => $employee->full_name,
+                    'status'             => $request->status,
+                    'certificate_issued' => $request->certificate_issued,
+                ],
+                ip:        $request->ip(),
+                userAgent: $request->userAgent(),
+            );
+
             return response()->json([
                 'message' => 'Participant updated successfully.',
                 'data'    => $formatted,
@@ -332,10 +436,28 @@ class TrainingController extends Controller
     public function removeParticipant(Request $request, Training $training, Employee $employee)
     {
         try {
-            $training->participants()->detach($employee->id);
+            $employeeId   = $employee->id;
+            $employeeName = $employee->full_name;
+
+            $training->participants()->detach($employeeId);
             $training->load('participants');
             $formatted = $this->formatTraining($training, $request->user()?->id);
             broadcast(new TrainingParticipantUpdated($formatted));
+
+            // ── Audit log ─────────────────────────────────────────────────
+            ActivityLog::record(
+                action:       'training.participant_removed',
+                userId:       $request->user()?->id,
+                subjectType:  Training::class,
+                subjectId:    $training->id,
+                subjectLabel: $training->title,
+                payload:      [
+                    'employee_id'   => $employeeId,
+                    'employee_name' => $employeeName,
+                ],
+                ip:        $request->ip(),
+                userAgent: $request->userAgent(),
+            );
 
             return response()->json([
                 'message' => 'Participant removed.',
@@ -413,9 +535,23 @@ class TrainingController extends Controller
         ]);
 
         $training->load('participants');
-
         $formatted = $this->formatTraining($training, $request->user()->id);
         broadcast(new TrainingParticipantUpdated($formatted));
+
+        // ── Audit log ─────────────────────────────────────────────────────
+        ActivityLog::record(
+            action:       'training.joined',
+            userId:       $request->user()->id,
+            subjectType:  Training::class,
+            subjectId:    $training->id,
+            subjectLabel: $training->title,
+            payload:      [
+                'employee_id'   => $employee->id,
+                'employee_name' => $employee->full_name,
+            ],
+            ip:        $request->ip(),
+            userAgent: $request->userAgent(),
+        );
 
         return response()->json([
             'message' => 'Successfully joined the training.',
