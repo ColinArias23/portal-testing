@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\NotificationCreated;
 use Illuminate\Database\Eloquent\Model;
 
 class Notification extends Model
@@ -18,6 +19,13 @@ class Notification extends Model
     protected $casts = [
         'data' => 'array',
     ];
+
+    protected static function booted(): void
+    {
+        static::created(function ($notification) {
+            broadcast(new NotificationCreated($notification))->toOthers();
+        });
+    }
 
     public function reads()
     {

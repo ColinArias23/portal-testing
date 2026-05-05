@@ -11,9 +11,7 @@ class UserSeeder extends Seeder
     public function run(): void
     {
         $this->upsertUser('superadmin@local.test', 'SuperAdmin');
-        $this->upsertUser('admin@local.test',      'Admin');
         $this->upsertUser('hr@local.test',         'HR');
-        $this->upsertUser('staff@local.test',      'Staff');
     }
 
     private function upsertUser(string $email, ?string $role): void

@@ -8,7 +8,7 @@ class EmployeeAssignment extends Model
 {
     protected $fillable = [
         'employee_id',
-        'plantilla_item_id',
+        'plantilla_position_id',   // FK → plantilla_positions (the slot)
         'step_increment_id',
         'is_primary',
         'start_date',
@@ -16,9 +16,9 @@ class EmployeeAssignment extends Model
     ];
 
     protected $casts = [
-        'start_date' => 'date',
-        'end_date' => 'date',
         'is_primary' => 'boolean',
+        'start_date' => 'date',
+        'end_date'   => 'date',
     ];
 
     /*
@@ -32,9 +32,27 @@ class EmployeeAssignment extends Model
         return $this->belongsTo(Employee::class);
     }
 
+    /**
+     * The actual slot (plantilla_positions row).
+     */
+    public function plantillaPosition()
+    {
+        return $this->belongsTo(PlantillaPosition::class, 'plantilla_position_id');
+    }
+
+    /**
+     * Convenience: reach the master item through the slot.
+     */
     public function plantillaItem()
     {
-        return $this->belongsTo(PlantillaItem::class);
+        return $this->hasOneThrough(
+            PlantillaItem::class,
+            PlantillaPosition::class,
+            'id',                    // plantilla_positions.id
+            'id',                    // plantilla_items.id
+            'plantilla_position_id', // employee_assignments.plantilla_position_id
+            'plantilla_item_id'      // plantilla_positions.plantilla_item_id
+        );
     }
 
     public function stepIncrement()
@@ -44,126 +62,33 @@ class EmployeeAssignment extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | EFFECTIVE STEP
+    | OBSERVER — auto UNFILLED when last occupant leaves
+    |
+    | Fires whenever end_date is written on a primary assignment.
+    | If no other active assignment covers the same slot,
+    | it is immediately locked (requires_approval = true, status = UNFILLED).
     |--------------------------------------------------------------------------
     */
 
-    public function getEffectiveStepAttribute()
+    protected static function booted(): void
     {
-        return $this->stepIncrement ?? $this->plantillaItem?->stepIncrement;
-    }
+        static::updated(function (self $assignment) {
+            if (!$assignment->wasChanged('end_date')) return;
+            if (!$assignment->end_date)               return;
+            if (!$assignment->is_primary)             return;
 
-    /*
-    |--------------------------------------------------------------------------
-    | EFFECTIVE SALARY GRADE
-    |--------------------------------------------------------------------------
-    */
+            $position = $assignment->plantillaPosition;
+            if (!$position) return;
 
-    public function getSalaryGradeAttribute()
-    {
-        return $this->plantillaItem?->salaryGrade;
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | SCOPES
-    |--------------------------------------------------------------------------
-    */
-
-    public function scopeActive($query)
-    {
-        return $query->whereNull('end_date');
-    }
-
-    public function scopePrimary($query)
-    {
-        return $query->where('is_primary', true);
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | MODEL EVENTS
-    |--------------------------------------------------------------------------
-    */
-
-    protected static function booted()
-    {
-
-        /*
-        |-----------------------------------------------
-        | PREVENT DUPLICATE PLANTILLA OCCUPANCY
-        |-----------------------------------------------
-        */
-
-        static::creating(function ($assignment) {
-
-            $occupied = self::where('plantilla_item_id', $assignment->plantilla_item_id)
+            $stillOccupied = static::where('plantilla_position_id', $position->id)
                 ->whereNull('end_date')
                 ->exists();
 
-            if ($occupied) {
-                throw new \Exception('Plantilla item already occupied.');
+            if (!$stillOccupied) {
+                $position->markUnfilled(
+                    'Automatically locked after employee vacated the position.'
+                );
             }
-
         });
-
-
-        /*
-        |-----------------------------------------------
-        | WHEN ASSIGNMENT CREATED
-        |-----------------------------------------------
-        */
-
-        static::created(function ($assignment) {
-
-            $assignment->plantillaItem()
-                ->update(['status' => 'FILLED']);
-
-        });
-
-
-        /*
-        |-----------------------------------------------
-        | WHEN ASSIGNMENT UPDATED
-        |-----------------------------------------------
-        */
-
-        static::updated(function ($assignment) {
-
-            if (!$assignment->wasChanged('end_date')) {
-                return;
-            }
-
-            $hasActive = self::where('plantilla_item_id', $assignment->plantilla_item_id)
-                ->whereNull('end_date')
-                ->exists();
-
-            if (!$hasActive) {
-                $assignment->plantillaItem()
-                    ->update(['status' => 'VACANT']);
-            }
-
-        });
-
-
-        /*
-        |-----------------------------------------------
-        | WHEN ASSIGNMENT DELETED
-        |-----------------------------------------------
-        */
-
-        static::deleted(function ($assignment) {
-
-            $hasActive = self::where('plantilla_item_id', $assignment->plantilla_item_id)
-                ->whereNull('end_date')
-                ->exists();
-
-            if (!$hasActive) {
-                $assignment->plantillaItem()
-                    ->update(['status' => 'VACANT']);
-            }
-
-        });
-
     }
 }

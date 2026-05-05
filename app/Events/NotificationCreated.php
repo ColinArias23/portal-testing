@@ -2,12 +2,13 @@
 
 namespace App\Events;
 
+use App\Models\Notification;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 
 class NotificationCreated implements ShouldBroadcast
 {
-    public function __construct(public string $visibility) {}
+    public function __construct(public Notification $notification) {}
 
     public function broadcastOn(): Channel
     {
@@ -21,6 +22,10 @@ class NotificationCreated implements ShouldBroadcast
 
     public function broadcastWith(): array
     {
-        return ['visibility' => $this->visibility];
+        return [
+            'type'              => $this->notification->type,
+            'visibility'        => $this->notification->visibility,
+            'posted_by_user_id' => $this->notification->data['posted_by_user_id'] ?? null,
+        ];
     }
 }

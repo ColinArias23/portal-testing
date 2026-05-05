@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
-use App\Models\Employee;
-use App\Models\EmployeeInfo;
-use App\Models\EmployeeHierarchy;
-use App\Models\EmployeeAssignment;
 use App\Models\Department;
+use App\Models\Employee;
+use App\Models\EmployeeHierarchy;
+use App\Models\EmployeeInfo;
+use App\Models\EmployeeAssignment;
+use App\Models\PlantillaItem;
+use App\Events\EmployeeUpdated;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -19,11 +22,17 @@ class EmployeeController extends Controller
 {
     private const PER_PAGE = 10;
 
+    /*
+    |--------------------------------------------------------------------------
+    | HELPERS
+    |--------------------------------------------------------------------------
+    */
+
     private function resolveAvatarUrl(?string $path): ?string
     {
-        if (!$path) return null;
+        if (! $path) return null;
         $filePath = storage_path('app/public/' . $path);
-        if (!file_exists($filePath)) return null;
+        if (! file_exists($filePath)) return null;
         return rtrim(config('app.url'), '/') . '/storage/' . $path;
     }
 
@@ -37,11 +46,19 @@ class EmployeeController extends Controller
             ->values()
             ->toArray();
 
-        $avatarUrl = $this->resolveAvatarUrl($employee->getRawOriginal('avatar_url'));
+        $avatarUrl      = $this->resolveAvatarUrl($employee->getRawOriginal('avatar_url'));
+        $assignment     = $employee->primaryAssignment;
+        $plantillaItem  = $assignment?->plantillaItem;
+        $stepIncrement  = $assignment?->effectiveStepIncrement();
 
-        $assignment    = $employee->primaryAssignment;
-        $plantillaItem = $assignment?->plantillaItem;
-        $stepIncrement = $assignment?->stepIncrement;
+        // -- Skill data -------------------------------------------------------
+        $latestAssessment  = $employee->relationLoaded('latestAssessment')
+            ? $employee->latestAssessment
+            : $employee->latestAssessment()->first();
+
+        $activePlans = $employee->relationLoaded('activeDevelopmentPlans')
+            ? $employee->activeDevelopmentPlans
+            : $employee->activeDevelopmentPlans()->with('skill')->get();
 
         return [
             'id'                   => $employee->id,
@@ -78,23 +95,54 @@ class EmployeeController extends Controller
             ])->toArray(),
             'primary_assignment'   => $assignment ? [
                 'id'             => $assignment->id,
+                'start_date'     => $assignment->start_date,
                 'plantilla_item' => $plantillaItem ? [
-                    'id'           => $plantillaItem->id,
-                    'item_number'  => $plantillaItem->item_number,
-                    'title'        => $plantillaItem->title,
-                    'salary_grade' => $plantillaItem->salaryGrade ? [
-                        'salary_grade' => $plantillaItem->salaryGrade->salary_grade,
-                        'annual_salary'=> $plantillaItem->salaryGrade->annual_salary,
+                    'id'             => $plantillaItem->id,
+                    'item_number'    => $plantillaItem->item_number,
+                    'title'          => $plantillaItem->title,
+                    'status'         => $plantillaItem->status,
+                    'salary_grade'   => $plantillaItem->salaryGrade ? [
+                        'id'             => $plantillaItem->salaryGrade->id,
+                        'salary_grade'   => $plantillaItem->salaryGrade->salary_grade,
+                        'monthly_salary' => $plantillaItem->salaryGrade->monthly_salary,
+                        'annual_salary'  => $plantillaItem->salaryGrade->annual_salary,
                     ] : null,
                 ] : null,
                 'step_increment' => $stepIncrement ? [
-                    'id'            => $stepIncrement->id,
-                    'step'          => $stepIncrement->step,
-                    'annual_salary' => $stepIncrement->annual_salary,
+                    'id'             => $stepIncrement->id,
+                    'step'           => $stepIncrement->step,
+                    'monthly_salary' => $stepIncrement->monthly_salary,
+                    'annual_salary'  => $stepIncrement->annual_salary,
                 ] : null,
             ] : null,
-            'created_at' => $employee->created_at,
-            'updated_at' => $employee->updated_at,
+
+            // -- Skill summary (always included) --------------------------------
+            'skill_summary'        => $latestAssessment ? [
+                'assessment_id'   => $latestAssessment->id,
+                'status'          => $latestAssessment->status,
+                'average_score'   => $latestAssessment->average_score,
+                'gap_count'       => $latestAssessment->gap_count,
+                'strength_count'  => $latestAssessment->strength_count,
+                'submitted_at'    => $latestAssessment->submitted_at,
+            ] : null,
+
+            // -- Active development plans ---------------------------------------
+            'development_plans'    => $activePlans->map(fn($plan) => [
+                'id'                  => $plan->id,
+                'skill'               => $plan->skill ? [
+                    'id'       => $plan->skill->id,
+                    'name'     => $plan->skill->name,
+                    'category' => $plan->skill->category,
+                ] : null,
+                'goal'                => $plan->goal,
+                'status'              => $plan->status,
+                'progress_percentage' => $plan->progress_percentage,
+                'start_date'          => $plan->start_date,
+                'target_date'         => $plan->target_date,
+            ])->toArray(),
+
+            'created_at'           => $employee->created_at,
+            'updated_at'           => $employee->updated_at,
         ];
     }
 
@@ -107,10 +155,12 @@ class EmployeeController extends Controller
             'user',
             'primaryAssignment.plantillaItem.salaryGrade',
             'primaryAssignment.stepIncrement',
+            'latestAssessment',
+            'activeDevelopmentPlans.skill',
         ]);
 
         if ($request->filled('division_id')) {
-            $query->where('division_id', $request->division_id);
+            $query->where('division_id', $request->integer('division_id'));
         }
 
         if ($request->filled('department_id')) {
@@ -143,10 +193,10 @@ class EmployeeController extends Controller
             'position_designation.*' => ['string'],
             'plantilla_item_id'      => ['nullable', 'exists:plantilla_items,id'],
             'step_increment_id'      => ['nullable', 'exists:step_increments,id'],
-            'annual_salary'          => ['nullable', 'numeric'],
-            'monthly_salary'         => ['nullable', 'numeric'],
+            'gender'                 => ['nullable', 'in:MALE,FEMALE'],
             'address'                => ['nullable'],
             'birthdate'              => ['nullable', 'date'],
+            'contact'                => ['nullable'],
             'avatar_url'             => ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:10240'],
             'parent_ids'             => ['nullable', 'array'],
             'parent_ids.*'           => ['exists:employees,id'],
@@ -155,7 +205,7 @@ class EmployeeController extends Controller
 
     private function assertUniqueEmployeeNumber(?string $number, $ignoreId = null): void
     {
-        if (!$number) return;
+        if (! $number) return;
 
         $number = strtoupper($number);
 
@@ -177,16 +227,15 @@ class EmployeeController extends Controller
     |--------------------------------------------------------------------------
     */
 
-    public function genderCount()
+    public function genderCount(): JsonResponse
     {
         $male   = EmployeeInfo::where('gender', 'MALE')->count();
         $female = EmployeeInfo::where('gender', 'FEMALE')->count();
-        $total  = $male + $female;
 
         return response()->json([
             'male'   => $male,
             'female' => $female,
-            'total'  => $total,
+            'total'  => $male + $female,
         ]);
     }
 
@@ -196,7 +245,7 @@ class EmployeeController extends Controller
     |--------------------------------------------------------------------------
     */
 
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
         $perPage  = max(1, (int) ($request->per_page ?? self::PER_PAGE));
         $page     = max(1, (int) ($request->page    ?? 1));
@@ -216,10 +265,7 @@ class EmployeeController extends Controller
                 $emp->departments = collect($emp->department_ids ?? [])
                     ->map(fn($id) => $allDepts->get($id))
                     ->filter()->values()->toArray();
-
-                $emp->avatar_url = $this->resolveAvatarUrl(
-                    $emp->getRawOriginal('avatar_url')
-                );
+                $emp->avatar_url = $this->resolveAvatarUrl($emp->getRawOriginal('avatar_url'));
             });
 
             $total    = $all->count();
@@ -243,11 +289,7 @@ class EmployeeController extends Controller
             $employee->departments = collect($employee->department_ids ?? [])
                 ->map(fn($id) => $allDepts->get($id))
                 ->filter()->values()->toArray();
-
-            $employee->avatar_url = $this->resolveAvatarUrl(
-                $employee->getRawOriginal('avatar_url')
-            );
-
+            $employee->avatar_url  = $this->resolveAvatarUrl($employee->getRawOriginal('avatar_url'));
             return $employee;
         });
 
@@ -256,11 +298,62 @@ class EmployeeController extends Controller
 
     /*
     |--------------------------------------------------------------------------
+    | SHOW
+    |--------------------------------------------------------------------------
+    */
+
+    public function show(Employee $employee): JsonResponse
+    {
+        $employee->load([
+            'info',
+            'parents',
+            'division',
+            'user',
+            'primaryAssignment.plantillaItem.salaryGrade',
+            'primaryAssignment.stepIncrement',
+            'latestAssessment',
+            'activeDevelopmentPlans.skill',
+        ]);
+
+        return response()->json($this->formatEmployee($employee));
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | NON-ROOT
+    |--------------------------------------------------------------------------
+    */
+
+    public function nonRoot(): JsonResponse
+    {
+        $rootIds = DB::table('employee_hierarchy')
+            ->whereNull('parent_id')
+            ->pluck('employee_id');
+
+        $employees = Employee::with(['division', 'latestAssessment'])
+            ->whereNotIn('id', $rootIds)
+            ->orderBy('last_name')
+            ->get()
+            ->map(fn($emp) => [
+                'id'        => $emp->id,
+                'full_name' => $emp->full_name,
+                'division'  => $emp->division?->only(['id', 'name']),
+                'skill_summary' => $emp->latestAssessment ? [
+                    'average_score' => $emp->latestAssessment->average_score,
+                    'gap_count'     => $emp->latestAssessment->gap_count,
+                ] : null,
+            ]);
+
+        return response()->json($employees);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | STORE
     |--------------------------------------------------------------------------
     */
 
-    public function store(Request $request)
+    public function store(Request $request): JsonResponse
     {
         $data = $request->validate($this->rules());
         $this->assertUniqueEmployeeNumber($request->employee_number);
@@ -278,19 +371,16 @@ class EmployeeController extends Controller
             $employee = Employee::create(
                 collect($data)->except([
                     'parent_ids', 'plantilla_item_id', 'step_increment_id',
-                    'gender', 'address', 'birthdate', 'contact', 'email',
+                    'gender', 'address', 'birthdate', 'contact',
                 ])->toArray()
             );
 
-            $info = $employee->info()->create([
+            $employee->info()->create([
                 'gender'    => $request->gender,
                 'address'   => $request->address,
                 'birthdate' => $request->birthdate,
                 'contact'   => $request->contact,
             ]);
-
-            $info->setRelation('employee', $employee);
-            $info->save();
 
             $this->syncAssignment($employee, $request);
             $this->syncParents($employee, $data['parent_ids'] ?? []);
@@ -299,10 +389,11 @@ class EmployeeController extends Controller
                 'info', 'parents', 'division',
                 'primaryAssignment.plantillaItem.salaryGrade',
                 'primaryAssignment.stepIncrement',
+                'latestAssessment',
+                'activeDevelopmentPlans.skill',
             ]);
         });
 
-        // ── Audit log ─────────────────────────────────────────────────────────
         ActivityLog::record(
             action:       'employee.created',
             userId:       $request->user()?->id,
@@ -326,12 +417,11 @@ class EmployeeController extends Controller
     |--------------------------------------------------------------------------
     */
 
-    public function update(Request $request, Employee $employee)
+    public function update(Request $request, Employee $employee): JsonResponse
     {
         $data = $request->validate($this->rules());
         $this->assertUniqueEmployeeNumber($request->employee_number, $employee->id);
 
-        // Snapshot before update
         $before = [
             'full_name'       => $employee->full_name,
             'employment_type' => $employee->employment_type,
@@ -357,11 +447,11 @@ class EmployeeController extends Controller
             $employee->update(
                 collect($data)->except([
                     'parent_ids', 'plantilla_item_id', 'step_increment_id',
-                    'gender', 'address', 'birthdate', 'contact', 'email',
+                    'gender', 'address', 'birthdate', 'contact',
                 ])->toArray()
             );
 
-            $info = $employee->info()->updateOrCreate(
+            $employee->info()->updateOrCreate(
                 ['employee_id' => $employee->id],
                 [
                     'gender'    => $request->gender,
@@ -370,10 +460,6 @@ class EmployeeController extends Controller
                     'contact'   => $request->contact,
                 ]
             );
-
-            $employee->refresh();
-            $info->setRelation('employee', $employee);
-            $info->save();
 
             $this->syncAssignment($employee, $request);
 
@@ -388,10 +474,11 @@ class EmployeeController extends Controller
                 'info', 'parents', 'division',
                 'primaryAssignment.plantillaItem.salaryGrade',
                 'primaryAssignment.stepIncrement',
+                'latestAssessment',
+                'activeDevelopmentPlans.skill',
             ]);
         });
 
-        // ── Audit log ─────────────────────────────────────────────────────────
         ActivityLog::record(
             action:       'employee.updated',
             userId:       $request->user()?->id,
@@ -412,7 +499,11 @@ class EmployeeController extends Controller
             userAgent: $request->userAgent(),
         );
 
-        return response()->json($this->formatEmployee($employee));
+        $formatted = $this->formatEmployee($employee);
+
+        broadcast(new EmployeeUpdated($formatted))->toOthers();
+
+        return response()->json($formatted);
     }
 
     /*
@@ -421,10 +512,26 @@ class EmployeeController extends Controller
     |--------------------------------------------------------------------------
     */
 
-    public function destroy(Request $request, Employee $employee)
+    public function destroy(Request $request, Employee $employee): JsonResponse
     {
         $label = $employee->full_name;
         $id    = $employee->id;
+
+        // Close active assignment and unlock the item if it was filled
+        $active = EmployeeAssignment::where('employee_id', $employee->id)
+            ->whereNull('end_date')
+            ->where('is_primary', true)
+            ->first();
+
+        if ($active) {
+            DB::transaction(function () use ($active) {
+                $active->update(['end_date' => now()->toDateString()]);
+                $active->plantillaItem?->update([
+                    'status'             => 'LOCKED',
+                    'date_of_assumption' => null,
+                ]);
+            });
+        }
 
         $path = $employee->getRawOriginal('avatar_url');
         if ($path && file_exists(storage_path('app/public/' . $path))) {
@@ -437,7 +544,6 @@ class EmployeeController extends Controller
 
         $employee->delete();
 
-        // ── Audit log ─────────────────────────────────────────────────────────
         ActivityLog::record(
             action:       'employee.deleted',
             userId:       $request->user()?->id,
@@ -457,7 +563,7 @@ class EmployeeController extends Controller
     |--------------------------------------------------------------------------
     */
 
-    public function avatar(Request $request, Employee $employee)
+    public function avatar(Request $request, Employee $employee): JsonResponse
     {
         Log::channel('confidential_access')->info('Avatar accessed', [
             'subject_emp_id' => $employee->id,
@@ -466,10 +572,9 @@ class EmployeeController extends Controller
             'at'             => now()->toIso8601String(),
         ]);
 
-        $path = $employee->getRawOriginal('avatar_url');
-        $url  = $this->resolveAvatarUrl($path);
-
-        return response()->json(['url' => $url]);
+        return response()->json([
+            'url' => $this->resolveAvatarUrl($employee->getRawOriginal('avatar_url')),
+        ]);
     }
 
     /*
@@ -497,9 +602,12 @@ class EmployeeController extends Controller
         }
     }
 
+    /**
+     * Sync an assignment from a plain employee create/update payload.
+     */
     private function syncAssignment(Employee $employee, Request $request): void
     {
-        if (!$request->has('plantilla_item_id')) return;
+        if (! $request->has('plantilla_item_id')) return;
 
         $newPlantillaId = $request->plantilla_item_id ?: null;
         $newStepId      = $request->step_increment_id ?: null;
@@ -509,6 +617,7 @@ class EmployeeController extends Controller
             ->whereNull('end_date')
             ->first();
 
+        // Nothing changed — skip
         if (
             $existing &&
             (string) $existing->plantilla_item_id === (string) $newPlantillaId &&
@@ -517,11 +626,29 @@ class EmployeeController extends Controller
             return;
         }
 
+        // Close old assignment and lock the old item
         if ($existing) {
-            $existing->update(['end_date' => now()]);
+            $existing->update(['end_date' => now()->toDateString()]);
+
+            if ($existing->plantilla_item_id && $existing->plantilla_item_id !== (int) $newPlantillaId) {
+                PlantillaItem::where('id', $existing->plantilla_item_id)->update([
+                    'status'             => 'LOCKED',
+                    'date_of_assumption' => null,
+                ]);
+            }
         }
 
-        if (!$newPlantillaId) return;
+        if (! $newPlantillaId) return;
+
+        // Validate the target item
+        $targetItem = PlantillaItem::findOrFail($newPlantillaId);
+
+        if ($targetItem->status === 'LOCKED') {
+            throw new \RuntimeException(
+                "Plantilla item [{$targetItem->item_number}] is LOCKED and awaiting city approval. " .
+                "It cannot be assigned until approved."
+            );
+        }
 
         $occupied = EmployeeAssignment::where('plantilla_item_id', $newPlantillaId)
             ->where('employee_id', '!=', $employee->id)
@@ -529,16 +656,24 @@ class EmployeeController extends Controller
             ->exists();
 
         if ($occupied) {
-            throw new \Exception("Plantilla item is already occupied by another employee.");
+            throw new \RuntimeException(
+                "Plantilla item [{$targetItem->item_number}] is already occupied by another employee."
+            );
         }
 
+        // Open new assignment
         EmployeeAssignment::create([
             'employee_id'       => $employee->id,
             'plantilla_item_id' => $newPlantillaId,
             'step_increment_id' => $newStepId,
             'is_primary'        => true,
-            'start_date'        => now(),
+            'start_date'        => now()->toDateString(),
             'end_date'          => null,
+        ]);
+
+        $targetItem->update([
+            'status'             => 'FILLED',
+            'date_of_assumption' => now()->toDateString(),
         ]);
     }
 }

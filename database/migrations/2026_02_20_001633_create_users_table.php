@@ -32,6 +32,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['approval_status', 'approved_at']);
+            $table->index('email');
         });
     }
 

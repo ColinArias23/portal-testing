@@ -18,6 +18,7 @@ return new class extends Migration
                   ->cascadeOnDelete();
             $table->enum('status', ['enrolled', 'completed', 'dropped'])->default('enrolled');
             $table->boolean('certificate_issued')->default(false);
+            $table->timestamp('attended_at')->nullable();
             $table->timestamps();
 
             $table->unique(['training_id', 'employee_id']);

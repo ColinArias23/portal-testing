@@ -13,9 +13,11 @@ class TrainingParticipant extends Pivot
         'employee_id',
         'status',
         'certificate_issued',
+        'attended_at',          
     ];
 
     protected $casts = [
         'certificate_issued' => 'boolean',
+        'attended_at'        => 'datetime',
     ];
 }

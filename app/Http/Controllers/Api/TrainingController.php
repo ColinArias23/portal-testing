@@ -69,6 +69,7 @@ class TrainingController extends Controller
                                         : null,
                 'status'            => $e->pivot->status,
                 'certificateIssued' => $e->pivot->certificate_issued,
+                'attendedAt'        => $e->pivot->attended_at?->format('Y-m-d\TH:i:s'),
             ])->values()->toArray(),
             'createdAt' => $training->created_at?->toISOString(),
             'updatedAt' => $training->updated_at?->toISOString(),
@@ -465,6 +466,58 @@ class TrainingController extends Controller
             ]);
         } catch (\Throwable $e) {
             Log::error('Training@removeParticipant: ' . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | MARK ATTENDANCE — PATCH /api/trainings/{id}/participants/{employeeId}/attend
+    |--------------------------------------------------------------------------
+    */
+
+    public function markAttendance(Request $request, Training $training, Employee $employee)
+    {
+        try {
+            $alreadyMarked = $training->participants()
+                ->where('employee_id', $employee->id)
+                ->whereNotNull('training_participants.attended_at')
+                ->exists();
+
+            if ($alreadyMarked) {
+                return response()->json(['message' => 'Attendance already recorded.'], 422);
+            }
+
+            $training->participants()->updateExistingPivot($employee->id, [
+                'attended_at' => now(),
+            ]);
+
+            $training->load('participants');
+            $formatted = $this->formatTraining($training, $request->user()?->id);
+            broadcast(new TrainingParticipantUpdated($formatted));
+
+            // ── Audit log ─────────────────────────────────────────────────
+            ActivityLog::record(
+                action:       'training.attendance_marked',
+                userId:       $request->user()?->id,
+                subjectType:  Training::class,
+                subjectId:    $training->id,
+                subjectLabel: $training->title,
+                payload:      [
+                    'employee_id'   => $employee->id,
+                    'employee_name' => $employee->full_name,
+                    'attended_at'   => now()->toISOString(),
+                ],
+                ip:        $request->ip(),
+                userAgent: $request->userAgent(),
+            );
+
+            return response()->json([
+                'message' => 'Attendance marked successfully.',
+                'data'    => $formatted,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Training@markAttendance: ' . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }

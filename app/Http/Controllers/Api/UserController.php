@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
@@ -30,14 +31,14 @@ class UserController extends Controller
 
     public function approvedUsers()
     {
-       $currentUserId = Auth::id();
+        $currentUserId = Auth::id();
 
         $users = User::with('employee')
             ->where('approval_status', 'APPROVED')
             ->where('id', '!=', $currentUserId)
             ->orderBy('approved_at', 'desc')
             ->get()
-            ->filter(fn($u) => !$u->hasRole('SuperAdmin')) 
+            ->filter(fn($u) => !$u->hasRole('SuperAdmin'))
             ->values()
             ->map(fn($u) => [
                 'id'            => $u->id,
@@ -65,6 +66,8 @@ class UserController extends Controller
 
         app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
         $user->unsetRelation('permissions');
+        $user->unsetRelation('roles');
+        $user->refresh();
 
         $updatedPermissions = $user->getAllPermissions()->pluck('name')->values();
 
@@ -91,6 +94,61 @@ class UserController extends Controller
         ]);
     }
 
+    // ✅ New — assign a single role, or "none" to strip all roles
+    public function updateRole(Request $request, User $user)
+    {
+        $request->validate([
+            'role' => ['nullable', 'string'],
+        ]);
+
+        $roleName = $request->input('role');
+
+        if ($roleName && strtolower($roleName) === 'superadmin') {
+            return response()->json(['message' => 'Cannot assign SuperAdmin role.'], 403);
+        }
+
+        $before = $user->getRoleNames()->toArray();
+
+        if ($roleName && $roleName !== 'none') {
+            $role = Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
+            // Replace all current roles with just this one
+            $user->syncRoles([$role->name]);
+        } else {
+            // Strip all non-superadmin roles
+            $toRemove = $user->getRoleNames()
+                ->filter(fn($r) => strtolower($r) !== 'superadmin')
+                ->toArray();
+            if (!empty($toRemove)) {
+                $user->removeRole(...$toRemove);
+            }
+        }
+
+        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+        $user->refresh();
+
+        ActivityLog::record(
+            action:       'user.role_updated',
+            userId:       $request->user()?->id,
+            subjectType:  User::class,
+            subjectId:    $user->id,
+            subjectLabel: $user->email,
+            payload:      [
+                'target_email' => $user->email,
+                'before'       => $before,
+                'after'        => $user->getRoleNames()->toArray(),
+            ],
+            ip:        $request->ip(),
+            userAgent: $request->userAgent(),
+        );
+
+        broadcast(new PermissionsUpdated($user->id));
+
+        return response()->json([
+            'message' => 'Role updated successfully.',
+            'roles'   => $user->getRoleNames(),
+        ]);
+    }
+
     public function activate(Request $request, User $user)
     {
         DB::transaction(function () use ($user) {
@@ -100,6 +158,14 @@ class UserController extends Controller
                 'approval_status' => 'APPROVED',
                 'approved_at'     => now()->toDateTimeString(),
             ]);
+
+            // ✅ Mark the linked employee as active
+            if ($user->employee_id) {
+                DB::table('employees')->where('id', $user->employee_id)->update([
+                    'employment_status' => 'active',
+                    'updated_at'        => now()->toDateTimeString(),
+                ]);
+            }
         });
 
         $fresh = User::with('employee.info')->find($user->id);
@@ -145,6 +211,17 @@ class UserController extends Controller
                     'approval_status' => 'APPROVED',
                     'approved_at'     => now()->toDateTimeString(),
                 ]);
+
+                // ✅ Mark the linked employee as active
+                $employeeId = $user->employee_id
+                    ?? DB::table('users')->where('id', $user->id)->value('employee_id');
+
+                if ($employeeId) {
+                    DB::table('employees')->where('id', $employeeId)->update([
+                        'employment_status' => 'active',
+                        'updated_at'        => now()->toDateTimeString(),
+                    ]);
+                }
             }
         });
 
@@ -181,13 +258,14 @@ class UserController extends Controller
         $now = now()->toDateTimeString();
 
         $employeeId = DB::table('employees')->insertGetId([
-            'first_name'      => null,
-            'last_name'       => null,
-            'employment_type' => 'Contract of Service',
-            'aligned'         => false,
-            'expanded'        => false,
-            'created_at'      => $now,
-            'updated_at'      => $now,
+            'first_name'        => null,
+            'last_name'         => null,
+            'employment_type'   => 'Contract of Service',
+            'employment_status' => 'active',
+            'aligned'           => false,
+            'expanded'          => false,
+            'created_at'        => $now,
+            'updated_at'        => $now,
         ]);
 
         DB::table('employee_info')->insert([

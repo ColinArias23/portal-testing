@@ -7,118 +7,57 @@ use Illuminate\Database\Eloquent\Model;
 class PlantillaItem extends Model
 {
     protected $fillable = [
-        'item_number',
-        'status',
-        'salary_grade_id',
-        'step_increment_id',
+        'base_item_number',
         'title',
         'description',
+        'approved_slots',
+        'division_id',
+        'department_ids',
     ];
 
-    /*
-    |--------------------------------------------------------------------------
-    | RELATIONSHIPS
-    |--------------------------------------------------------------------------
-    */
+    protected $casts = [
+        'department_ids' => 'array',
+    ];
 
-    public function salaryGrade()
+    // ─── Relationships ────────────────────────────────────────────────────
+
+    public function positions()
     {
-        return $this->belongsTo(SalaryGrade::class);
+        return $this->hasMany(PlantillaPosition::class);
     }
 
-    public function stepIncrement()
+    public function division()
     {
-        return $this->belongsTo(StepIncrement::class);
+        return $this->belongsTo(Division::class);
     }
 
-    public function assignments()
+    // ─── Slot Counts ──────────────────────────────────────────────────────
+
+    public function remainingSlots(): int
     {
-        return $this->hasMany(EmployeeAssignment::class);
+        return max(0, $this->approved_slots - $this->positions()->count());
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | ACTIVE ASSIGNMENTS
-    |--------------------------------------------------------------------------
-    */
-
-    public function activeAssignments()
+    public function hasAvailableSlots(): bool
     {
-        return $this->assignments()->whereNull('end_date');
+        return $this->remainingSlots() > 0;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | CHECK IF FILLED
-    |--------------------------------------------------------------------------
-    */
-
-    public function isFilled(): bool
+    public function getAvailableSlotsAttribute(): int
     {
-        return $this->activeAssignments()->exists();
+        return $this->remainingSlots();
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | CHECK IF VACANT
-    |--------------------------------------------------------------------------
-    */
+    // ─── Model Events ─────────────────────────────────────────────────────
 
-    public function isVacant(): bool
+    protected static function booted(): void
     {
-        return !$this->activeAssignments()->exists();
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | DETECT OVERSTAFF
-    |--------------------------------------------------------------------------
-    */
-
-    public function isOverstaffed(): bool
-    {
-        return $this->activeAssignments()->count() > 1;
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | COMPUTED STATUS
-    |--------------------------------------------------------------------------
-    */
-
-    public function getComputedStatusAttribute()
-    {
-        if ($this->isOverstaffed()) {
-            return 'OVERSTAFFED';
-        }
-
-        if ($this->isFilled()) {
-            return 'FILLED';
-        }
-
-        return 'VACANT';
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | SCOPES
-    |--------------------------------------------------------------------------
-    */
-
-    public function scopeVacant($query)
-    {
-        return $query->whereDoesntHave('activeAssignments');
-    }
-
-    public function scopeFilled($query)
-    {
-        return $query->whereHas('activeAssignments');
-    }
-
-    public function scopeOverstaffed($query)
-    {
-        return $query
-            ->withCount('activeAssignments')
-            ->having('active_assignments_count', '>', 1);
+        static::deleting(function (PlantillaItem $item) {
+            if ($item->positions()->filled()->exists()) {
+                throw new \RuntimeException(
+                    "Cannot delete plantilla item [{$item->title}] — it still has filled slots."
+                );
+            }
+        });
     }
 }

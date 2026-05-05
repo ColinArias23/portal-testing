@@ -20,19 +20,14 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $user = User::with([
-            'employee.info',
-            'employee.division',
-            'employee.primaryAssignment.plantillaItem.salaryGrade',
-        ])->where('email', $data['email'])->first();
+        $user = User::where('email', $data['email'])->first();
 
-        // ── Failed login attempt ──────────────────────────────────────────────
         if (!$user || !Hash::check($data['password'], $user->password)) {
             ActivityLog::record(
-                action:      'auth.login_failed',
-                payload:     ['email' => $data['email']],
-                ip:          $request->ip(),
-                userAgent:   $request->userAgent(),
+                action:    'auth.login_failed',
+                payload:   ['email' => $data['email']],
+                ip:        $request->ip(),
+                userAgent: $request->userAgent(),
             );
 
             throw ValidationException::withMessages([
@@ -40,7 +35,6 @@ class AuthController extends Controller
             ]);
         }
 
-        // ── Pending account ───────────────────────────────────────────────────
         if ($user->approval_status !== 'APPROVED') {
             ActivityLog::record(
                 action:      'auth.login_blocked',
@@ -57,10 +51,27 @@ class AuthController extends Controller
             ], 403);
         }
 
-        $user->tokens()->delete();
+        /*
+        |----------------------------------------------------------------
+        | Keep only the 4 most recently used tokens.
+        | Pulls all token IDs into PHP first then slices with take(4)
+        | in memory — avoids MariaDB OFFSET-without-LIMIT syntax error
+        | that affects both skip()->pluck() and limit()->pluck().
+        |----------------------------------------------------------------
+        */
+        $allTokenIds = $user->tokens()
+            ->orderByDesc('last_used_at')
+            ->pluck('id');
+
+        if ($allTokenIds->count() >= 4) {
+            $keepIds = $allTokenIds->take(4);
+            $user->tokens()
+                ->whereNotIn('id', $keepIds)
+                ->delete();
+        }
+
         $token = $user->createToken('api-token')->plainTextToken;
 
-        // ── Successful login ──────────────────────────────────────────────────
         ActivityLog::record(
             action:      'auth.login',
             userId:      $user->id,
@@ -69,6 +80,11 @@ class AuthController extends Controller
             ip:          $request->ip(),
             userAgent:   $request->userAgent(),
         );
+
+        $user->load([
+            'employee.info',
+            'employee.division',
+        ]);
 
         return response()->json([
             'success' => true,
@@ -114,7 +130,6 @@ class AuthController extends Controller
         $user = $request->user()->load([
             'employee.info',
             'employee.division',
-            'employee.primaryAssignment.plantillaItem.salaryGrade',
         ]);
 
         return response()->json([
@@ -140,8 +155,6 @@ class AuthController extends Controller
         return response()->json(['success' => true]);
     }
 
-    // ── private helpers (unchanged) ──────────────────────────────────────────
-
     private function resolveAvatarUrl(?string $path): ?string
     {
         if (!$path) return null;
@@ -152,9 +165,8 @@ class AuthController extends Controller
 
     private function formatUser(User $user): array
     {
-        $employee          = $user->employee;
-        $primaryAssignment = $employee?->primaryAssignment;
-        $division          = $employee?->division;
+        $employee = $user->employee;
+        $division = $employee?->division;
 
         $departments = [];
         if ($employee && !empty($employee->department_ids)) {
@@ -167,6 +179,9 @@ class AuthController extends Controller
             $employee?->getRawOriginal('avatar_url')
         );
 
+        $roles       = $user->getRoleNames();
+        $permissions = $user->getAllPermissions()->pluck('name')->values();
+
         return [
             'id'              => $user->id,
             'email'           => $user->email,
@@ -174,14 +189,14 @@ class AuthController extends Controller
             'approval_status' => $user->approval_status,
             'first_name'      => $employee?->first_name ?? null,
             'last_name'       => $employee?->last_name  ?? null,
-            'roles'           => $user->getRoleNames(),
-            'permissions'     => $user->getAllPermissions()->pluck('name')->values(),
+            'roles'           => $roles,
+            'permissions'     => $permissions,
             'employee'        => $employee,
             'avatar_url'      => $avatarUrl,
             'departments'     => $departments,
             'department_ids'  => $employee?->department_ids ?? [],
             'division'        => $division?->name,
-            'position'        => $primaryAssignment?->plantillaItem?->title,
+            'position'        => null,
             'employee_id'     => $employee?->id ?? null,
         ];
     }

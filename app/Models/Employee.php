@@ -6,9 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 use App\Models\EmployeeHierarchy;
 use App\Models\EmployeeInfo;
 use App\Models\Division;
-use App\Models\PlantillaItem;
 use App\Models\StepIncrement;
 use App\Models\EmployeeAssignment;
+use App\Models\SkillAssessment;
+use App\Models\DevelopmentPlan;
 
 class Employee extends Model
 {
@@ -17,8 +18,6 @@ class Employee extends Model
         'role_position',
         'division_id',
         'department_ids',
-        'plantilla_item_id',
-        'step_increment_id',
         'prefix',
         'first_name',
         'middle_name',
@@ -46,6 +45,12 @@ class Employee extends Model
 
     protected $appends = ['full_name'];
 
+    /*
+    |--------------------------------------------------------------------------
+    | COMPUTED ATTRIBUTES
+    |--------------------------------------------------------------------------
+    */
+
     public function getFullNameAttribute(): string
     {
         return collect([
@@ -62,6 +67,12 @@ class Employee extends Model
         return collect($this->role_position)->filter()->implode(', ');
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | RELATIONSHIPS
+    |--------------------------------------------------------------------------
+    */
+
     public function info()
     {
         return $this->hasOne(EmployeeInfo::class);
@@ -77,16 +88,24 @@ class Employee extends Model
         return $this->belongsTo(Division::class);
     }
 
-    public function plantillaItem()
-    {
-        return $this->belongsTo(PlantillaItem::class, 'plantilla_item_id');
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | ASSIGNMENT RELATIONSHIPS
+    |--------------------------------------------------------------------------
+    */
 
+    /**
+     * All assignment records (history included).
+     */
     public function assignments()
     {
         return $this->hasMany(EmployeeAssignment::class);
     }
 
+    /**
+     * The single active primary assignment.
+     * This is the source of truth for current plantilla item + step.
+     */
     public function primaryAssignment()
     {
         return $this->hasOne(EmployeeAssignment::class)
@@ -94,15 +113,19 @@ class Employee extends Model
             ->where('is_primary', true);
     }
 
+    /**
+     * Alias kept for backwards compatibility with existing code.
+     */
     public function activeAssignment()
     {
         return $this->primaryAssignment();
     }
 
-    public function stepIncrement()
-    {
-        return $this->belongsTo(StepIncrement::class);
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | HIERARCHY RELATIONSHIPS
+    |--------------------------------------------------------------------------
+    */
 
     public function hierarchy()
     {
@@ -134,14 +157,136 @@ class Employee extends Model
         );
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | SKILL RELATIONSHIPS
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * All skill assessments for this employee.
+     */
+    public function skillAssessments()
+    {
+        return $this->hasMany(SkillAssessment::class);
+    }
+
+    /**
+     * The latest submitted skill assessment.
+     */
+    public function latestAssessment()
+    {
+        return $this->hasOne(SkillAssessment::class)
+            ->where('status', '!=', 'draft')
+            ->latestOfMany('submitted_at');
+    }
+
+    /**
+     * All development plans for this employee.
+     */
+    public function developmentPlans()
+    {
+        return $this->hasMany(DevelopmentPlan::class);
+    }
+
+    /**
+     * Active development plans (planned or in_progress).
+     */
+    public function activeDevelopmentPlans()
+    {
+        return $this->hasMany(DevelopmentPlan::class)
+            ->whereIn('status', ['planned', 'in_progress']);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | SALARY HISTORIES
+    |--------------------------------------------------------------------------
+    */
+
     public function salaryHistories()
     {
         return $this->hasMany(EmployeeSalaryHistory::class);
     }
 
-    public function scopeSearch($query, $s)
+    /*
+    |--------------------------------------------------------------------------
+    | CONVENIENCE ACCESSORS
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Shortcut: current plantilla item via active assignment.
+     */
+    public function getCurrentPlantillaItemAttribute(): ?PlantillaItem
     {
-        return $query->where(function ($q) use ($s) {
+        return $this->primaryAssignment?->plantillaItem;
+    }
+
+    /**
+     * Shortcut: current step increment via active assignment.
+     */
+    public function getCurrentStepIncrementAttribute(): ?StepIncrement
+    {
+        return $this->primaryAssignment?->effectiveStepIncrement();
+    }
+
+    /**
+     * Shortcut: average score from the latest submitted assessment.
+     */
+    public function getSkillScoreAttribute(): ?float
+    {
+        return $this->latestAssessment?->average_score;
+    }
+
+    /**
+     * Shortcut: gap count from the latest submitted assessment.
+     */
+    public function getSkillGapCountAttribute(): ?int
+    {
+        return $this->latestAssessment?->gap_count;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | SCOPES
+    |--------------------------------------------------------------------------
+    */
+
+    public function scopeSearch($query, string $term)
+    {
+        $term = strtolower(trim($term));
+
+        return $query->where(function ($q) use ($term) {
+            $q->whereRaw('LOWER(first_name) LIKE ?', ["%{$term}%"])
+              ->orWhereRaw('LOWER(last_name) LIKE ?', ["%{$term}%"])
+              ->orWhereRaw('LOWER(employee_number) LIKE ?', ["%{$term}%"]);
         });
+    }
+
+    public function scopePlantilla($query)
+    {
+        return $query->where('employment_type', 'Plantilla');
+    }
+
+    /**
+     * Scope: employees who have at least one submitted assessment.
+     */
+    public function scopeWithAssessment($query)
+    {
+        return $query->whereHas('skillAssessments', fn ($q) =>
+            $q->where('status', '!=', 'draft')
+        );
+    }
+
+    /**
+     * Scope: employees who have skill gaps (gap_count > 0 in latest assessment).
+     */
+    public function scopeWithGaps($query)
+    {
+        return $query->whereHas('skillAssessments', fn ($q) =>
+            $q->where('status', '!=', 'draft')
+              ->where('gap_count', '>', 0)
+        );
     }
 }

@@ -23,18 +23,19 @@ return new class extends Migration
 
             /*
             |------------------------------------------------------------------
-            | PLANTILLA ITEM
+            | PLANTILLA POSITION (slot-level, replaces plantilla_item_id)
             |------------------------------------------------------------------
             */
-            $table->foreignId('plantilla_item_id')
-                ->constrained('plantilla_items')
-                ->cascadeOnDelete();
+            $table->foreignId('plantilla_position_id')
+                ->nullable()
+                ->constrained('plantilla_positions')
+                ->nullOnDelete();
 
             /*
             |------------------------------------------------------------------
             | STEP OVERRIDE (OPTIONAL)
             |------------------------------------------------------------------
-            | If NULL → use plantilla_items.step_increment_id
+            | If NULL → use plantilla_positions.step_increment_id
             */
             $table->foreignId('step_increment_id')
                 ->nullable()
@@ -54,7 +55,6 @@ return new class extends Migration
             |------------------------------------------------------------------
             */
             $table->date('start_date');
-
             $table->date('end_date')->nullable();
 
             $table->timestamps();
@@ -64,9 +64,8 @@ return new class extends Migration
             | INDEXES
             |------------------------------------------------------------------
             */
-
             $table->index(['employee_id', 'end_date']);
-            $table->index(['plantilla_item_id']);
+            $table->index(['plantilla_position_id']);
             $table->index(['start_date']);
             $table->index(['is_primary']);
         });
