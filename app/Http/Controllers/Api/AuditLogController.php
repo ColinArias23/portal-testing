@@ -8,9 +8,28 @@ use Illuminate\Http\Request;
 
 class AuditLogController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+        $this->middleware('role:admin'); // Only admins can view audit logs
+    }
+
+    /**
+     * Get paginated audit logs with filtering options
+     */
     public function index(Request $request)
     {
-        $query = ActivityLog::with('user:id,email')
+        $request->validate([
+            'action' => ['nullable', 'string'],
+            'user_id' => ['nullable', 'integer'],
+            'subject_type' => ['nullable', 'string'],
+            'subject_id' => ['nullable', 'integer'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $query = ActivityLog::with('user:id,username')
             ->orderByDesc('performed_at');
 
         if ($request->filled('action')) {
@@ -30,15 +49,70 @@ class AuditLogController extends Controller
         }
 
         if ($request->filled('from')) {
-            $query->where('performed_at', '>=', $request->from);
+            $query->where('performed_at', '>=', $request->from . ' 00:00:00');
         }
 
         if ($request->filled('to')) {
-            $query->where('performed_at', '<=', $request->to);
+            $query->where('performed_at', '<=', $request->to . ' 23:59:59');
         }
 
         $logs = $query->paginate($request->per_page ?? 50);
 
         return response()->json($logs);
+    }
+
+    /**
+     * Get available actions for filtering
+     */
+    public function getActions()
+    {
+        $actions = ActivityLog::distinct()
+            ->pluck('action')
+            ->sort()
+            ->values();
+
+        return response()->json([
+            'actions' => $actions,
+        ]);
+    }
+
+    /**
+     * Get audit log summary
+     */
+    public function summary(Request $request)
+    {
+        $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+        ]);
+
+        $query = ActivityLog::query();
+
+        if ($request->filled('from')) {
+            $query->where('performed_at', '>=', $request->from . ' 00:00:00');
+        }
+
+        if ($request->filled('to')) {
+            $query->where('performed_at', '<=', $request->to . ' 23:59:59');
+        }
+
+        $summary = [
+            'total_actions' => $query->count(),
+            'by_action' => $query->groupBy('action')
+                ->selectRaw('action, count(*) as count')
+                ->get()
+                ->pluck('count', 'action'),
+            'by_user' => $query->with('user:id,username')
+                ->groupBy('user_id')
+                ->selectRaw('user_id, count(*) as count')
+                ->get()
+                ->map(fn($log) => [
+                    'user_id' => $log->user_id,
+                    'username' => $log->user?->username,
+                    'count' => $log->count,
+                ]),
+        ];
+
+        return response()->json($summary);
     }
 }

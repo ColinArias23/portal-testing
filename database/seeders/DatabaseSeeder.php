@@ -11,7 +11,6 @@ class DatabaseSeeder extends Seeder
         $this->call([
             SalaryGradeSeeder::class,
             StepIncrementSeeder::class,
-            PlantillaItemSeeder::class,
             PlantillaPositionSeeder::class,
             CosPositionSeeder::class,
             ConsultantPositionSeeder::class,

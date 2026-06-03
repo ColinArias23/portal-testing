@@ -23,30 +23,36 @@ class ApplicantController extends Controller
         'Complete mandatory trainings',
     ];
 
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+    }
+
     private function format(Applicant $applicant): array
     {
         return [
-            'id'           => $applicant->id,
-            'first_name'   => $applicant->first_name,
-            'last_name'    => $applicant->last_name,
-            'full_name'    => $applicant->full_name,
-            'email'        => $applicant->email,
-            'age'          => $applicant->age,
-            'phone'        => $applicant->phone,
-            'address'      => $applicant->address,
-            'birthdate'    => $applicant->birthdate?->toDateString(),
-            'source'       => $applicant->source,
-            'position'     => $applicant->position,
-            'department'   => $applicant->department,
+            'id' => $applicant->id,
+            'username' => $applicant->username,
+            'first_name' => $applicant->first_name,
+            'last_name' => $applicant->last_name,
+            'full_name' => $applicant->full_name,
+            'email' => $applicant->email,
+            'age' => $applicant->age,
+            'phone' => $applicant->phone,
+            'address' => $applicant->address,
+            'birthdate' => $applicant->birthdate?->toDateString(),
+            'source' => $applicant->source,
+            'position' => $applicant->position,
+            'department' => $applicant->department,
             'date_applied' => $applicant->date_applied?->toDateString(),
-            'submission'   => $applicant->submission,
-            'status'       => $applicant->status,
-            'remarks'      => $applicant->remarks,
-            'documents'    => $applicant->documents,
-            'interview'    => $applicant->interview,
-            'contract'     => $applicant->contract,
-            'onboarding'   => $applicant->onboarding,
-            'created_at'   => $applicant->created_at,
+            'submission' => $applicant->submission,
+            'status' => $applicant->status,
+            'remarks' => $applicant->remarks,
+            'documents' => $applicant->documents,
+            'interview' => $applicant->interview,
+            'contract' => $applicant->contract,
+            'onboarding' => $applicant->onboarding,
+            'created_at' => $applicant->created_at,
         ];
     }
 
@@ -59,9 +65,9 @@ class ApplicantController extends Controller
             $term = $request->search;
             $query->where(function ($q) use ($term) {
                 $q->where('first_name', 'like', "%{$term}%")
-                  ->orWhere('last_name',  'like', "%{$term}%")
-                  ->orWhere('email',      'like', "%{$term}%")
-                  ->orWhere('position',   'like', "%{$term}%");
+                    ->orWhere('last_name', 'like', "%{$term}%")
+                    ->orWhere('username', 'like', "%{$term}%")
+                    ->orWhere('position', 'like', "%{$term}%");
             });
         }
 
@@ -76,12 +82,12 @@ class ApplicantController extends Controller
         $paginated = $query->paginate($request->per_page ?? 15);
 
         return response()->json([
-            'data'       => $paginated->getCollection()->map(fn($a) => $this->format($a)),
+            'data' => $paginated->getCollection()->map(fn($a) => $this->format($a)),
             'pagination' => [
-                'total'        => $paginated->total(),
-                'per_page'     => $paginated->perPage(),
+                'total' => $paginated->total(),
+                'per_page' => $paginated->perPage(),
                 'current_page' => $paginated->currentPage(),
-                'last_page'    => $paginated->lastPage(),
+                'last_page' => $paginated->lastPage(),
             ],
         ]);
     }
@@ -89,22 +95,23 @@ class ApplicantController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'first_name'   => ['required', 'string', 'max:100'],
-            'last_name'    => ['required', 'string', 'max:100'],
-            'email'        => ['nullable', 'email', 'max:100'],
-            'age'          => ['nullable', 'string', 'max:5'],
-            'phone'        => ['nullable', 'string', 'max:30'],
-            'address'      => ['nullable', 'string'],
-            'birthdate'    => ['nullable', 'date'],
-            'source'       => ['nullable', 'string', 'max:60'],
-            'position'     => ['nullable', 'string', 'max:100'],
-            'department'   => ['nullable', 'string', 'max:100'],
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name' => ['required', 'string', 'max:100'],
+            'username' => ['required', 'string', 'max:100'],
+            'email' => ['nullable', 'email', 'max:100'],
+            'age' => ['nullable', 'string', 'max:5'],
+            'phone' => ['nullable', 'string', 'max:30'],
+            'address' => ['nullable', 'string'],
+            'birthdate' => ['nullable', 'date'],
+            'source' => ['nullable', 'string', 'max:60'],
+            'position' => ['nullable', 'string', 'max:100'],
+            'department' => ['nullable', 'string', 'max:100'],
             'date_applied' => ['nullable', 'date'],
-            'submission'   => ['nullable', 'string', 'max:100'],
-            'status'       => ['nullable', 'string', 'max:60'],
-            'remarks'      => ['nullable', 'string'],
-            'documents'    => ['nullable', 'array'],
-            'documents.*'  => ['string'],
+            'submission' => ['nullable', 'string', 'max:100'],
+            'status' => ['nullable', 'string', 'max:60'],
+            'remarks' => ['nullable', 'string'],
+            'documents' => ['nullable', 'array'],
+            'documents.*' => ['string', 'max:255'],
         ]);
 
         $applicant = DB::transaction(function () use ($request, $data) {
@@ -116,7 +123,7 @@ class ApplicantController extends Controller
 
             foreach ($request->documents ?? [] as $docName) {
                 $applicant->documents()->create([
-                    'name'   => trim($docName),
+                    'name' => trim($docName),
                     'status' => 'Submitted',
                 ]);
             }
@@ -125,19 +132,19 @@ class ApplicantController extends Controller
         });
 
         ActivityLog::record(
-            action:       'applicant.created',
-            userId:       $request->user()?->id,
-            subjectType:  Applicant::class,
-            subjectId:    $applicant->id,
+            action: 'applicant.created',
+            userId: $request->user()?->id,
+            subjectType: Applicant::class,
+            subjectId: $applicant->id,
             subjectLabel: $applicant->full_name,
-            payload:      [
-                'email'          => $applicant->email,
-                'position'       => $applicant->position,
-                'department'     => $applicant->department,
-                'source'         => $applicant->source,
+            payload: [
+                'username' => $applicant->username,
+                'position' => $applicant->position,
+                'department' => $applicant->department,
+                'source' => $applicant->source,
                 'document_count' => $applicant->documents->count(),
             ],
-            ip:        $request->ip(),
+            ip: $request->ip(),
             userAgent: $request->userAgent(),
         );
 
@@ -153,47 +160,48 @@ class ApplicantController extends Controller
     public function update(Request $request, Applicant $applicant)
     {
         $data = $request->validate([
-            'first_name'   => ['sometimes', 'string', 'max:100'],
-            'last_name'    => ['sometimes', 'string', 'max:100'],
-            'email'        => ['nullable', 'email', 'max:100'],
-            'age'          => ['nullable', 'string', 'max:5'],
-            'phone'        => ['nullable', 'string', 'max:30'],
-            'address'      => ['nullable', 'string'],
-            'birthdate'    => ['nullable', 'date'],
-            'source'       => ['nullable', 'string', 'max:60'],
-            'position'     => ['nullable', 'string', 'max:100'],
-            'department'   => ['nullable', 'string', 'max:100'],
+            'first_name' => ['sometimes', 'string', 'max:100'],
+            'last_name' => ['sometimes', 'string', 'max:100'],
+            'username' => ['sometimes', 'string', 'max:100'],
+            'email' => ['nullable', 'email', 'max:100'],
+            'age' => ['nullable', 'string', 'max:5'],
+            'phone' => ['nullable', 'string', 'max:30'],
+            'address' => ['nullable', 'string'],
+            'birthdate' => ['nullable', 'date'],
+            'source' => ['nullable', 'string', 'max:60'],
+            'position' => ['nullable', 'string', 'max:100'],
+            'department' => ['nullable', 'string', 'max:100'],
             'date_applied' => ['nullable', 'date'],
-            'submission'   => ['nullable', 'string', 'max:100'],
-            'status'       => ['nullable', 'string', 'max:60'],
-            'remarks'      => ['nullable', 'string'],
+            'submission' => ['nullable', 'string', 'max:100'],
+            'status' => ['nullable', 'string', 'max:60'],
+            'remarks' => ['nullable', 'string'],
         ]);
 
         $before = [
-            'status'     => $applicant->status,
-            'position'   => $applicant->position,
+            'status' => $applicant->status,
+            'position' => $applicant->position,
             'department' => $applicant->department,
-            'remarks'    => $applicant->remarks,
+            'remarks' => $applicant->remarks,
         ];
 
         $applicant->update($data);
 
         ActivityLog::record(
-            action:       'applicant.updated',
-            userId:       $request->user()?->id,
-            subjectType:  Applicant::class,
-            subjectId:    $applicant->id,
+            action: 'applicant.updated',
+            userId: $request->user()?->id,
+            subjectType: Applicant::class,
+            subjectId: $applicant->id,
             subjectLabel: $applicant->full_name,
-            payload:      [
+            payload: [
                 'before' => $before,
-                'after'  => [
-                    'status'     => $applicant->status,
-                    'position'   => $applicant->position,
+                'after' => [
+                    'status' => $applicant->status,
+                    'position' => $applicant->position,
                     'department' => $applicant->department,
-                    'remarks'    => $applicant->remarks,
+                    'remarks' => $applicant->remarks,
                 ],
             ],
-            ip:        $request->ip(),
+            ip: $request->ip(),
             userAgent: $request->userAgent(),
         );
 
@@ -201,48 +209,86 @@ class ApplicantController extends Controller
         return response()->json($this->format($applicant));
     }
 
+    /**
+     * IMPROVED: Soft delete instead of hard delete for audit trail
+     */
     public function destroy(Request $request, Applicant $applicant)
     {
-        $id    = $applicant->id;
+        $id = $applicant->id;
         $label = $applicant->full_name;
+        $payload = [
+            'position' => $applicant->position,
+            'department' => $applicant->department,
+            'status' => $applicant->status,
+        ];
 
-        $applicant->delete();
+        $applicant->delete(); // Soft delete if model uses SoftDeletes trait
 
         ActivityLog::record(
-            action:       'applicant.deleted',
-            userId:       $request->user()?->id,
-            subjectType:  Applicant::class,
-            subjectId:    $id,
+            action: 'applicant.deleted',
+            userId: $request->user()?->id,
+            subjectType: Applicant::class,
+            subjectId: $id,
             subjectLabel: $label,
-            payload:      [
-                'position'   => $applicant->position,
-                'department' => $applicant->department,
-                'status'     => $applicant->status,
-            ],
-            ip:        $request->ip(),
+            payload: $payload,
+            ip: $request->ip(),
             userAgent: $request->userAgent(),
         );
 
-        return response()->json(['message' => 'Applicant deleted successfully.']);
+        return response()->json([
+            'message' => 'Applicant deleted successfully.',
+        ]);
+    }
+
+    /**
+     * Restore soft-deleted applicant
+     */
+    public function restore(Request $request, $id)
+    {
+        $applicant = Applicant::onlyTrashed()->find($id);
+
+        if (!$applicant) {
+            return response()->json([
+                'message' => 'Applicant not found.',
+            ], 404);
+        }
+
+        $applicant->restore();
+
+        ActivityLog::record(
+            action: 'applicant.restored',
+            userId: $request->user()?->id,
+            subjectType: Applicant::class,
+            subjectId: $applicant->id,
+            subjectLabel: $applicant->full_name,
+            payload: [
+                'position' => $applicant->position,
+                'department' => $applicant->department,
+            ],
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+        );
+
+        return response()->json([
+            'message' => 'Applicant restored successfully.',
+        ]);
     }
 
     public function summary()
     {
         return response()->json([
-            'total'         => Applicant::count(),
+            'total' => Applicant::count(),
             'for_interview' => Applicant::where('status', 'For Interview')->count(),
-            'hired'         => Applicant::where('status', 'Hired')->count(),
-            'rejected'      => Applicant::where('status', 'Rejected')->count(),
-            'no_show'       => Applicant::where('status', 'No Show')->count(),
+            'hired' => Applicant::where('status', 'Hired')->count(),
+            'rejected' => Applicant::where('status', 'Rejected')->count(),
+            'no_show' => Applicant::where('status', 'No Show')->count(),
         ]);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | MOVE TO ONBOARDING — POST /hiring/applicants/{applicant}/move-to-onboarding
-    |--------------------------------------------------------------------------
-    */
-
+    /**
+     * MOVE TO ONBOARDING — POST /hiring/applicants/{applicant}/move-to-onboarding
+     * FIXED: Contract creation logic now works correctly
+     */
     public function moveToOnboarding(Request $request, Applicant $applicant)
     {
         // Prevent duplicate onboarding
@@ -261,44 +307,49 @@ class ApplicantController extends Controller
             // Create onboarding
             $onboarding = Onboarding::create([
                 'applicant_id' => $applicant->id,
-                'name'         => $applicant->full_name,
-                'position'     => $applicant->position,
-                'department'   => $applicant->department,
-                'status'       => 'Pending',
+                'name' => $applicant->full_name,
+                'position' => $applicant->position,
+                'department' => $applicant->department,
+                'status' => 'Pending',
             ]);
 
+            // Create default onboarding tasks
             foreach (self::DEFAULT_TASKS as $index => $title) {
                 OnboardingTask::create([
                     'onboarding_id' => $onboarding->id,
-                    'title'         => $title,
-                    'completed'     => false,
-                    'sort_order'    => $index,
+                    'title' => $title,
+                    'completed' => false,
+                    'sort_order' => $index,
                 ]);
             }
 
-            // Create draft contract if none exists
-            if (!Contract::where('applicant_id', $applicant->id)->exists()) {
+            // FIXED: Check contract before creating, and store the result
+            $contractAlreadyExists = Contract::where('applicant_id', $applicant->id)->exists();
+            $contractCreated = false;
+
+            if (!$contractAlreadyExists) {
                 Contract::create([
-                    'applicant_id'  => $applicant->id,
+                    'applicant_id' => $applicant->id,
                     'employee_name' => $applicant->full_name,
-                    'position'      => $applicant->position,
-                    'status'        => 'Draft',
+                    'position' => $applicant->position,
+                    'status' => 'Draft',
                 ]);
+                $contractCreated = true;
             }
 
             ActivityLog::record(
-                action:       'applicant.moved_to_onboarding',
-                userId:       $request->user()?->id,
-                subjectType:  Applicant::class,
-                subjectId:    $applicant->id,
+                action: 'applicant.moved_to_onboarding',
+                userId: $request->user()?->id,
+                subjectType: Applicant::class,
+                subjectId: $applicant->id,
                 subjectLabel: $applicant->full_name,
-                payload:      [
-                    'position'       => $applicant->position,
-                    'department'     => $applicant->department,
-                    'onboarding_id'  => $onboarding->id,
-                    'contract_created' => !Contract::where('applicant_id', $applicant->id)->exists(),
+                payload: [
+                    'position' => $applicant->position,
+                    'department' => $applicant->department,
+                    'onboarding_id' => $onboarding->id,
+                    'contract_created' => $contractCreated,
                 ],
-                ip:        $request->ip(),
+                ip: $request->ip(),
                 userAgent: $request->userAgent(),
             );
         });
@@ -306,7 +357,7 @@ class ApplicantController extends Controller
         $applicant->load(['documents', 'interview', 'contract', 'onboarding']);
 
         return response()->json([
-            'message'   => "{$applicant->full_name} has been moved to onboarding.",
+            'message' => "{$applicant->full_name} has been moved to onboarding.",
             'applicant' => $this->format($applicant),
         ]);
     }

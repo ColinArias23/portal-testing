@@ -40,6 +40,7 @@ class ConsultantPositionSeeder extends Seeder
             'Medical Specialist (Pediatric Pulmonologist)',
             'Medical Specialist (Pulmonologist)',
             'Medical Specialist (Urologist)',
+            'DATA CONTROLLER',
         ];
 
         $rows = [];

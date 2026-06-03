@@ -712,6 +712,12 @@ class EmployeeSeeder extends Seeder
             [
                 'Staff', null, null, 'Margie', 'Molito', 'Lucañas', null, null, 'Plantilla', 'active', null, null, false, false, null,
             ],
+            [
+                'Staff', null, null, 'Pia Angelina', 'C.', 'Tan', null, null, 'Plantilla', 'active', null, null, false, false, null,
+            ],
+            [
+                'Staff', null, null, 'Bradford Antonio', 'C.', 'Martinez', null, null, 'Plantilla', 'active', null, null, false, false, null,
+            ],
         ];
 
         foreach ($employees as $emp) {

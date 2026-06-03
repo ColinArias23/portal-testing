@@ -10,6 +10,8 @@ use App\Models\StepIncrement;
 use App\Models\EmployeeAssignment;
 use App\Models\SkillAssessment;
 use App\Models\DevelopmentPlan;
+use App\Models\CosPosition;
+use App\Models\ConsultantPosition;
 
 class Employee extends Model
 {
@@ -27,6 +29,8 @@ class Employee extends Model
         'position_designation',
         'employment_type',
         'employment_status',
+        'cos_position_id',
+        'consultant_position_id',
         'avatar_url',
         'border_color',
         'aligned',
@@ -94,9 +98,6 @@ class Employee extends Model
     |--------------------------------------------------------------------------
     */
 
-    /**
-     * All assignment records (history included).
-     */
     public function assignments()
     {
         return $this->hasMany(EmployeeAssignment::class);
@@ -104,17 +105,18 @@ class Employee extends Model
 
     /**
      * The single active primary assignment.
-     * This is the source of truth for current plantilla item + step.
+     * Source of truth for current position slot + step.
      */
     public function primaryAssignment()
     {
         return $this->hasOne(EmployeeAssignment::class)
             ->whereNull('end_date')
-            ->where('is_primary', true);
+            ->where('is_primary', true)
+            ->latestOfMany('start_date');
     }
 
     /**
-     * Alias kept for backwards compatibility with existing code.
+     * Alias for backwards compatibility.
      */
     public function activeAssignment()
     {
@@ -159,21 +161,37 @@ class Employee extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | SKILL RELATIONSHIPS
+    | EMPLOYMENT TYPE RELATIONSHIPS
     |--------------------------------------------------------------------------
     */
 
     /**
-     * All skill assessments for this employee.
+     * COS (Contract of Service) position relationship.
      */
+    public function cosPosition()
+    {
+        return $this->belongsTo(CosPosition::class, 'cos_position_id');
+    }
+
+    /**
+     * Consultant position relationship.
+     */
+    public function consultantPosition()
+    {
+        return $this->belongsTo(ConsultantPosition::class, 'consultant_position_id');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | SKILL RELATIONSHIPS
+    |--------------------------------------------------------------------------
+    */
+
     public function skillAssessments()
     {
         return $this->hasMany(SkillAssessment::class);
     }
 
-    /**
-     * The latest submitted skill assessment.
-     */
     public function latestAssessment()
     {
         return $this->hasOne(SkillAssessment::class)
@@ -181,17 +199,11 @@ class Employee extends Model
             ->latestOfMany('submitted_at');
     }
 
-    /**
-     * All development plans for this employee.
-     */
     public function developmentPlans()
     {
         return $this->hasMany(DevelopmentPlan::class);
     }
 
-    /**
-     * Active development plans (planned or in_progress).
-     */
     public function activeDevelopmentPlans()
     {
         return $this->hasMany(DevelopmentPlan::class)
@@ -216,15 +228,16 @@ class Employee extends Model
     */
 
     /**
-     * Shortcut: current plantilla item via active assignment.
+     * Current position slot via active assignment (Plantilla only).
      */
-    public function getCurrentPlantillaItemAttribute(): ?PlantillaItem
+    public function getCurrentPlantillaPositionAttribute(): ?PlantillaPosition
     {
-        return $this->primaryAssignment?->plantillaItem;
+        return $this->primaryAssignment?->plantillaPosition;
     }
 
     /**
-     * Shortcut: current step increment via active assignment.
+     * Current step increment via active assignment (with fallback to position default).
+     * Only applies to Plantilla employees.
      */
     public function getCurrentStepIncrementAttribute(): ?StepIncrement
     {
@@ -232,16 +245,35 @@ class Employee extends Model
     }
 
     /**
-     * Shortcut: average score from the latest submitted assessment.
+     * Get position title based on employment type.
+     * Works for Plantilla, COS, and Consultant employees.
      */
+    public function getPositionTitleAttribute(): ?string
+    {
+        $type = strtolower(trim($this->employment_type ?? ''));
+
+        if ($type === 'plantilla') {
+            return $this->primaryAssignment?->plantillaPosition?->item?->title
+                ?? $this->primaryAssignment?->plantillaPosition?->position_title
+                ?? null;
+        }
+
+        if ($type === 'contract of service' || $type === 'cos') {
+            return $this->cosPosition?->title ?? null;
+        }
+
+        if ($type === 'consultant') {
+            return $this->consultantPosition?->title ?? null;
+        }
+
+        return null;
+    }
+
     public function getSkillScoreAttribute(): ?float
     {
         return $this->latestAssessment?->average_score;
     }
 
-    /**
-     * Shortcut: gap count from the latest submitted assessment.
-     */
     public function getSkillGapCountAttribute(): ?int
     {
         return $this->latestAssessment?->gap_count;
@@ -269,9 +301,16 @@ class Employee extends Model
         return $query->where('employment_type', 'Plantilla');
     }
 
-    /**
-     * Scope: employees who have at least one submitted assessment.
-     */
+    public function scopeCos($query)
+    {
+        return $query->where('employment_type', 'Contract of Service');
+    }
+
+    public function scopeConsultant($query)
+    {
+        return $query->where('employment_type', 'Consultant');
+    }
+
     public function scopeWithAssessment($query)
     {
         return $query->whereHas('skillAssessments', fn ($q) =>
@@ -279,14 +318,99 @@ class Employee extends Model
         );
     }
 
-    /**
-     * Scope: employees who have skill gaps (gap_count > 0 in latest assessment).
-     */
     public function scopeWithGaps($query)
     {
         return $query->whereHas('skillAssessments', fn ($q) =>
             $q->where('status', '!=', 'draft')
               ->where('gap_count', '>', 0)
         );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | DEPARTMENT ASSIGNMENT RELATIONSHIPS (NEW)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * All department assignments (current and historical).
+     */
+    public function departmentAssignments()
+    {
+        return $this->hasMany(EmployeeDepartmentAssignment::class);
+    }
+
+    /**
+     * The primary active department assignment.
+     */
+    public function primaryDepartmentAssignment()
+    {
+        return $this->hasOne(EmployeeDepartmentAssignment::class)
+            ->where('is_primary', true)
+            ->whereNull('end_date');
+    }
+
+    /**
+     * All active department assignments (for staff with multiple depts).
+     */
+    public function activeDepartmentAssignments()
+    {
+        return $this->departmentAssignments()
+            ->whereNull('end_date')
+            ->orderBy('is_primary', 'desc');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CONVENIENCE ACCESSORS (NEW)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Get the primary department (via assignment).
+     */
+    public function getPrimaryDepartmentAttribute(): ?Department
+    {
+        return $this->primaryDepartmentAssignment?->department;
+    }
+
+    /**
+     * Get the primary department head (via assignment).
+     */
+    public function getPrimaryDepartmentHeadAttribute(): ?Employee
+    {
+        return $this->primaryDepartmentAssignment?->effective_head;
+    }
+
+    /**
+     * Get all departments this employee is assigned to (active only).
+     */
+    public function getAssignedDepartmentsAttribute()
+    {
+        return $this->activeDepartmentAssignments
+            ->map(fn ($a) => $a->department)
+            ->unique('id')
+            ->values();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | HELPER
+    |--------------------------------------------------------------------------
+    */
+
+    public function isPlantilla(): bool
+    {
+        return strtolower(trim($this->employment_type ?? '')) === 'plantilla';
+    }
+
+    public function isCos(): bool
+    {
+        return in_array(strtolower(trim($this->employment_type ?? '')), ['contract of service', 'cos']);
+    }
+
+    public function isConsultant(): bool
+    {
+        return strtolower(trim($this->employment_type ?? '')) === 'consultant';
     }
 }

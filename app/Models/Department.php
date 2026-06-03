@@ -26,8 +26,32 @@ class Department extends Model
         return $this->belongsTo(Employee::class, 'head_employee_id');
     }
 
-    public function plantillaItems()
+    public function plantillaPositions()
     {
-        return $this->hasMany(PlantillaItem::class);
+        return $this->hasManyThrough(
+            PlantillaPosition::class,
+            Division::class,
+            'id',
+            'division_id',
+            'division_id',
+            'id'
+        );
+    }
+
+    /**
+     * All employees assigned to this department (current).
+     */
+    public function assignedEmployees()
+    {
+        return $this->hasMany(EmployeeDepartmentAssignment::class)
+            ->whereNull('end_date');
+    }
+
+    /**
+     * Primary employees (should be one department head).
+     */
+    public function primaryEmployees()
+    {
+        return $this->assignedEmployees()->where('is_primary', true);
     }
 }

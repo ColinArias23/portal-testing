@@ -4,8 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     /**
      * Run the migrations.
      */
@@ -14,25 +13,44 @@ return new class extends Migration
         Schema::create('users', function (Blueprint $table) {
             $table->id();
 
-            $table->foreignId('employee_id')->nullable()
+            $table->foreignId('employee_id')
+                ->nullable()
                 ->constrained('employees')
                 ->nullOnDelete();
 
-            $table->string('email')->unique();
+            // Authentication fields
+            $table->string('username')
+                ->unique()
+                ->index();
+
+            $table->string('email')
+                ->nullable()
+                ->unique();
+
             $table->string('password');
 
-            $table->string('approval_status')->default('PENDING');
-            $table->timestamp('approved_at')->nullable();
+            // Approval workflow fields
+            $table->enum('approval_status', ['PENDING', 'APPROVED', 'REJECTED'])
+                ->default('PENDING')
+                ->index();
 
-            $table->foreignId('approved_by')->nullable()
+            $table->timestamp('approved_at')
+                ->nullable()
+                ->index();
+
+            $table->foreignId('approved_by')
+                ->nullable()
                 ->constrained('users')
                 ->nullOnDelete();
 
+            // API token
             $table->rememberToken();
+
+            // Timestamps
             $table->timestamps();
 
+            // Composite index for common queries
             $table->index(['approval_status', 'approved_at']);
-            $table->index('email');
         });
     }
 
@@ -42,7 +60,5 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('users');
-        Schema::dropIfExists('password_reset_tokens');
-        Schema::dropIfExists('sessions');
     }
 };

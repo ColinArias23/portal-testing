@@ -12,12 +12,44 @@ class User extends Authenticatable
 
     protected $guard_name = 'web';
 
-    protected $fillable = ['employee_id','email','password','approval_status','approved_at','approved_by'];
+    // Only fillable fields that users/admins should directly set
+    protected $fillable = ['employee_id', 'username', 'email', 'password'];
 
-    protected $hidden = ['password','remember_token'];
+    protected $hidden = ['password', 'remember_token'];
+
+    // FIXED: 'approve_at' → 'approved_at'
+    protected $casts = [
+        'approved_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
 
     public function employee()
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    /**
+     * Scope: Get only approved users
+     */
+    public function scopeApproved($query)
+    {
+        return $query->where('approval_status', 'APPROVED');
+    }
+
+    /**
+     * Scope: Get only pending users
+     */
+    public function scopePending($query)
+    {
+        return $query->where('approval_status', 'PENDING');
+    }
+
+    /**
+     * Check if user is approved
+     */
+    public function isApproved(): bool
+    {
+        return $this->approval_status === 'APPROVED';
     }
 }

@@ -16,34 +16,34 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $data = $request->validate([
-            'email'    => ['required', 'email'],
+            'username' => ['required', 'string'],
             'password' => ['required', 'string'],
         ]);
 
-        $user = User::where('email', $data['email'])->first();
+        $user = User::where('username', $data['username'])->first();
 
         if (!$user || !Hash::check($data['password'], $user->password)) {
             ActivityLog::record(
-                action:    'auth.login_failed',
-                payload:   ['email' => $data['email']],
-                ip:        $request->ip(),
+                action: 'auth.login_failed',
+                payload: ['username' => $data['username']],
+                ip: $request->ip(),
                 userAgent: $request->userAgent(),
             );
 
             throw ValidationException::withMessages([
-                'email' => ['Invalid email or password.'],
+                'username' => ['Invalid username or password.'],
             ]);
         }
 
         if ($user->approval_status !== 'APPROVED') {
             ActivityLog::record(
-                action:      'auth.login_blocked',
-                userId:      $user->id,
+                action: 'auth.login_blocked',
+                userId: $user->id,
                 subjectType: User::class,
-                subjectId:   $user->id,
-                payload:     ['reason' => 'account_not_approved'],
-                ip:          $request->ip(),
-                userAgent:   $request->userAgent(),
+                subjectId: $user->id,
+                payload: ['reason' => 'account_not_approved'],
+                ip: $request->ip(),
+                userAgent: $request->userAgent(),
             );
 
             return response()->json([
@@ -59,26 +59,20 @@ class AuthController extends Controller
         | that affects both skip()->pluck() and limit()->pluck().
         |----------------------------------------------------------------
         */
-        $allTokenIds = $user->tokens()
-            ->orderByDesc('last_used_at')
-            ->pluck('id');
-
-        if ($allTokenIds->count() >= 4) {
-            $keepIds = $allTokenIds->take(4);
-            $user->tokens()
-                ->whereNotIn('id', $keepIds)
-                ->delete();
+        if ($user->tokens()->exists()) {
+            broadcast(new \App\Events\UserLoggedInElsewhere($user->id));
+            $user->tokens()->delete();
         }
-
+        
         $token = $user->createToken('api-token')->plainTextToken;
 
         ActivityLog::record(
-            action:      'auth.login',
-            userId:      $user->id,
+            action: 'auth.login',
+            userId: $user->id,
             subjectType: User::class,
-            subjectId:   $user->id,
-            ip:          $request->ip(),
-            userAgent:   $request->userAgent(),
+            subjectId: $user->id,
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
         );
 
         $user->load([
@@ -88,40 +82,42 @@ class AuthController extends Controller
 
         return response()->json([
             'success' => true,
-            'token'   => $token,
-            'user'    => $this->formatUser($user),
+            'token' => $token,
+            'user' => $this->formatUser($user),
         ]);
     }
 
     public function register(Request $request)
     {
         $data = $request->validate([
-            'email'    => ['required', 'email', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'username' => ['required', 'string', 'unique:users,username', 'min:3', 'max:100'],
+            'email' => ['required', 'string', 'email', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8', 'confirmed', 'regex:/[A-Z]/', 'regex:/[0-9]/'],
         ]);
 
         $user = User::create([
-            'email'           => $data['email'],
-            'password'        => Hash::make($data['password']),
+            'username' => $data['username'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
             'approval_status' => 'PENDING',
         ]);
 
         broadcast(new UserRegistered($user->id));
-        NotificationService::accountPending($user->email);
+        NotificationService::accountPending($user->username);
 
         ActivityLog::record(
-            action:      'auth.register',
-            userId:      $user->id,
+            action: 'auth.register',
+            userId: $user->id,
             subjectType: User::class,
-            subjectId:   $user->id,
-            ip:          $request->ip(),
-            userAgent:   $request->userAgent(),
+            subjectId: $user->id,
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
         );
 
         return response()->json([
             'success' => true,
             'message' => 'Registration successful. Please wait for HR to activate your account.',
-            'user'    => $this->formatUser($user),
+            'user' => $this->formatUser($user),
         ], 201);
     }
 
@@ -142,12 +138,12 @@ class AuthController extends Controller
         $user = $request->user();
 
         ActivityLog::record(
-            action:      'auth.logout',
-            userId:      $user?->id,
+            action: 'auth.logout',
+            userId: $user?->id,
             subjectType: $user ? User::class : null,
-            subjectId:   $user?->id,
-            ip:          $request->ip(),
-            userAgent:   $request->userAgent(),
+            subjectId: $user?->id,
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
         );
 
         $user?->currentAccessToken()?->delete();
@@ -157,9 +153,15 @@ class AuthController extends Controller
 
     private function resolveAvatarUrl(?string $path): ?string
     {
-        if (!$path) return null;
+        if (!$path) {
+            return null;
+        }
+
         $filePath = storage_path('app/public/' . $path);
-        if (!file_exists($filePath)) return null;
+        if (!file_exists($filePath)) {
+            return null;
+        }
+
         return rtrim(config('app.url'), '/') . '/storage/' . $path;
     }
 
@@ -179,25 +181,26 @@ class AuthController extends Controller
             $employee?->getRawOriginal('avatar_url')
         );
 
-        $roles       = $user->getRoleNames();
+        $roles = $user->getRoleNames();
         $permissions = $user->getAllPermissions()->pluck('name')->values();
 
         return [
-            'id'              => $user->id,
-            'email'           => $user->email,
-            'is_active'       => $user->approval_status === 'APPROVED',
+            'id' => $user->id,
+            'username' => $user->username,
+            'email' => $user->email,
+            'is_active' => $user->approval_status === 'APPROVED',
             'approval_status' => $user->approval_status,
-            'first_name'      => $employee?->first_name ?? null,
-            'last_name'       => $employee?->last_name  ?? null,
-            'roles'           => $roles,
-            'permissions'     => $permissions,
-            'employee'        => $employee,
-            'avatar_url'      => $avatarUrl,
-            'departments'     => $departments,
-            'department_ids'  => $employee?->department_ids ?? [],
-            'division'        => $division?->name,
-            'position'        => null,
-            'employee_id'     => $employee?->id ?? null,
+            'first_name' => $employee?->first_name ?? null,
+            'last_name' => $employee?->last_name ?? null,
+            'roles' => $roles,
+            'permissions' => $permissions,
+            'employee' => $employee,
+            'avatar_url' => $avatarUrl,
+            'departments' => $departments,
+            'department_ids' => $employee?->department_ids ?? [],
+            'division' => $division?->name,
+            'position' => null,
+            'employee_id' => $employee?->id ?? null,
         ];
     }
 }

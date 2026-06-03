@@ -4,71 +4,35 @@ namespace App\Services;
 
 use App\Models\Employee;
 use App\Models\EmployeeAssignment;
-use App\Models\PlantillaItem;
 use App\Models\PlantillaPosition;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 class PlantillaService
 {
-    /*
-    |--------------------------------------------------------------------------
-    | ADD POSITION
-    | Rule: plantilla_item must have available slots before a new
-    | PlantillaPosition can be created under it.
-    |--------------------------------------------------------------------------
-    */
-
-    public function addPosition(
-        PlantillaItem $item,
-        string        $itemNumber,
-        ?string       $positionTitle   = null,
-        ?int          $salaryGradeId   = null,
-        ?int          $stepIncrementId = null,
-    ): PlantillaPosition {
-
-        if (!$item->hasAvailableSlots()) {
-            throw new RuntimeException(
-                "No available slots for [{$item->title}]. " .
-                "All {$item->approved_slots} approved slot(s) are taken."
-            );
-        }
-
-        // model creating() event also guards this — double safety
-        return PlantillaPosition::create([
-            'plantilla_item_id' => $item->id,
-            'item_number'       => $itemNumber,
-            'position_title'    => $positionTitle,
-            'salary_grade_id'   => $salaryGradeId,
-            'step_increment_id' => $stepIncrementId,
-            'status'            => 'VACANT',
-            'requires_approval' => false,
-        ]);
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | ASSIGN
-    | Rule: only VACANT positions (requires_approval = false, not filled)
-    | can be assigned to an employee.
-    |--------------------------------------------------------------------------
-    */
-
+    /**
+     * ─────────────────────────────────────────────────────────────────────
+     * ASSIGN
+     * ─────────────────────────────────────────────────────────────────────
+     * 
+     * Assign an employee to a VACANT position.
+     * Position must be assignable (not filled, not unfilled, not requiring approval).
+     */
     public function assign(
         PlantillaPosition $position,
-        Employee          $employee,
-        ?int              $stepIncrementId = null,
-        ?string           $startDate       = null,
+        Employee $employee,
+        ?int $stepIncrementId = null,
+        ?string $startDate = null,
     ): EmployeeAssignment {
 
         if (!$position->isAssignable()) {
             $status = $position->computed_status;
             throw new RuntimeException(
-                "Position [{$position->item_number}] cannot be assigned. " .
+                "Position [{$position->position_slot_name}] cannot be assigned. " .
                 "Current status: {$status}. " .
                 ($status === 'UNFILLED'
-                    ? "City approval is required before this slot can be filled again."
-                    : "Only VACANT slots can be assigned.")
+                    ? "Approval is required before this position can be filled again."
+                    : "Only VACANT positions can be assigned.")
             );
         }
 
@@ -78,7 +42,7 @@ class PlantillaService
 
         if ($alreadyOccupied) {
             throw new RuntimeException(
-                "Position [{$position->item_number}] already has an active assignment."
+                "Position [{$position->position_slot_name}] already has an active assignment."
             );
         }
 
@@ -89,42 +53,40 @@ class PlantillaService
 
         if ($existing && $existing->plantilla_position_id !== $position->id) {
             throw new RuntimeException(
-                "Employee [{$employee->full_name}] already has an active assignment. " .
+                "Employee [{$employee->full_name}] already has an active assignment to " .
+                "[{$existing->plantillaPosition->position_slot_name}]. " .
                 "Use transfer() to move them to a different position."
             );
         }
 
         return DB::transaction(function () use ($position, $employee, $stepIncrementId, $startDate) {
             $assignment = EmployeeAssignment::create([
-                'employee_id'           => $employee->id,
+                'employee_id' => $employee->id,
                 'plantilla_position_id' => $position->id,
-                'step_increment_id'     => $stepIncrementId,
-                'is_primary'            => true,
-                'start_date'            => $startDate ?? now()->toDateString(),
-                'end_date'              => null,
+                'step_increment_id' => $stepIncrementId,
+                'is_primary' => true,
+                'start_date' => $startDate ?? now()->toDateString(),
+                'end_date' => null,
             ]);
 
-            $position->update([
-                'status'             => 'FILLED',
-                'date_of_assumption' => $startDate ?? now()->toDateString(),
-            ]);
+            $position->fillPosition();
 
             return $assignment;
         });
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | VACATE
-    | Sets position to UNFILLED + requires_approval = true.
-    | Position cannot be assigned again until approved.
-    |--------------------------------------------------------------------------
-    */
-
+    /**
+     * ─────────────────────────────────────────────────────────────────────
+     * VACATE
+     * ─────────────────────────────────────────────────────────────────────
+     * 
+     * End an employee's assignment to a position.
+     * Position becomes UNFILLED and requires approval before reassignment.
+     */
     public function vacate(
         EmployeeAssignment $assignment,
-        ?string            $endDate = null,
-        ?string            $remarks = null,
+        ?string $endDate = null,
+        ?string $remarks = null,
     ): PlantillaPosition {
 
         if (!$assignment->isActive()) {
@@ -139,33 +101,26 @@ class PlantillaService
             ]);
 
             $position = $assignment->plantillaPosition;
-
-            $position->update([
-                'status'             => 'UNFILLED',
-                'requires_approval'  => true,
-                'vacated_at'         => now(),
-                'date_of_assumption' => null,
-                'vacancy_notes'      => $remarks,
-            ]);
+            $position->vacatePosition($remarks);
 
             return $position->fresh();
         });
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | TRANSFER
-    | Moves employee from one position to another.
-    | Source → UNFILLED (locked, needs approval before reuse).
-    | Destination must be VACANT.
-    |--------------------------------------------------------------------------
-    */
-
+    /**
+     * ─────────────────────────────────────────────────────────────────────
+     * TRANSFER
+     * ─────────────────────────────────────────────────────────────────────
+     * 
+     * Move employee from one position to another.
+     * Source position → UNFILLED (requires approval before reuse)
+     * Destination must be VACANT
+     */
     public function transfer(
         EmployeeAssignment $fromAssignment,
-        PlantillaPosition  $toPosition,
-        ?int               $stepIncrementId = null,
-        ?string            $transferDate    = null,
+        PlantillaPosition $toPosition,
+        ?int $stepIncrementId = null,
+        ?string $transferDate = null,
     ): EmployeeAssignment {
 
         if (!$fromAssignment->isActive()) {
@@ -177,69 +132,61 @@ class PlantillaService
         if (!$toPosition->isAssignable()) {
             $status = $toPosition->computed_status;
             throw new RuntimeException(
-                "Destination position [{$toPosition->item_number}] is not available. " .
+                "Destination position [{$toPosition->position_slot_name}] is not available. " .
                 "Status: {$status}." .
                 ($status === 'UNFILLED'
-                    ? " City approval is required before this slot can be filled."
+                    ? " Approval is required before this position can be filled."
                     : "")
             );
         }
 
         return DB::transaction(function () use ($fromAssignment, $toPosition, $stepIncrementId, $transferDate) {
-            $date         = $transferDate ?? now()->toDateString();
-            $employee     = $fromAssignment->employee;
+            $date = $transferDate ?? now()->toDateString();
+            $employee = $fromAssignment->employee;
             $fromPosition = $fromAssignment->plantillaPosition;
 
             // Close old assignment
             $fromAssignment->update(['end_date' => $date]);
 
-            // Lock old position — needs city approval before reuse
-            $fromPosition->update([
-                'status'             => 'UNFILLED',
-                'requires_approval'  => true,
-                'vacated_at'         => now(),
-                'date_of_assumption' => null,
-            ]);
+            // Lock old position — needs approval before reuse
+            $fromPosition->vacatePosition("Transferred to [{$toPosition->position_slot_name}]");
 
             // Open new assignment
             $newAssignment = EmployeeAssignment::create([
-                'employee_id'           => $employee->id,
+                'employee_id' => $employee->id,
                 'plantilla_position_id' => $toPosition->id,
-                'step_increment_id'     => $stepIncrementId,
-                'is_primary'            => true,
-                'start_date'            => $date,
-                'end_date'              => null,
+                'step_increment_id' => $stepIncrementId ?? $fromAssignment->step_increment_id,
+                'is_primary' => true,
+                'start_date' => $date,
+                'end_date' => null,
             ]);
 
-            $toPosition->update([
-                'status'             => 'FILLED',
-                'date_of_assumption' => $date,
-            ]);
+            $toPosition->fillPosition();
 
             return $newAssignment;
         });
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | APPROVE
-    | City approval received — unlock the position for assignment.
-    | UNFILLED → VACANT
-    |--------------------------------------------------------------------------
-    */
-
+    /**
+     * ─────────────────────────────────────────────────────────────────────
+     * APPROVE
+     * ─────────────────────────────────────────────────────────────────────
+     * 
+     * Approve an UNFILLED position and reopen it for assignment.
+     * UNFILLED → VACANT
+     */
     public function approve(PlantillaPosition $position): PlantillaPosition
     {
         if ($position->status !== 'UNFILLED') {
             throw new RuntimeException(
-                "Position [{$position->item_number}] is not UNFILLED — nothing to approve. " .
+                "Position [{$position->position_slot_name}] is not UNFILLED — nothing to approve. " .
                 "Current status: {$position->status}."
             );
         }
 
         if ($position->isFilled()) {
             throw new RuntimeException(
-                "Position [{$position->item_number}] still has an active occupant."
+                "Position [{$position->position_slot_name}] still has an active occupant."
             );
         }
 
@@ -248,43 +195,132 @@ class PlantillaService
         return $position->fresh();
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | FORCE UNLOCK (admin override)
-    |--------------------------------------------------------------------------
-    */
-
+    /**
+     * ─────────────────────────────────────────────────────────────────────
+     * FORCE UNLOCK (Admin override)
+     * ─────────────────────────────────────────────────────────────────────
+     * 
+     * Admin-only: Override approval requirement and reopen position.
+     * Intended for urgent staffing situations.
+     */
     public function forceUnlock(PlantillaPosition $position, string $reason = ''): PlantillaPosition
     {
         $position->approveForRefilling();
 
+        if ($reason) {
+            $position->update(['vacancy_notes' => "Force unlocked: {$reason}"]);
+        }
+
         return $position->fresh();
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | DELETE POSITION
-    | Removes the position slot. If the parent item has no remaining
-    | positions after deletion, the item is auto-deleted via model event.
-    | Cannot delete FILLED or UNFILLED slots.
-    |--------------------------------------------------------------------------
-    */
+    /**
+     * ─────────────────────────────────────────────────────────────────────
+     * GET COMPATIBLE POSITIONS
+     * ─────────────────────────────────────────────────────────────────────
+     * 
+     * Get positions that an employee can be assigned to.
+     * Compatible = VACANT, assignable, and with matching salary grade if required.
+     */
+    public function getCompatiblePositions(
+        Employee $employee,
+        ?int $divisionId = null,
+        ?int $salaryGradeId = null,
+    ) {
+        $query = PlantillaPosition::assignable();
 
-    public function deletePosition(PlantillaPosition $position): void
+        if ($divisionId) {
+            $query->forDivision($divisionId);
+        }
+
+        if ($salaryGradeId) {
+            $query->where('salary_grade_id', $salaryGradeId);
+        }
+
+        return $query
+            ->with(['division', 'salaryGrade', 'stepIncrement'])
+            ->orderBy('base_item_number')
+            ->orderBy('slot_number')
+            ->get();
+    }
+
+    /**
+     * ─────────────────────────────────────────────────────────────────────
+     * GET CURRENT ASSIGNMENT
+     * ─────────────────────────────────────────────────────────────────────
+     * 
+     * Get the current active assignment for an employee.
+     */
+    public function getCurrentAssignment(Employee $employee): ?EmployeeAssignment
     {
-        if ($position->isFilled()) {
-            throw new RuntimeException(
-                "Cannot delete position [{$position->item_number}] — it is currently FILLED."
-            );
-        }
+        return $employee->assignments()
+            ->where('is_primary', true)
+            ->whereNull('end_date')
+            ->with('plantillaPosition.salaryGrade')
+            ->first();
+    }
 
-        if ($position->isUnfilled()) {
-            throw new RuntimeException(
-                "Cannot delete position [{$position->item_number}] — it is UNFILLED and awaiting approval."
-            );
-        }
+    /**
+     * ─────────────────────────────────────────────────────────────────────
+     * GET ASSIGNMENT HISTORY
+     * ─────────────────────────────────────────────────────────────────────
+     * 
+     * Get all past and current assignments for an employee.
+     */
+    public function getAssignmentHistory(Employee $employee)
+    {
+        return $employee->assignments()
+            ->where('is_primary', true)
+            ->with(['plantillaPosition', 'stepIncrement'])
+            ->orderBy('start_date', 'desc')
+            ->get();
+    }
 
-        // model deleted() event will auto-delete parent item if no positions remain
-        $position->delete();
+    /**
+     * ─────────────────────────────────────────────────────────────────────
+     * CHECK OVERSTAFFING
+     * ─────────────────────────────────────────────────────────────────────
+     * 
+     * Detect positions with multiple active assignments.
+     * Useful for audit and compliance checks.
+     */
+    public function getOverstaffedPositions()
+    {
+        return PlantillaPosition::overstaffed()
+            ->with([
+                'activeAssignments.employee',
+                'division',
+                'salaryGrade',
+            ])
+            ->orderBy('base_item_number')
+            ->orderBy('slot_number')
+            ->get();
+    }
+
+    /**
+     * ─────────────────────────────────────────────────────────────────────
+     * CHECK VACANT POSITIONS BY ITEM
+     * ─────────────────────────────────────────────────────────────────────
+     * 
+     * Get summary of vacancy by plantilla item.
+     */
+    public function getVacancySummaryByItem()
+    {
+        return PlantillaPosition::selectRaw(
+            'base_item_number, title, ' .
+            'COUNT(*) as total_slots, ' .
+            'SUM(CASE WHEN status = "FILLED" THEN 1 ELSE 0 END) as filled_slots'
+        )
+            ->groupBy('base_item_number', 'title')
+            ->orderBy('base_item_number')
+            ->get()
+            ->map(fn($item) => [
+                'base_item_number' => $item->base_item_number,
+                'title' => $item->title,
+                'total_slots' => $item->total_slots,
+                'filled_slots' => $item->filled_slots,
+                'vacant_slots' => $item->total_slots - $item->filled_slots,
+                'occupancy_rate' => number_format(($item->filled_slots / $item->total_slots) * 100, 2) . '%',
+            ]);
     }
 }

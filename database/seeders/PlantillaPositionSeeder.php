@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\PlantillaItem;
 use App\Models\PlantillaPosition;
 use App\Models\SalaryGrade;
 use App\Models\StepIncrement;
@@ -446,56 +445,37 @@ class PlantillaPositionSeeder extends Seeder
         $sgCache   = SalaryGrade::pluck('id', 'salary_grade')->toArray();
         $stepCache = StepIncrement::where('step', 1)->pluck('id', 'salary_grade_id')->toArray();
 
-        $groups = [];
         foreach ($this->rows as $row) {
-            $base = explode('-', $row['item_no'])[0];
-            $key  = $base . '|' . $row['title'] . '|' . $row['sg'];
-            $groups[$key][] = $row;
-        }
 
-        foreach ($groups as $slotRows) {
-
-            $first = $slotRows[0];
-            $base  = explode('-', $first['item_no'])[0];
-
-            if (! isset($sgCache[$first['sg']])) {
+            if (! isset($sgCache[$row['sg']])) {
                 $sg = SalaryGrade::create([
-                    'salary_grade'   => $first['sg'],
+                    'salary_grade'   => $row['sg'],
                     'monthly_salary' => null,
                     'annual_salary'  => null,
                 ]);
-                $sgCache[$first['sg']] = $sg->id;
+                $sgCache[$row['sg']] = $sg->id;
             }
 
-            $sgId   = $sgCache[$first['sg']];
+            $sgId   = $sgCache[$row['sg']];
             $stepId = $stepCache[$sgId] ?? null;
 
-            $item = PlantillaItem::firstOrCreate(
+            PlantillaPosition::updateOrCreate(
+                ['position_slot_name' => $row['item_no']],  // ← was 'item_number'
                 [
-                    'base_item_number' => $base,
-                    'title'            => $first['title'],
-                ],
-                [
-                    'approved_slots' => count($slotRows),
-                    'description'    => null,
+                    'base_item_number'  => explode('-', $row['item_no'])[0],
+                    'title'             => $row['title'],
+                    'slot_number'       => isset(explode('-', $row['item_no'])[1])
+                                            ? (int) explode('-', $row['item_no'])[1]
+                                            : 1,
+                    'position_title'    => $row['title'],
+                    'salary_grade_id'   => $sgId,
+                    'step_increment_id' => $stepId,
+                    'status'            => $row['status'],
+                    'requires_approval' => false,
+                    'vacated_at'        => null,
+                    'vacancy_notes'     => null,
                 ]
             );
-
-            foreach ($slotRows as $row) {
-                PlantillaPosition::updateOrCreate(
-                    ['item_number' => $row['item_no']],
-                    [
-                        'plantilla_item_id' => $item->id,
-                        'position_title'    => $first['title'],
-                        'salary_grade_id'   => $sgId,
-                        'step_increment_id' => $stepId,
-                        'status'            => $row['status'],
-                        'requires_approval' => false,
-                        'vacated_at'        => null,
-                        'vacancy_notes'     => null,
-                    ]
-                );
-            }
         }
     }
 }
