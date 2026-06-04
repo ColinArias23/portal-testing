@@ -43,6 +43,9 @@ return new class extends Migration {
                 ->constrained('users')
                 ->nullOnDelete();
 
+            $table->boolean('has_completed_orientation')
+                ->default(false);
+
             // API token
             $table->rememberToken();
 

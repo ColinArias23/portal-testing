@@ -190,6 +190,7 @@ class AuthController extends Controller
             'email' => $user->email,
             'is_active' => $user->approval_status === 'APPROVED',
             'approval_status' => $user->approval_status,
+            'has_completed_orientation'   => (bool) $user->has_completed_orientation,
             'first_name' => $employee?->first_name ?? null,
             'last_name' => $employee?->last_name ?? null,
             'roles' => $roles,

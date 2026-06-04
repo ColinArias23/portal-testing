@@ -22,7 +22,7 @@ use Illuminate\Support\Str;
 
 class EmployeeController extends Controller
 {
-    private const PER_PAGE = 10;
+    private const PER_PAGE = 999999;
 
     public function __construct(private PlantillaService $plantillaService)
     {

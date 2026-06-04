@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Broadcast;
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\OrientationController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\SkillController;
 use App\Http\Controllers\Api\SkillAssessmentController;
@@ -68,6 +69,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me',      [AuthController::class, 'me']);
+
+    Route::post('/orientation/complete', [OrientationController::class, 'complete']);
 
     /*
     |--------------------------------------------------------------------------

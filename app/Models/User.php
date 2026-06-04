@@ -12,16 +12,24 @@ class User extends Authenticatable
 
     protected $guard_name = 'web';
 
-    // Only fillable fields that users/admins should directly set
-    protected $fillable = ['employee_id', 'username', 'email', 'password'];
+    protected $fillable = [
+        'employee_id', 
+        'username', 
+        'email', 
+        'password', 
+        'has_completed_orientation',
+    ];
 
-    protected $hidden = ['password', 'remember_token'];
+    protected $hidden = [
+        'password',
+        'remember_token'
+    ];
 
-    // FIXED: 'approve_at' → 'approved_at'
     protected $casts = [
         'approved_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'has_completed_orientation' => 'boolean',
     ];
 
     public function employee()
