@@ -26,7 +26,19 @@ class ProfileController extends Controller
 
     public function status(Request $request)
     {
-        $user     = $request->user()->load('employee.info');
+        $user = $request->user()->load('employee.info');
+
+        // SuperAdmin skips PDS and orientation modals entirely —
+        // always return is_complete: true so no modal is triggered.
+        if ($user->hasRole('SuperAdmin')) {
+            return response()->json([
+                'is_complete'    => true,
+                'missing_fields' => [],
+                'status'         => 'COMPLETE',
+                'user'           => $user,
+            ]);
+        }
+
         $employee = $user->employee;
         $info     = $employee?->info;
 

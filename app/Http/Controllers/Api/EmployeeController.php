@@ -628,7 +628,18 @@ class EmployeeController extends Controller
                     $employee->info()->delete();
                 }
 
-                // Step 6: Finally delete the employee record
+                // Step 6: Soft delete the linked user account if exists
+                // Guard: skip SuperAdmin and HR accounts to prevent accidental lockout
+                $linkedUser = \App\Models\User::where('employee_id', $employee->id)
+                    ->whereNotNull('employee_id')
+                    ->first();
+
+                if ($linkedUser && ! $linkedUser->hasAnyRole(['SuperAdmin', 'HR'])) {
+                    $linkedUser->tokens()->delete(); // revoke all tokens — logs them out immediately
+                    $linkedUser->delete();           // soft delete the user account
+                }
+
+                // Step 7: Finally soft delete the employee record
                 $employee->delete();
             }, attempts: 3);
 
