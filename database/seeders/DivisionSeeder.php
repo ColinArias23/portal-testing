@@ -38,14 +38,14 @@ class DivisionSeeder extends Seeder
                 'head_employee_id' => 8,
                 // 'parent_id' => 1
             ],
-            [
-                'code' => 'MCC',   
-                'name' => 'MEDICAL CENTER CHIEF', 
-                'description' => 'Responsible for the overall management, supervision, and strategic direction of the medical center, 
-                                  ensuring quality healthcare services, efficient operations, and compliance with healthcare standards.',
-                'head_employee_id' => 1,
-                // 'parent_id' => 1
-            ],
+            // [
+            //     'code' => 'MCC',   
+            //     'name' => 'MEDICAL CENTER CHIEF', 
+            //     'description' => 'Responsible for the overall management, supervision, and strategic direction of the medical center, 
+            //                       ensuring quality healthcare services, efficient operations, and compliance with healthcare standards.',
+            //     'head_employee_id' => 1,
+            //     // 'parent_id' => 1
+            // ],
         ];
 
         $now = now();
