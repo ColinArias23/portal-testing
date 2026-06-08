@@ -23,6 +23,10 @@ return new class extends Migration {
                 ->unique()
                 ->index();
 
+            $table->string('given_name')->nullable();
+            $table->string('middle_name')->nullable();
+            $table->string('last_name')->nullable();
+
             $table->string('email')
                 ->nullable()
                 ->unique();

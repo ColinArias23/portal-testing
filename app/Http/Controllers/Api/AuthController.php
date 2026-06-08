@@ -51,19 +51,11 @@ class AuthController extends Controller
             ], 403);
         }
 
-        /*
-        |----------------------------------------------------------------
-        | Keep only the 4 most recently used tokens.
-        | Pulls all token IDs into PHP first then slices with take(4)
-        | in memory — avoids MariaDB OFFSET-without-LIMIT syntax error
-        | that affects both skip()->pluck() and limit()->pluck().
-        |----------------------------------------------------------------
-        */
         if ($user->tokens()->exists()) {
             broadcast(new \App\Events\UserLoggedInElsewhere($user->id));
             $user->tokens()->delete();
         }
-        
+
         $token = $user->createToken('api-token')->plainTextToken;
 
         ActivityLog::record(
@@ -90,15 +82,21 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $data = $request->validate([
-            'username' => ['required', 'string', 'unique:users,username', 'min:3', 'max:100'],
-            'email' => ['required', 'string', 'email', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed', 'regex:/[A-Z]/', 'regex:/[0-9]/'],
+            'given_name'  => ['required', 'string', 'max:100'],
+            'middle_name' => ['nullable', 'string', 'max:100'],
+            'last_name'   => ['required', 'string', 'max:100'],
+            'username'    => ['required', 'string', 'unique:users,username', 'min:2', 'max:100'],
+            'email'       => ['required', 'string', 'email', 'unique:users,email'],
+            'password'    => ['required', 'string', 'min:8', 'confirmed', 'regex:/[A-Z]/', 'regex:/[0-9]/'],
         ]);
 
         $user = User::create([
-            'username' => $data['username'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
+            'username'      => strtoupper($data['username']),
+            'email'         => $data['email'],
+            'password'      => Hash::make($data['password']),
+            'given_name'    => strtoupper($data['given_name']),
+            'middle_name'   => isset($data['middle_name']) ? strtoupper($data['middle_name']) : null,
+            'last_name'     => strtoupper($data['last_name']),
             'approval_status' => 'PENDING',
         ]);
 
@@ -185,23 +183,23 @@ class AuthController extends Controller
         $permissions = $user->getAllPermissions()->pluck('name')->values();
 
         return [
-            'id' => $user->id,
-            'username' => $user->username,
-            'email' => $user->email,
-            'is_active' => $user->approval_status === 'APPROVED',
+            'id'              => $user->id,
+            'username'        => $user->username,
+            'email'           => $user->email,
+            'is_active'       => $user->approval_status === 'APPROVED',
             'approval_status' => $user->approval_status,
-            'has_completed_orientation'   => (bool) $user->has_completed_orientation,
-            'first_name' => $employee?->first_name ?? null,
-            'last_name' => $employee?->last_name ?? null,
-            'roles' => $roles,
-            'permissions' => $permissions,
-            'employee' => $employee,
-            'avatar_url' => $avatarUrl,
-            'departments' => $departments,
-            'department_ids' => $employee?->department_ids ?? [],
-            'division' => $division?->name,
-            'position' => null,
-            'employee_id' => $employee?->id ?? null,
+            'has_completed_orientation' => (bool) $user->has_completed_orientation,
+            'first_name'      => $employee?->first_name ?? $user->given_name ?? null,
+            'last_name'       => $employee?->last_name  ?? $user->last_name  ?? null,
+            'roles'           => $roles,
+            'permissions'     => $permissions,
+            'employee'        => $employee,
+            'avatar_url'      => $avatarUrl,
+            'departments'     => $departments,
+            'department_ids'  => $employee?->department_ids ?? [],
+            'division'        => $division?->name,
+            'position'        => null,
+            'employee_id'     => $employee?->id ?? null,
         ];
     }
 }

@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
@@ -71,7 +72,7 @@ class RbacSeeder extends Seeder
         // ── Admin — all permissions ────────────────────────────────────────
         $admin->syncPermissions($allPermissions);
 
-        // ── Admin — all permissions ────────────────────────────────────────
+        // ── HR — all permissions ────────────────────────────────────────
         $hr->syncPermissions($allPermissions);
 
         // ── Director ───────────────────────────────────────────────────────
@@ -96,38 +97,6 @@ class RbacSeeder extends Seeder
             'spms.manage',
             'notifications.view',
         ]);
-
-        // ── HR ─────────────────────────────────────────────────────────────
-        // $hr->syncPermissions([
-        //     'dashboard.view',
-        //     'employees.view',
-        //     'employees.manage',
-        //     'analytics.view',
-        //     'trainings.view',
-        //     'trainings.manage',
-        //     'trainings.join',
-        //     'team.view',
-        //     'leave.view',
-        //     'leave.manage',
-        //     'leave.approve',
-        //     'accounts.view',
-        //     'accounts.manage',
-        //     'departments.view',
-        //     'departments.manage',
-        //     'plantilla_items.view',
-        //     'plantilla_items.manage',
-        //     'hiring.view',
-        //     'hiring.manage',
-        //     'announcements.view',
-        //     'announcements.manage',
-        //     'manpower.view',
-        //     'manpower.manage',
-        //     'spms.view',
-        //     'spms.manage',
-        //     'users.view',
-        //     'users.manage',
-        //     'notifications.view',
-        // ]);
 
         // ── Head ───────────────────────────────────────────────────────────
         $head->syncPermissions([
@@ -169,7 +138,6 @@ class RbacSeeder extends Seeder
 
         // ── Staff ──────────────────────────────────────────────────────────
         $staff->syncPermissions([
-            // 'dashboard.view',
             'trainings.view',
             'trainings.join',
             'team.view',

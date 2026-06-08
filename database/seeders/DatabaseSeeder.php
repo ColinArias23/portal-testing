@@ -16,7 +16,7 @@ class DatabaseSeeder extends Seeder
             ConsultantPositionSeeder::class,
             DivisionSeeder::class,
             DepartmentSeeder::class,
-            EmployeeSeeder::class,
+            // EmployeeSeeder::class,
             SkillSeeder::class, 
             PermissionSeeder::class,
             RbacSeeder::class,
