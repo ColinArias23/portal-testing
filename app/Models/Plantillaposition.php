@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Builder;
 
 class PlantillaPosition extends Model
 {
@@ -17,8 +16,8 @@ class PlantillaPosition extends Model
         'slot_number',
         'position_slot_name',
         'position_title',
-        'division_id',
-        'department_ids',
+        'role',
+        'display_department_id',
         'salary_grade_id',
         'step_increment_id',
         'status',
@@ -29,13 +28,12 @@ class PlantillaPosition extends Model
     ];
 
     protected $casts = [
-        'department_ids' => 'array',
-        'requires_approval' => 'boolean',
-        'vacated_at' => 'datetime',
+        'requires_approval'  => 'boolean',
+        'vacated_at'         => 'datetime',
         'date_of_assumption' => 'date',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
-        'deleted_at' => 'datetime',
+        'created_at'         => 'datetime',
+        'updated_at'         => 'datetime',
+        'deleted_at'         => 'datetime',
     ];
 
     protected $appends = [
@@ -44,11 +42,11 @@ class PlantillaPosition extends Model
         'is_assignable',
     ];
 
-    // ─── Relationships ────────────────────────────────────────────────────
+    // ─── Relationships ─────────────────────────────────────────────────────
 
-    public function division()
+    public function displayDepartment()
     {
-        return $this->belongsTo(Division::class);
+        return $this->belongsTo(Department::class, 'display_department_id');
     }
 
     public function salaryGrade()
@@ -71,7 +69,7 @@ class PlantillaPosition extends Model
         return $this->assignments()->whereNull('end_date');
     }
 
-    // ─── Status Checks ────────────────────────────────────────────────────
+    // ─── Status Checks ─────────────────────────────────────────────────────
 
     public function isFilled(): bool
     {
@@ -98,23 +96,15 @@ class PlantillaPosition extends Model
         return !$this->requires_approval && !$this->isFilled();
     }
 
-    // ─── Computed Status ──────────────────────────────────────────────────
+    // ─── Computed Attributes ───────────────────────────────────────────────
 
     public function getComputedStatusAttribute(): string
     {
-        if ($this->isOverstaffed()) {
-            return 'OVERSTAFFED';
-        }
-        if ($this->isFilled()) {
-            return 'FILLED';
-        }
-        if ($this->requires_approval) {
-            return 'UNFILLED';
-        }
+        if ($this->isOverstaffed())   return 'OVERSTAFFED';
+        if ($this->isFilled())        return 'FILLED';
+        if ($this->requires_approval) return 'UNFILLED';
         return 'VACANT';
     }
-
-    // ─── Salary Configuration ─────────────────────────────────────────────
 
     public function getHasSalaryConfigAttribute(): bool
     {
@@ -128,117 +118,86 @@ class PlantillaPosition extends Model
 
     public function getEffectiveSalaryGradeAttribute(): ?SalaryGrade
     {
-        if ($this->relationLoaded('salaryGrade')) {
-            return $this->salaryGrade;
-        }
+        if ($this->relationLoaded('salaryGrade')) return $this->salaryGrade;
         return $this->salaryGrade()->first();
     }
 
     public function getEffectiveStepIncrementAttribute(): ?StepIncrement
     {
-        if ($this->relationLoaded('stepIncrement')) {
-            return $this->stepIncrement;
-        }
+        if ($this->relationLoaded('stepIncrement')) return $this->stepIncrement;
         return $this->stepIncrement()->first();
     }
 
-    /**
-     * Get all available step increments for this position's salary grade.
-     */
     public function getAvailableStepsAttribute()
     {
-        if (!$this->salary_grade_id) {
-            return collect([]);
-        }
-
+        if (!$this->salary_grade_id) return collect([]);
         if ($this->relationLoaded('salaryGrade') && $this->salaryGrade) {
             return $this->salaryGrade->stepIncrements;
         }
-
         return StepIncrement::where('salary_grade_id', $this->salary_grade_id)
-            ->orderBy('step')
-            ->get();
+            ->orderBy('step')->get();
     }
 
     public function availableSteps()
     {
-        if (!$this->salary_grade_id) {
-            return collect([]);
-        }
-
+        if (!$this->salary_grade_id) return collect([]);
         return StepIncrement::where('salary_grade_id', $this->salary_grade_id)
-            ->orderBy('step')
-            ->get();
+            ->orderBy('step')->get();
     }
 
-    /**
-     * Format salary and step information for API responses.
-     */
     public function formatSalaryInfo(): array
     {
-        $sg = $this->relationLoaded('salaryGrade')
-            ? $this->salaryGrade
-            : $this->salaryGrade()->first();
-
-        $step = $this->relationLoaded('stepIncrement')
-            ? $this->stepIncrement
-            : $this->stepIncrement()->first();
+        $sg   = $this->relationLoaded('salaryGrade')   ? $this->salaryGrade   : $this->salaryGrade()->first();
+        $step = $this->relationLoaded('stepIncrement') ? $this->stepIncrement : $this->stepIncrement()->first();
 
         return [
             'salary_grade' => $sg ? [
-                'id' => $sg->id,
-                'salary_grade' => $sg->salary_grade,
+                'id'             => $sg->id,
+                'salary_grade'   => $sg->salary_grade,
                 'monthly_salary' => $sg->monthly_salary,
-                'annual_salary' => $sg->annual_salary,
+                'annual_salary'  => $sg->annual_salary,
             ] : null,
-
             'default_step' => $step ? [
-                'id' => $step->id,
-                'step' => $step->step,
+                'id'             => $step->id,
+                'step'           => $step->step,
                 'monthly_salary' => $step->monthly_salary,
-                'annual_salary' => $step->annual_salary,
+                'annual_salary'  => $step->annual_salary,
             ] : null,
-
             'available_steps' => $this->availableSteps()
                 ->map(fn($s) => [
-                    'id' => $s->id,
-                    'step' => $s->step,
+                    'id'             => $s->id,
+                    'step'           => $s->step,
                     'monthly_salary' => $s->monthly_salary,
-                    'annual_salary' => $s->annual_salary,
-                ])
-                ->values()
-                ->toArray(),
+                    'annual_salary'  => $s->annual_salary,
+                ])->values()->toArray(),
         ];
     }
 
-    // ─── Vacancy Actions ──────────────────────────────────────────────────
+    // ─── Vacancy Actions ───────────────────────────────────────────────────
 
     public function markUnfilled(?string $notes = null): void
     {
         $this->update([
-            'status' => 'UNFILLED',
+            'status'            => 'UNFILLED',
             'requires_approval' => true,
-            'vacated_at' => now(),
-            'vacancy_notes' => $notes,
+            'vacated_at'        => now(),
+            'vacancy_notes'     => $notes,
         ]);
     }
 
     public function approveForRefilling(): void
     {
         $this->update([
-            'status' => 'VACANT',
+            'status'            => 'VACANT',
             'requires_approval' => false,
-            'vacated_at' => null,
-            'vacancy_notes' => null,
+            'vacated_at'        => null,
+            'vacancy_notes'     => null,
         ]);
     }
 
     public function fillPosition(): void
     {
-        $this->update([
-            'status' => 'FILLED',
-            'vacated_at' => null,
-        ]);
+        $this->update(['status' => 'FILLED', 'vacated_at' => null]);
     }
 
     public function vacatePosition(?string $notes = null): void
@@ -246,7 +205,7 @@ class PlantillaPosition extends Model
         $this->markUnfilled($notes);
     }
 
-    // ─── Model Events ─────────────────────────────────────────────────────
+    // ─── Model Events ──────────────────────────────────────────────────────
 
     protected static function booted(): void
     {
@@ -256,7 +215,6 @@ class PlantillaPosition extends Model
                     "Cannot delete position [{$position->position_slot_name}] — it is currently FILLED."
                 );
             }
-
             if ($position->isUnfilled()) {
                 throw new \RuntimeException(
                     "Cannot delete position [{$position->position_slot_name}] — it is UNFILLED and awaiting approval."
@@ -265,13 +223,11 @@ class PlantillaPosition extends Model
         });
     }
 
-    // ─── Scopes ───────────────────────────────────────────────────────────
+    // ─── Scopes ────────────────────────────────────────────────────────────
 
     public function scopeVacant($query)
     {
-        return $query
-            ->whereDoesntHave('activeAssignments')
-            ->where('requires_approval', false);
+        return $query->whereDoesntHave('activeAssignments')->where('requires_approval', false);
     }
 
     public function scopeFilled($query)
@@ -281,33 +237,22 @@ class PlantillaPosition extends Model
 
     public function scopeUnfilled($query)
     {
-        return $query
-            ->whereDoesntHave('activeAssignments')
-            ->where('requires_approval', true);
+        return $query->whereDoesntHave('activeAssignments')->where('requires_approval', true);
     }
 
     public function scopeAssignable($query)
     {
-        return $query
-            ->whereDoesntHave('activeAssignments')
-            ->where('requires_approval', false);
+        return $query->whereDoesntHave('activeAssignments')->where('requires_approval', false);
     }
 
     public function scopeOverstaffed($query)
     {
-        return $query
-            ->withCount('activeAssignments')
-            ->having('active_assignments_count', '>', 1);
-    }
-
-    public function scopeForDivision($query, int $divisionId)
-    {
-        return $query->where('division_id', $divisionId);
+        return $query->withCount('activeAssignments')->having('active_assignments_count', '>', 1);
     }
 
     public function scopeForDepartment($query, int $departmentId)
     {
-        return $query->whereJsonContains('department_ids', $departmentId);
+        return $query->where('display_department_id', $departmentId);
     }
 
     public function scopeForItem($query, string $baseItemNumber)
@@ -318,15 +263,5 @@ class PlantillaPosition extends Model
     public function scopeWithSalaryConfig($query)
     {
         return $query->whereNotNull('salary_grade_id');
-    }
-
-    public function scopeActive($query)
-    {
-        return $query->whereNull('deleted_at');
-    }
-
-    public function scopeTrashed($query)
-    {
-        return $query->whereNotNull('deleted_at');
     }
 }

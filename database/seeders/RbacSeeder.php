@@ -71,6 +71,9 @@ class RbacSeeder extends Seeder
         // ── Admin — all permissions ────────────────────────────────────────
         $admin->syncPermissions($allPermissions);
 
+        // ── Admin — all permissions ────────────────────────────────────────
+        $hr->syncPermissions($allPermissions);
+
         // ── Director ───────────────────────────────────────────────────────
         $director->syncPermissions([
             'dashboard.view',
@@ -95,36 +98,36 @@ class RbacSeeder extends Seeder
         ]);
 
         // ── HR ─────────────────────────────────────────────────────────────
-        $hr->syncPermissions([
-            'dashboard.view',
-            'employees.view',
-            'employees.manage',
-            'analytics.view',
-            'trainings.view',
-            'trainings.manage',
-            'trainings.join',
-            'team.view',
-            'leave.view',
-            'leave.manage',
-            'leave.approve',
-            'accounts.view',
-            'accounts.manage',
-            'departments.view',
-            'departments.manage',
-            'plantilla_items.view',
-            'plantilla_items.manage',
-            'hiring.view',
-            'hiring.manage',
-            'announcements.view',
-            'announcements.manage',
-            'manpower.view',
-            'manpower.manage',
-            'spms.view',
-            'spms.manage',
-            'users.view',
-            'users.manage',
-            'notifications.view',
-        ]);
+        // $hr->syncPermissions([
+        //     'dashboard.view',
+        //     'employees.view',
+        //     'employees.manage',
+        //     'analytics.view',
+        //     'trainings.view',
+        //     'trainings.manage',
+        //     'trainings.join',
+        //     'team.view',
+        //     'leave.view',
+        //     'leave.manage',
+        //     'leave.approve',
+        //     'accounts.view',
+        //     'accounts.manage',
+        //     'departments.view',
+        //     'departments.manage',
+        //     'plantilla_items.view',
+        //     'plantilla_items.manage',
+        //     'hiring.view',
+        //     'hiring.manage',
+        //     'announcements.view',
+        //     'announcements.manage',
+        //     'manpower.view',
+        //     'manpower.manage',
+        //     'spms.view',
+        //     'spms.manage',
+        //     'users.view',
+        //     'users.manage',
+        //     'notifications.view',
+        // ]);
 
         // ── Head ───────────────────────────────────────────────────────────
         $head->syncPermissions([
@@ -166,7 +169,7 @@ class RbacSeeder extends Seeder
 
         // ── Staff ──────────────────────────────────────────────────────────
         $staff->syncPermissions([
-            'dashboard.view',
+            // 'dashboard.view',
             'trainings.view',
             'trainings.join',
             'team.view',
