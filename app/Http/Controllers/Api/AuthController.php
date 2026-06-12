@@ -119,6 +119,76 @@ class AuthController extends Controller
         ], 201);
     }
 
+    public function checkUsername(Request $request)
+    {
+        $request->validate([
+            'username'    => ['required', 'string', 'max:100'],
+            'given_name'  => ['nullable', 'string'],
+            'middle_name' => ['nullable', 'string'],
+            'last_name'   => ['nullable', 'string'],
+        ]);
+
+        $username = mb_strtoupper(trim($request->username));
+        $exists = User::where('username', $username)->exists();
+
+        $suggestions = [];
+
+        if ($exists) {
+            $givenName  = (string) ($request->given_name ?? '');
+            $middleName = (string) ($request->middle_name ?? '');
+            $lastName   = (string) ($request->last_name ?? '');
+
+            $givenInitials = collect(preg_split('/\s+/', trim($givenName)))
+                ->filter()
+                ->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))
+                ->implode('');
+
+            $middleInitial = $middleName !== ''
+                ? mb_strtoupper(mb_substr(trim($middleName), 0, 1))
+                : '';
+
+            $lastUpper  = mb_strtoupper(preg_replace('/\s+/', '', trim($lastName)));
+            $givenUpper = mb_strtoupper(preg_replace('/\s+/', '', trim($givenName)));
+
+            $candidates = [];
+
+            if ($middleInitial !== '') {
+                $candidates[] = $givenInitials . $middleInitial . $lastUpper;
+            }
+
+            if ($givenUpper !== '' && $lastUpper !== '') {
+                $candidates[] = $givenUpper . mb_substr($lastUpper, 0, 1);
+            }
+
+            for ($i = 1; $i <= 9; $i++) {
+                $candidates[] = $username . $i;
+            }
+
+            if ($givenUpper !== '' && $lastUpper !== '') {
+                $candidates[] = $givenUpper . $lastUpper;
+            }
+
+            foreach ($candidates as $candidate) {
+                if (count($suggestions) >= 4) {
+                    break;
+                }
+
+                if (
+                    $candidate !== $username
+                    && !in_array($candidate, $suggestions)
+                    && !User::where('username', $candidate)->exists()
+                ) {
+                    $suggestions[] = $candidate;
+                }
+            }
+        }
+
+        return response()->json([
+            'available'   => !$exists,
+            'suggestions' => $suggestions,
+        ]);
+    }
+
     public function me(Request $request)
     {
         $user = $request->user()->load([

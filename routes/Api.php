@@ -42,6 +42,7 @@ use App\Http\Controllers\Api\HolidayController;
 
 Route::post('/login',    [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
+Route::post('/check-username', [AuthController::class, 'checkUsername']);
 
 /*
 |--------------------------------------------------------------------------
