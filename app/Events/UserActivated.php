@@ -1,5 +1,4 @@
 <?php
-// app/Events/UserActivated.php
 
 namespace App\Events;
 

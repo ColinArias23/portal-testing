@@ -18,6 +18,7 @@ class PlantillaPosition extends Model
         'position_title',
         'role',
         'display_department_id',
+        'display_division_id',
         'salary_grade_id',
         'step_increment_id',
         'status',
@@ -47,6 +48,11 @@ class PlantillaPosition extends Model
     public function displayDepartment()
     {
         return $this->belongsTo(Department::class, 'display_department_id');
+    }
+
+    public function displayDivision()
+    {
+        return $this->belongsTo(Division::class, 'display_division_id');
     }
 
     public function salaryGrade()
@@ -253,6 +259,11 @@ class PlantillaPosition extends Model
     public function scopeForDepartment($query, int $departmentId)
     {
         return $query->where('display_department_id', $departmentId);
+    }
+
+    public function scopeForDivision($query, int $divisionId)
+    {
+        return $query->where('display_division_id', $divisionId);
     }
 
     public function scopeForItem($query, string $baseItemNumber)

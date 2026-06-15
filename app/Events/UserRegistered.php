@@ -1,5 +1,4 @@
 <?php
-// app/Events/UserRegistered.php
 
 namespace App\Events;
 

@@ -12,6 +12,7 @@ use App\Models\EmployeeAssignment;
 use App\Models\PlantillaPosition;
 use App\Services\PlantillaService;
 use App\Events\EmployeeUpdated;
+use App\Traits\ResolvesAvatarUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -22,6 +23,8 @@ use Illuminate\Support\Str;
 
 class EmployeeController extends Controller
 {
+    use ResolvesAvatarUrl;
+
     private const PER_PAGE = 999999;
 
     public function __construct(private PlantillaService $plantillaService)
@@ -41,14 +44,6 @@ class EmployeeController extends Controller
     | HELPERS
     |--------------------------------------------------------------------------
     */
-
-    private function resolveAvatarUrl(?string $path): ?string
-    {
-        if (! $path) return null;
-        $filePath = storage_path('app/public/' . $path);
-        if (! file_exists($filePath)) return null;
-        return rtrim(config('app.url'), '/') . '/storage/' . $path;
-    }
 
     private function formatEmployee(Employee $employee): array
     {

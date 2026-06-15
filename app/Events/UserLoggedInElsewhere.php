@@ -1,5 +1,5 @@
 <?php
-// app/Events/UserLoggedInElsewhere.php
+
 namespace App\Events;
 
 use Illuminate\Broadcasting\PrivateChannel;

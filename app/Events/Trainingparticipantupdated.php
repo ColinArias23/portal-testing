@@ -19,10 +19,6 @@ class TrainingParticipantUpdated implements ShouldBroadcastNow
         $this->training = $training;
     }
 
-    /**
-     * Returns an array to stay consistent with Laravel's broadcastOn() signature.
-     * Your original returned a single Channel — both work, but array is cleaner.
-     */
     public function broadcastOn(): array
     {
         return [new Channel('trainings')];

@@ -24,9 +24,6 @@ class TrainingDeleted implements ShouldBroadcastNow
         return [new Channel('trainings')];
     }
 
-    /**
-     * Frontend listens with: channel.listen('.training.deleted', handler)
-     */
     public function broadcastAs(): string
     {
         return 'training.deleted';
