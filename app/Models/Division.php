@@ -12,13 +12,24 @@ class Division extends Model
         'description',
         'head_employee_id',
         'parent_id',
+        'type',
     ];
+
+    public function setCodeAttribute($value)
+    {
+        $this->attributes['code'] = $value !== null ? strtoupper($value) : $value;
+    }
+
+    public function setNameAttribute($value)
+    {
+        $this->attributes['name'] = $value !== null ? strtoupper($value) : $value;
+    }
 
     public function employees()
     {
         return $this->hasMany(Employee::class);
     }
-    
+
     public function head()
     {
         return $this->belongsTo(Employee::class, 'head_employee_id');

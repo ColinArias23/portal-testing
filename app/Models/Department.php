@@ -9,12 +9,23 @@ class Department extends Model
     protected $fillable = [
         'division_id',
         'parent_id',
+        'parent_division_id',
         'type',
         'code',
         'name',
         'description',
         'head_employee_id',
     ];
+
+    public function setCodeAttribute($value)
+    {
+        $this->attributes['code'] = $value !== null ? strtoupper($value) : $value;
+    }
+
+    public function setNameAttribute($value)
+    {
+        $this->attributes['name'] = $value !== null ? strtoupper($value) : $value;
+    }
 
     public function division()
     {
@@ -24,6 +35,21 @@ class Department extends Model
     public function head()
     {
         return $this->belongsTo(Employee::class, 'head_employee_id');
+    }
+
+    public function parent()
+    {
+        return $this->belongsTo(Department::class, 'parent_id');
+    }
+
+    public function parentDivision()
+    {
+        return $this->belongsTo(Division::class, 'parent_division_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(Department::class, 'parent_id');
     }
 
     public function plantillaPositions()
@@ -38,18 +64,12 @@ class Department extends Model
         );
     }
 
-    /**
-     * All employees assigned to this department (current).
-     */
     public function assignedEmployees()
     {
         return $this->hasMany(EmployeeDepartmentAssignment::class)
             ->whereNull('end_date');
     }
 
-    /**
-     * Primary employees (should be one department head).
-     */
     public function primaryEmployees()
     {
         return $this->assignedEmployees()->where('is_primary', true);

@@ -12,7 +12,7 @@ class DivisionController extends Controller
 {
     public function index()
     {
-        return Division::with(['departments', 'head'])
+        return Division::with(['departments', 'head', 'parent', 'children'])
             ->orderBy('name')
             ->get();
     }
@@ -24,14 +24,16 @@ class DivisionController extends Controller
             'name'             => ['required', 'string'],
             'description'      => ['nullable', 'string'],
             'head_employee_id' => ['nullable', 'exists:employees,id'],
+            'parent_id'        => ['nullable', 'exists:divisions,id'],
+            'type'             => ['sometimes', 'in:OFFICE,DIVISION,DIRECTORATE'],
         ]);
 
-        return Division::create($data)->load(['departments', 'head']);
+        return Division::create($data)->load(['departments', 'head', 'parent', 'children']);
     }
 
     public function show(Division $division)
     {
-        return $division->load(['departments', 'head']);
+        return $division->load(['departments', 'head', 'parent', 'children']);
     }
 
     public function update(Request $request, Division $division)
@@ -41,21 +43,31 @@ class DivisionController extends Controller
             'name'             => ['sometimes', 'string'],
             'description'      => ['nullable', 'string'],
             'head_employee_id' => ['nullable', 'exists:employees,id'],
+            'type'             => ['sometimes', 'in:OFFICE,DIVISION,DIRECTORATE'],
+            'parent_id'        => [
+                'nullable',
+                'exists:divisions,id',
+                function ($attribute, $value, $fail) use ($division) {
+                    if ($value !== null && (int) $value === (int) $division->id) {
+                        $fail('A division cannot be its own parent.');
+                    }
+                },
+            ],
         ]);
 
         $division->update($data);
 
-        return $division->fresh(['departments', 'head']);
+        return $division->fresh(['departments', 'head', 'parent', 'children']);
     }
 
     public function destroy(Division $division)
     {
-        // Null out division_id on departments that belong to this division,
-        // so they become unassigned rather than having a broken FK reference.
+        Division::where('parent_id', $division->id)
+            ->update(['parent_id' => $division->parent_id]);
+
         Department::where('division_id', $division->id)
             ->update(['division_id' => null]);
 
-        // Null out division_id on employees directly assigned to this division.
         Employee::where('division_id', $division->id)
             ->update(['division_id' => null]);
 
