@@ -119,6 +119,19 @@ class PlantillaPositionController extends Controller
         unset($data['slots']);
 
         DB::transaction(function () use ($data, $slots, $request) {
+            // FIX: position_slot_name has a unique constraint
+            // (plantilla_positions_position_slot_name_unique). Soft-deleted
+            // positions (via SoftDeletes) keep their row + position_slot_name
+            // in the DB. If the user deletes an item and then creates a new
+            // one reusing the same base_item_number, the new rows would
+            // collide with the old slot names (e.g. "150", "150-1") and
+            // throw a 23000 integrity constraint violation. Permanently
+            // remove any stale soft-deleted rows for this base_item_number
+            // first so the slate is clean for the new slots.
+            PlantillaPosition::onlyTrashed()
+                ->where('base_item_number', $data['base_item_number'])
+                ->forceDelete();
+
             for ($i = 1; $i <= $slots; $i++) {
                 $itemNo = $i === 1
                     ? $data['base_item_number']
@@ -179,6 +192,13 @@ class PlantillaPositionController extends Controller
         }
 
         DB::transaction(function () use ($template, $data, $highest, $request) {
+            // FIX: same stale-soft-delete issue as store() — clean up any
+            // trashed rows for this base_item_number whose position_slot_name
+            // would collide with the new slot numbers we're about to create.
+            PlantillaPosition::onlyTrashed()
+                ->where('base_item_number', $template->base_item_number)
+                ->forceDelete();
+
             for ($i = 1; $i <= $data['count']; $i++) {
                 $newSlotNumber = $highest + $i;
                 $slotName = $newSlotNumber === 1

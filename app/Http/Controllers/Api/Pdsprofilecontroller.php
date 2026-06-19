@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
-class CompleteProfileController extends Controller
+class PdsProfileController extends Controller
 {
     // ── Scalar fields that live on employee_info ──────────────────────────────
     private const SCALAR_FIELDS = [
@@ -28,7 +28,8 @@ class CompleteProfileController extends Controller
         'surname', 'name_extension', 'date_of_birth', 'place_of_birth',
         'sex_at_birth', 'civil_status', 'height', 'weight', 'blood_type', 'citizenship',
         // Government IDs
-        'umid_id', 'pagibig_id', 'philhealth_no', 'philsys_number', 'tin_no', 'agency_employee_no',
+        'umid_id', 'pagibig_id', 'philhealth_no', 'sss_no', 'philsys_number',
+        'tin_no', 'agency_employee_no',
         // Residential address
         'residential_province', 'residential_city', 'residential_barangay',
         'residential_house_no', 'residential_street', 'residential_subdivision', 'residential_zip',
@@ -56,7 +57,7 @@ class CompleteProfileController extends Controller
         'is_pwd', 'pwd_id_no',
         'is_solo_parent', 'solo_parent_id_no',
         // Gov't ID
-        'govt_id_type', 'govt_id_no', 'govt_id_date_place',
+        'govt_id_type', 'govt_id_type_other', 'govt_id_no', 'govt_id_date_place',
         // License
         'license_number', 'license_date_issued', 'license_expiry_date', 'license_place_issued',
     ];
@@ -70,11 +71,8 @@ class CompleteProfileController extends Controller
         'govt_id_date_place',
     ];
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // COMPLETE / UPDATE PROFILE
-    // ─────────────────────────────────────────────────────────────────────────
 
-    public function store(Request $request)
+    public function status(Request $request)
     {
         /** @var \App\Models\User $user */
         $user     = $request->user();
@@ -83,6 +81,64 @@ class CompleteProfileController extends Controller
         if (! $employee) {
             return response()->json(['message' => 'Employee record not found.'], 404);
         }
+
+        $info = $employee->info;
+
+        // No employee_info row yet at all → definitely incomplete/empty.
+        if (! $info) {
+            return response()->json([
+                'is_complete'    => false,
+                'missing_fields' => [],
+            ]);
+        }
+
+        $isComplete = $info->status === 'COMPLETE';
+
+        return response()->json([
+            'is_complete'    => $isComplete,
+            'missing_fields' => $isComplete ? [] : $this->resolveMissingFields($info, $employee),
+        ]);
+    }
+    
+    private function resolveMissingFields(EmployeeInfo $info, Employee $employee): array
+    {
+        $requiredFields = [
+            'date_of_birth', 'sex_at_birth', 'civil_status', 'citizenship',
+            'residential_city', 'residential_province', 'mobile_no',
+        ];
+
+        $missing = [];
+        foreach ($requiredFields as $field) {
+            if (empty($info->$field)) {
+                $missing[] = $field;
+            }
+        }
+
+        if (empty($employee->first_name) || empty($employee->last_name)) {
+            $missing[] = 'name';
+        }
+
+        $avatarPath = $employee->getRawOriginal('avatar_url');
+        if (! $avatarPath || ! file_exists(storage_path('app/public/' . $avatarPath))) {
+            $missing[] = 'avatar';
+        }
+
+        return $missing;
+    }
+
+    // ───────────────────────────── COMPLETE / UPDATE PROFILE ────────────────────────────────────────────
+
+    public function complete(Request $request)
+    {
+        /** @var \App\Models\User $user */
+        $user     = $request->user();
+        $employee = $user->employee;
+
+        if (! $employee) {
+            return response()->json(['message' => 'Employee record not found.'], 404);
+        }
+
+        $validated = $request->validate($this->validationRules());
 
         DB::transaction(function () use ($request, $employee) {
 
@@ -94,10 +150,6 @@ class CompleteProfileController extends Controller
                 $scalarPayload,
             );
 
-            // Keep legacy mirror fields in sync
-            $info->setRelation('employee', $employee);
-            $info->save();
-
             // ── 2. Avatar ─────────────────────────────────────────────────────
             if ($request->hasFile('avatar')) {
                 $oldPath = $employee->getRawOriginal('avatar_url');
@@ -107,6 +159,8 @@ class CompleteProfileController extends Controller
                 $path = 'avatars/' . Str::uuid() . '.' . $request->file('avatar')->getClientOriginalExtension();
                 Storage::disk('public')->put($path, file_get_contents($request->file('avatar')->getRealPath()));
                 $employee->update(['avatar_url' => $path]);
+
+                $info->save();
             }
 
             // ── 3. Array / relational fields ──────────────────────────────────
@@ -116,9 +170,119 @@ class CompleteProfileController extends Controller
         return response()->json(['message' => 'Profile completed successfully.']);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // BUILD SCALAR PAYLOAD — uppercase everything except preserve-case fields
-    // ─────────────────────────────────────────────────────────────────────────
+    // ──────────────────────────── VALIDATION RULES ─────────────────────────────────────────────
+
+    private function validationRules(): array
+    {
+        return [
+            // ── Required scalars (mirrors EmployeeInfo::REQUIRED_FIELDS) ──────
+            'date_of_birth'        => ['required', 'date', 'before:today'],
+            'sex_at_birth'         => ['required', 'string', 'in:MALE,FEMALE'],
+            'civil_status'         => ['required', 'string', 'max:30'],
+            'citizenship'          => ['required', 'string', 'max:60'],
+            'residential_city'     => ['required', 'string', 'max:100'],
+            'residential_province' => ['required', 'string', 'max:100'],
+            'mobile_no'            => ['required', 'string', 'max:30'],
+
+            // ── Optional scalars ────────────────────────────────────────────
+            'surname'                  => ['nullable', 'string', 'max:100'],
+            'name_extension'           => ['nullable', 'string', 'max:20'],
+            'place_of_birth'           => ['nullable', 'string', 'max:255'],
+            'height'                   => ['nullable', 'numeric', 'between:0,3'],
+            'weight'                   => ['nullable', 'numeric', 'between:0,500'],
+            'blood_type'               => ['nullable', 'string', 'max:5'],
+            'umid_id'                  => ['nullable', 'string', 'max:30'],
+            'pagibig_id'               => ['nullable', 'string', 'max:30'],
+            'philhealth_no'            => ['nullable', 'string', 'max:30'],
+            'sss_no'                   => ['nullable', 'string', 'max:30'],
+            'philsys_number'           => ['nullable', 'string', 'max:30'],
+            'tin_no'                   => ['nullable', 'string', 'max:30'],
+            'agency_employee_no'       => ['nullable', 'string', 'max:50'],
+            'residential_barangay'     => ['nullable', 'string', 'max:100'],
+            'residential_house_no'     => ['nullable', 'string', 'max:50'],
+            'residential_street'       => ['nullable', 'string', 'max:100'],
+            'residential_subdivision'  => ['nullable', 'string', 'max:100'],
+            'residential_zip'          => ['nullable', 'string', 'max:10'],
+            'permanent_province'       => ['nullable', 'string', 'max:100'],
+            'permanent_city'           => ['nullable', 'string', 'max:100'],
+            'permanent_barangay'       => ['nullable', 'string', 'max:100'],
+            'permanent_house_no'       => ['nullable', 'string', 'max:50'],
+            'permanent_street'         => ['nullable', 'string', 'max:100'],
+            'permanent_subdivision'    => ['nullable', 'string', 'max:100'],
+            'permanent_zip'            => ['nullable', 'string', 'max:10'],
+            'telephone_no'             => ['nullable', 'string', 'max:30'],
+            'email_address'            => ['nullable', 'email', 'max:100'],
+
+            'spouse_surname'           => ['nullable', 'string', 'max:100'],
+            'spouse_first_name'       => ['nullable', 'string', 'max:100'],
+            'spouse_middle_name'       => ['nullable', 'string', 'max:100'],
+            'spouse_extension'         => ['nullable', 'string', 'max:20'],
+            'spouse_occupation'        => ['nullable', 'string', 'max:100'],
+            'spouse_employer'          => ['nullable', 'string', 'max:100'],
+            'spouse_business_address'  => ['nullable', 'string'],
+            'spouse_telephone'         => ['nullable', 'string', 'max:30'],
+            'father_surname'           => ['nullable', 'string', 'max:100'],
+            'father_first_name'        => ['nullable', 'string', 'max:100'],
+            'father_middle_name'       => ['nullable', 'string', 'max:100'],
+            'father_extension'         => ['nullable', 'string', 'max:20'],
+            'mother_maiden_surname'    => ['nullable', 'string', 'max:100'],
+            'mother_first_name'        => ['nullable', 'string', 'max:100'],
+            'mother_middle_name'       => ['nullable', 'string', 'max:100'],
+
+            'related_3rd_degree'              => ['nullable', 'string', 'in:YES,NO'],
+            'related_3rd_degree_details'      => ['nullable', 'string'],
+            'related_4th_degree'              => ['nullable', 'string', 'in:YES,NO'],
+            'related_4th_degree_details'      => ['nullable', 'string'],
+            'found_guilty_admin'              => ['nullable', 'string', 'in:YES,NO'],
+            'found_guilty_admin_details'      => ['nullable', 'string'],
+            'criminally_charged'              => ['nullable', 'string', 'in:YES,NO'],
+            'criminally_charged_details'      => ['nullable', 'string'],
+            'convicted_crime'                 => ['nullable', 'string', 'in:YES,NO'],
+            'convicted_crime_details'         => ['nullable', 'string'],
+            'separated_from_service'          => ['nullable', 'string', 'in:YES,NO'],
+            'separated_from_service_details'  => ['nullable', 'string'],
+            'candidate_in_election'           => ['nullable', 'string', 'in:YES,NO'],
+            'candidate_in_election_details'   => ['nullable', 'string'],
+            'resigned_to_campaign'            => ['nullable', 'string', 'in:YES,NO'],
+            'resigned_to_campaign_details'    => ['nullable', 'string'],
+            'immigrant_status'                => ['nullable', 'string', 'in:YES,NO'],
+            'immigrant_country'               => ['nullable', 'string', 'max:100'],
+            'is_indigenous'                   => ['nullable', 'string', 'in:YES,NO'],
+            'indigenous_specify'              => ['nullable', 'string', 'max:100'],
+            'is_pwd'                          => ['nullable', 'string', 'in:YES,NO'],
+            'pwd_id_no'                       => ['nullable', 'string', 'max:50'],
+            'is_solo_parent'                  => ['nullable', 'string', 'in:YES,NO'],
+            'solo_parent_id_no'               => ['nullable', 'string', 'max:50'],
+
+            'govt_id_type'         => ['nullable', 'string', 'max:60'],
+            'govt_id_type_other'   => ['nullable', 'string', 'max:100', 'required_if:govt_id_type,OTHER'],
+            'govt_id_no'           => ['nullable', 'string', 'max:60'],
+            'govt_id_date_place'   => ['nullable', 'string', 'max:100'],
+
+            'license_number'        => ['nullable', 'string', 'max:60'],
+            'license_date_issued'   => ['nullable', 'date'],
+            'license_expiry_date'   => ['nullable', 'date', 'after_or_equal:license_date_issued'],
+            'license_place_issued'  => ['nullable', 'string', 'max:100'],
+
+            // ── Avatar ───────────────────────────────────────────────────────
+            'avatar' => ['nullable', 'image', 'max:10240'], 
+
+            'children'                  => ['nullable', 'string'],
+            'edu_elementary'            => ['nullable', 'string'],
+            'edu_secondary'             => ['nullable', 'string'],
+            'edu_vocational'            => ['nullable', 'string'],
+            'edu_college'               => ['nullable', 'string'],
+            'edu_graduate'              => ['nullable', 'string'],
+            'eligibilities'             => ['nullable', 'string'],
+            'work_experiences'          => ['nullable', 'string'],
+            'voluntary_works'           => ['nullable', 'string'],
+            'trainings'                 => ['nullable', 'string'],
+            'special_skills'            => ['nullable', 'string'],
+            'non_academic_distinctions' => ['nullable', 'string'],
+            'organization_memberships'  => ['nullable', 'string'],
+            'references'                => ['nullable', 'string'],
+        ];
+    }
 
     private function buildScalarPayload(Request $request): array
     {
@@ -148,11 +312,6 @@ class CompleteProfileController extends Controller
         return $payload;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // SYNC RELATIONAL TABLES
-    // Each table is wiped and re-inserted so the PDS always reflects the form.
-    // ─────────────────────────────────────────────────────────────────────────
-
     private function syncRelational(Employee $employee, Request $request): void
     {
         $empId = $employee->id;
@@ -163,7 +322,7 @@ class CompleteProfileController extends Controller
             PdsChild::create([
                 'employee_id'   => $empId,
                 'name'          => $this->up($row['name'] ?? ''),
-                'date_of_birth' => $row['date_of_birth'] ?? null,
+                'date_of_birth' => $this->dateOrNull($row['date_of_birth'] ?? null),
                 'order'         => $i,
             ]);
         }
@@ -174,16 +333,16 @@ class CompleteProfileController extends Controller
         foreach ($eduLevels as $level) {
             foreach ($this->decodeJson($request, "edu_{$level}") as $i => $row) {
                 PdsEducation::create([
-                    'employee_id'   => $empId,
-                    'level'         => $level,
-                    'school'        => $this->up($row['school']         ?? ''),
-                    'degree'        => $this->up($row['degree']         ?? ''),
-                    'period_from'   => $this->up($row['period_from']    ?? ''),
-                    'period_to'     => $this->up($row['period_to']      ?? ''),
-                    'highest_level' => $this->up($row['highest_level']  ?? ''),
-                    'year_graduated'=> $this->up($row['year_graduated'] ?? ''),
-                    'honors'        => $this->up($row['honors']         ?? ''),
-                    'order'         => $i,
+                    'employee_id'    => $empId,
+                    'level'          => $level,
+                    'school'         => $this->up($row['school']         ?? ''),
+                    'degree'         => $this->up($row['degree']         ?? ''),
+                    'period_from'    => $this->up($row['period_from']    ?? ''),
+                    'period_to'      => $this->up($row['period_to']      ?? ''),
+                    'highest_level'  => $this->up($row['highest_level']  ?? ''),
+                    'year_graduated' => $this->up($row['year_graduated'] ?? ''),
+                    'honors'         => $this->up($row['honors']         ?? ''),
+                    'order'          => $i,
                 ]);
             }
         }
@@ -195,10 +354,10 @@ class CompleteProfileController extends Controller
                 'employee_id' => $empId,
                 'eligibility' => $this->up($row['eligibility'] ?? ''),
                 'rating'      => $this->up($row['rating']      ?? ''),
-                'exam_date'   => $row['exam_date']   ?? null,
+                'exam_date'   => $this->dateOrNull($row['exam_date']   ?? null),
                 'place'       => $this->up($row['place']       ?? ''),
                 'license_no'  => $this->up($row['license_no']  ?? ''),
-                'valid_until' => $row['valid_until'] ?? null,
+                'valid_until' => $this->dateOrNull($row['valid_until'] ?? null),
                 'order'       => $i,
             ]);
         }
@@ -206,13 +365,14 @@ class CompleteProfileController extends Controller
         // ── Work Experience ───────────────────────────────────────────────────
         PdsWorkExperience::where('employee_id', $empId)->delete();
         foreach ($this->decodeJson($request, 'work_experiences') as $i => $row) {
+            $salary = $row['monthly_salary'] ?? null;
             PdsWorkExperience::create([
                 'employee_id'        => $empId,
-                'date_from'          => $row['from']           ?? null,
-                'date_to'            => $row['to']             ?? null,
+                'date_from'          => $this->dateOrNull($row['from'] ?? null),
+                'date_to'            => $this->dateOrNull($row['to']   ?? null),
                 'position'           => $this->up($row['position']       ?? ''),
                 'department'         => $this->up($row['department']     ?? ''),
-                'monthly_salary'     => $row['monthly_salary']  ?? null,
+                'monthly_salary'     => ($salary === null || $salary === '') ? null : (float) $salary,
                 'salary_grade'       => $this->up($row['salary_grade']   ?? ''),
                 'appointment_status' => $this->up($row['status']         ?? ''),
                 'govt_service'       => $this->up($row['govt_service']   ?? ''),
@@ -226,8 +386,8 @@ class CompleteProfileController extends Controller
             PdsVoluntaryWork::create([
                 'employee_id'      => $empId,
                 'org_name_address' => $this->up($row['org_name_address'] ?? ''),
-                'date_from'        => $row['from'] ?? null,
-                'date_to'          => $row['to']   ?? null,
+                'date_from'        => $this->dateOrNull($row['from'] ?? null),
+                'date_to'          => $this->dateOrNull($row['to']   ?? null),
                 'hours'            => $this->up($row['hours']    ?? ''),
                 'position'         => $this->up($row['position'] ?? ''),
                 'order'            => $i,
@@ -240,8 +400,8 @@ class CompleteProfileController extends Controller
             PdsTraining::create([
                 'employee_id'  => $empId,
                 'title'        => $this->up($row['title']        ?? ''),
-                'date_from'    => $row['from'] ?? null,
-                'date_to'      => $row['to']   ?? null,
+                'date_from'    => $this->dateOrNull($row['from'] ?? null),
+                'date_to'      => $this->dateOrNull($row['to']   ?? null),
                 'hours'        => $this->up($row['hours']        ?? ''),
                 'type'         => $this->up($row['type']         ?? ''),
                 'sponsored_by' => $this->up($row['sponsored_by'] ?? ''),
@@ -292,11 +452,8 @@ class CompleteProfileController extends Controller
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // PRIVATE HELPERS
-    // ─────────────────────────────────────────────────────────────────────────
+    // ──────────────────────────────────PRIVATE HELPERS─────────────────────────────────────── 
 
-    /** Decode a JSON-encoded array field from the request; return [] on failure. */
     private function decodeJson(Request $request, string $field): array
     {
         $raw = $request->input($field);
@@ -306,11 +463,17 @@ class CompleteProfileController extends Controller
         return is_array($decoded) ? $decoded : [];
     }
 
-    /** Uppercase + trim a string value; return empty string if blank. */
     private function up(mixed $value): string
     {
         if (! is_string($value)) return '';
         $trimmed = trim($value);
         return $trimmed !== '' ? strtoupper($trimmed) : '';
+    }
+
+    private function dateOrNull(mixed $value): ?string
+    {
+        if (! is_string($value)) return null;
+        $trimmed = trim($value);
+        return $trimmed !== '' ? $trimmed : null;
     }
 }

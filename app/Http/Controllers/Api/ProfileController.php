@@ -71,6 +71,8 @@ class ProfileController extends Controller
 
     public function complete(Request $request)
     {
+        $this->nullifyBlankDates($request);
+
         $data = $request->validate($this->rules());
 
         $user     = $request->user()->fresh()->load('employee.info');
@@ -137,6 +139,26 @@ class ProfileController extends Controller
 
     // ── Validation rules ──────────────────────────────────────────────────────
 
+    /**
+     * The frontend (profileCompletionModal.jsx) appends every non-null/undefined
+     * value to FormData, including empty strings for date fields the user left
+     * blank (e.g. license_date_issued when there's no professional license).
+     * Laravel's `date` rule rejects '' even alongside `nullable`, so these are
+     * normalized to actual null before validation runs.
+     */
+    private function nullifyBlankDates(Request $request): void
+    {
+        $dateFields = [
+            'date_of_birth', 'license_date_issued', 'license_expiry_date',
+        ];
+
+        foreach ($dateFields as $field) {
+            if ($request->has($field) && $request->input($field) === '') {
+                $request->merge([$field => null]);
+            }
+        }
+    }
+
     private function rules(): array
     {
         return [
@@ -148,26 +170,27 @@ class ProfileController extends Controller
             'middle_name'     => ['nullable',  'string', 'max:255'],
             'surname'         => ['sometimes', 'string', 'max:255'],
             'name_extension'  => ['nullable',  'string', 'max:20'],
-            'date_of_birth'   => ['sometimes', 'date'],
+            'date_of_birth'   => ['required',  'date', 'before:today'],
             'place_of_birth'  => ['nullable',  'string', 'max:255'],
-            'sex_at_birth'    => ['sometimes', 'string', 'in:MALE,FEMALE'],
-            'civil_status'    => ['sometimes', 'string', 'max:50'],
+            'sex_at_birth'    => ['required',  'string', 'in:MALE,FEMALE'],
+            'civil_status'    => ['required',  'string', 'max:50'],
             'height'          => ['nullable',  'numeric', 'min:0.5', 'max:3'],
             'weight'          => ['nullable',  'numeric', 'min:10',  'max:500'],
             'blood_type'      => ['nullable',  'string', 'max:5'],
-            'citizenship'     => ['sometimes', 'string', 'max:100'],
+            'citizenship'     => ['required',  'string', 'max:100'],
 
             // Government IDs
             'umid_id'            => ['nullable', 'string', 'max:50'],
             'pagibig_id'         => ['nullable', 'string', 'max:50'],
             'philhealth_no'      => ['nullable', 'string', 'max:50'],
+            'sss_no'             => ['nullable', 'string', 'max:50'],
             'philsys_number'     => ['nullable', 'string', 'max:50'],
             'tin_no'             => ['nullable', 'string', 'max:50'],
             'agency_employee_no' => ['nullable', 'string', 'max:50'],
 
-            // Residential address
-            'residential_province'    => ['nullable', 'string', 'max:100'],
-            'residential_city'        => ['nullable', 'string', 'max:100'],
+            // Residential address — required (mirrors EmployeeInfo::REQUIRED_FIELDS)
+            'residential_province'    => ['required', 'string', 'max:100'],
+            'residential_city'        => ['required', 'string', 'max:100'],
             'residential_barangay'    => ['nullable', 'string', 'max:100'],
             'residential_house_no'    => ['nullable', 'string', 'max:100'],
             'residential_street'      => ['nullable', 'string', 'max:100'],
@@ -185,7 +208,7 @@ class ProfileController extends Controller
 
             // Contact
             'telephone_no'  => ['nullable', 'string', 'max:50'],
-            'mobile_no'     => ['sometimes', 'string', 'max:50'],
+            'mobile_no'     => ['required', 'string', 'max:50'],
             'email_address' => ['nullable', 'email',  'max:255'],
 
             // II. Family — spouse
@@ -264,6 +287,7 @@ class ProfileController extends Controller
 
             // Government-issued ID
             'govt_id_type'       => ['nullable', 'string', 'max:50'],
+            'govt_id_type_other' => ['nullable', 'string', 'max:100', 'required_if:govt_id_type,OTHER'],
             'govt_id_no'         => ['nullable', 'string', 'max:100'],
             'govt_id_date_place' => ['nullable', 'string', 'max:255'],
 
@@ -286,7 +310,7 @@ class ProfileController extends Controller
             'surname', 'name_extension',
             'date_of_birth', 'place_of_birth', 'sex_at_birth', 'civil_status',
             'height', 'weight', 'blood_type', 'citizenship',
-            'umid_id', 'pagibig_id', 'philhealth_no', 'philsys_number', 'tin_no', 'agency_employee_no',
+            'umid_id', 'pagibig_id', 'philhealth_no', 'sss_no', 'philsys_number', 'tin_no', 'agency_employee_no',
             'residential_province', 'residential_city', 'residential_barangay',
             'residential_house_no', 'residential_street', 'residential_subdivision', 'residential_zip',
             'permanent_province', 'permanent_city', 'permanent_barangay',
@@ -308,7 +332,7 @@ class ProfileController extends Controller
             'is_indigenous', 'indigenous_specify',
             'is_pwd', 'pwd_id_no',
             'is_solo_parent', 'solo_parent_id_no',
-            'govt_id_type', 'govt_id_no', 'govt_id_date_place',
+            'govt_id_type', 'govt_id_type_other', 'govt_id_no', 'govt_id_date_place',
             // Professional License
             'license_number', 'license_date_issued', 'license_expiry_date', 'license_place_issued',
         ];
@@ -340,12 +364,20 @@ class ProfileController extends Controller
         return is_array($decoded) ? $decoded : [];
     }
 
+    /** Normalize a date value from a repeatable row: blank/empty → null. */
+    private function dateOrNull(mixed $value): ?string
+    {
+        if (! is_string($value)) return null;
+        $trimmed = trim($value);
+        return $trimmed !== '' ? $trimmed : null;
+    }
+
     private function syncChildren(int $employeeId, string|array $raw): void
     {
         $rows = is_string($raw) ? $this->decodeJson($raw) : $raw;
         $this->syncRows(PdsChild::class, $employeeId, $rows, fn($r) => [
             'name'          => $r['name']          ?? null,
-            'date_of_birth' => $r['date_of_birth'] ?? null,
+            'date_of_birth' => $this->dateOrNull($r['date_of_birth'] ?? null),
         ]);
     }
 
@@ -379,10 +411,10 @@ class ProfileController extends Controller
         $this->syncRows(PdsEligibility::class, $employeeId, $rows, fn($r) => [
             'eligibility' => $r['eligibility'] ?? null,
             'rating'      => $r['rating']      ?? null,
-            'exam_date'   => $r['exam_date']   ?? null,
+            'exam_date'   => $this->dateOrNull($r['exam_date']   ?? null),
             'place'       => $r['place']       ?? null,
             'license_no'  => $r['license_no']  ?? null,
-            'valid_until' => $r['valid_until'] ?? null,
+            'valid_until' => $this->dateOrNull($r['valid_until'] ?? null),
         ]);
     }
 
@@ -390,8 +422,8 @@ class ProfileController extends Controller
     {
         $rows = is_string($raw) ? $this->decodeJson($raw) : $raw;
         $this->syncRows(PdsWorkExperience::class, $employeeId, $rows, fn($r) => [
-            'date_from'          => $r['from']           ?? null,
-            'date_to'            => $r['to']             ?? null,
+            'date_from'          => $this->dateOrNull($r['from'] ?? null),
+            'date_to'            => $this->dateOrNull($r['to']   ?? null),
             'position'           => $r['position']       ?? null,
             'department'         => $r['department']     ?? null,
             'monthly_salary'     => is_numeric($r['monthly_salary'] ?? null) ? $r['monthly_salary'] : null,
@@ -406,8 +438,8 @@ class ProfileController extends Controller
         $rows = is_string($raw) ? $this->decodeJson($raw) : $raw;
         $this->syncRows(PdsVoluntaryWork::class, $employeeId, $rows, fn($r) => [
             'org_name_address' => $r['org_name_address'] ?? null,
-            'date_from'        => $r['from']             ?? null,
-            'date_to'          => $r['to']               ?? null,
+            'date_from'        => $this->dateOrNull($r['from'] ?? null),
+            'date_to'          => $this->dateOrNull($r['to']   ?? null),
             'hours'            => $r['hours']            ?? null,
             'position'         => $r['position']         ?? null,
         ]);
@@ -418,8 +450,8 @@ class ProfileController extends Controller
         $rows = is_string($raw) ? $this->decodeJson($raw) : $raw;
         $this->syncRows(PdsTraining::class, $employeeId, $rows, fn($r) => [
             'title'        => $r['title']        ?? null,
-            'date_from'    => $r['from']         ?? null,
-            'date_to'      => $r['to']           ?? null,
+            'date_from'    => $this->dateOrNull($r['from'] ?? null),
+            'date_to'      => $this->dateOrNull($r['to']   ?? null),
             'hours'        => $r['hours']        ?? null,
             'type'         => $r['type']         ?? null,
             'sponsored_by' => $r['sponsored_by'] ?? null,

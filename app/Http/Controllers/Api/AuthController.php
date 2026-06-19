@@ -56,7 +56,7 @@ class AuthController extends Controller
             $user->tokens()->delete();
         }
 
-        $token = $user->createToken('api-token')->plainTextToken;
+        $token = $user->createToken($user->username)->plainTextToken;
 
         ActivityLog::record(
             action: 'auth.login',
