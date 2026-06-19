@@ -12,10 +12,10 @@ class EmployeeInfo extends Model
     protected $fillable = [
         // ── Legacy fields (kept for backwards compat) ─────────────────────
         'employee_id',
-        'contact',      // mirrors mobile_no — kept so existing code doesn't break
-        'address',      // mirrors residential address — kept for backwards compat
-        'birthdate',    // mirrors date_of_birth
-        'gender',       // mirrors sex_at_birth
+        'contact',      
+        'address',      
+        'birthdate',   
+        'gender',       
         'status',
 
         // ── I. Personal Information ───────────────────────────────────────
@@ -34,6 +34,7 @@ class EmployeeInfo extends Model
         'umid_id',
         'pagibig_id',
         'philhealth_no',
+        'sss_no',
         'philsys_number',
         'tin_no',
         'agency_employee_no',
@@ -106,6 +107,7 @@ class EmployeeInfo extends Model
 
         // ── Government-issued ID ──────────────────────────────────────────
         'govt_id_type',
+        'govt_id_type_other',
         'govt_id_no',
         'govt_id_date_place',
 
@@ -131,7 +133,6 @@ class EmployeeInfo extends Model
         static::saving(function (EmployeeInfo $info) {
             $info->status = $info->computeStatus();
 
-            // Keep legacy mirror fields in sync so old queries don't break
             if ($info->isDirty('date_of_birth') && !$info->isDirty('birthdate')) {
                 $info->birthdate = $info->date_of_birth;
             }
