@@ -147,12 +147,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
     */
 
     Route::prefix('skill-assessments')->group(function () {
-        Route::get('/',                        [SkillAssessmentController::class, 'index']);
-        Route::post('/',                       [SkillAssessmentController::class, 'store']);
-        Route::get('/employee/{employee}',     [SkillAssessmentController::class, 'byEmployee']);
-        Route::get('/{skillAssessment}',       [SkillAssessmentController::class, 'show']);
-        Route::put('/{skillAssessment}',       [SkillAssessmentController::class, 'update']);
-        Route::delete('/{skillAssessment}',    [SkillAssessmentController::class, 'destroy']);
+        Route::get('/',                          [SkillAssessmentController::class, 'index']);
+        Route::post('/',                         [SkillAssessmentController::class, 'store']);
+        Route::get('/employee/{employee}',       [SkillAssessmentController::class, 'byEmployee']);
+        Route::get('/{skillAssessment}',         [SkillAssessmentController::class, 'show']);
+        Route::put('/{skillAssessment}',         [SkillAssessmentController::class, 'update']);
+        Route::delete('/{skillAssessment}',      [SkillAssessmentController::class, 'destroy']);
         Route::post('/{skillAssessment}/submit', [SkillAssessmentController::class, 'submit']);
         Route::post('/{skillAssessment}/review', [SkillAssessmentController::class, 'review']);
     });
@@ -164,12 +164,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
     */
 
     Route::prefix('skill-recommendations')->group(function () {
-        Route::get('/',                            [SkillRecommendationController::class, 'index']);
-        Route::post('/',                           [SkillRecommendationController::class, 'store']);
-        Route::get('/skill/{skillId}',             [SkillRecommendationController::class, 'bySkill']);
-        Route::get('/{skillRecommendation}',       [SkillRecommendationController::class, 'show']);
-        Route::put('/{skillRecommendation}',       [SkillRecommendationController::class, 'update']);
-        Route::delete('/{skillRecommendation}',    [SkillRecommendationController::class, 'destroy']);
+        Route::get('/',                         [SkillRecommendationController::class, 'index']);
+        Route::post('/',                        [SkillRecommendationController::class, 'store']);
+        Route::get('/skill/{skillId}',          [SkillRecommendationController::class, 'bySkill']);
+        Route::get('/{skillRecommendation}',    [SkillRecommendationController::class, 'show']);
+        Route::put('/{skillRecommendation}',    [SkillRecommendationController::class, 'update']);
+        Route::delete('/{skillRecommendation}', [SkillRecommendationController::class, 'destroy']);
     });
 
     /*
@@ -179,12 +179,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
     */
 
     Route::prefix('development-plans')->group(function () {
-        Route::get('/',                          [DevelopmentPlanController::class, 'index']);
-        Route::post('/',                         [DevelopmentPlanController::class, 'store']);
-        Route::get('/employee/{employee}',       [DevelopmentPlanController::class, 'byEmployee']);
-        Route::get('/{developmentPlan}',         [DevelopmentPlanController::class, 'show']);
-        Route::put('/{developmentPlan}',         [DevelopmentPlanController::class, 'update']);
-        Route::delete('/{developmentPlan}',      [DevelopmentPlanController::class, 'destroy']);
+        Route::get('/',                             [DevelopmentPlanController::class, 'index']);
+        Route::post('/',                            [DevelopmentPlanController::class, 'store']);
+        Route::get('/employee/{employee}',          [DevelopmentPlanController::class, 'byEmployee']);
+        Route::get('/{developmentPlan}',            [DevelopmentPlanController::class, 'show']);
+        Route::put('/{developmentPlan}',            [DevelopmentPlanController::class, 'update']);
+        Route::delete('/{developmentPlan}',         [DevelopmentPlanController::class, 'destroy']);
         Route::patch('/{developmentPlan}/progress', [DevelopmentPlanController::class, 'updateProgress']);
         Route::patch('/{developmentPlan}/complete', [DevelopmentPlanController::class, 'complete']);
     });
@@ -196,11 +196,11 @@ Route::middleware(['auth:sanctum'])->group(function () {
     */
 
     Route::prefix('skill-gap-analysis')->group(function () {
-        Route::get('/{skillAssessment}',                    [SkillGapAnalysisController::class, 'generate']);
-        Route::post('/{skillAssessment}/create-plans',      [SkillGapAnalysisController::class, 'createPlans']);
-        Route::get('/department/{departmentId}/stats',      [SkillGapAnalysisController::class, 'departmentStats']);
-        Route::get('/employee/{employee}/summary',          [SkillGapAnalysisController::class, 'employeeSummary']);
-        Route::get('/export/{skillAssessment}',             [SkillGapAnalysisController::class, 'export']);
+        Route::get('/{skillAssessment}',               [SkillGapAnalysisController::class, 'generate']);
+        Route::post('/{skillAssessment}/create-plans', [SkillGapAnalysisController::class, 'createPlans']);
+        Route::get('/department/{departmentId}/stats', [SkillGapAnalysisController::class, 'departmentStats']);
+        Route::get('/employee/{employee}/summary',     [SkillGapAnalysisController::class, 'employeeSummary']);
+        Route::get('/export/{skillAssessment}',        [SkillGapAnalysisController::class, 'export']);
     });
 
     /*
@@ -227,24 +227,23 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
         // !! Order matters: static/specific segments must come before wildcards !!
 
-        // List and create
         Route::get('/',  [PlantillaPositionController::class, 'index']);
         Route::post('/', [PlantillaPositionController::class, 'store']);
 
-        // Static POST routes (must be before /{plantillaPosition} wildcard)
+        // Static POST routes (before /{plantillaPosition} wildcard)
         Route::post('/add-slots',    [PlantillaPositionController::class, 'addSlots']);
         Route::post('/bulk-delete',  [PlantillaPositionController::class, 'bulkDelete']);
         Route::post('/bulk-restore', [PlantillaPositionController::class, 'bulkRestore']);
 
-        // Static GET routes (must be before /{plantillaPosition} wildcard)
+        // Static GET routes (before /{plantillaPosition} wildcard)
         Route::get('/summary/all',     [PlantillaPositionController::class, 'summary']);
         Route::get('/available/items', [PlantillaPositionController::class, 'availableItems']);
 
-        // Wildcard routes — specific sub-paths first, then bare wildcard
-        Route::get('/{plantillaPosition}/steps',          [PlantillaPositionController::class, 'steps']);
-        Route::get('/{plantillaPosition}/salary-config',  [PlantillaPositionController::class, 'salaryConfig']);
-        Route::post('/{plantillaPosition}/approve',       [PlantillaPositionController::class, 'approve']);
-        Route::patch('/{id}/restore',                     [PlantillaPositionController::class, 'restore']);
+        // Wildcard sub-paths first, then bare wildcard
+        Route::get('/{plantillaPosition}/steps',         [PlantillaPositionController::class, 'steps']);
+        Route::get('/{plantillaPosition}/salary-config', [PlantillaPositionController::class, 'salaryConfig']);
+        Route::post('/{plantillaPosition}/approve',      [PlantillaPositionController::class, 'approve']);
+        Route::patch('/{id}/restore',                    [PlantillaPositionController::class, 'restore']);
 
         Route::get('/{plantillaPosition}',    [PlantillaPositionController::class, 'show']);
         Route::patch('/{plantillaPosition}',  [PlantillaPositionController::class, 'update']);
@@ -258,10 +257,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     */
 
     Route::prefix('cos-positions')->group(function () {
-        Route::get('/',              [CosPositionController::class, 'index']);
-        Route::post('/',             [CosPositionController::class, 'store']);
-        Route::get('/{cosPosition}', [CosPositionController::class, 'show']);
-        Route::put('/{cosPosition}', [CosPositionController::class, 'update']);
+        Route::get('/',                 [CosPositionController::class, 'index']);
+        Route::post('/',                [CosPositionController::class, 'store']);
+        Route::get('/{cosPosition}',    [CosPositionController::class, 'show']);
+        Route::put('/{cosPosition}',    [CosPositionController::class, 'update']);
         Route::delete('/{cosPosition}', [CosPositionController::class, 'destroy']);
     });
 
@@ -272,10 +271,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     */
 
     Route::prefix('consultant-positions')->group(function () {
-        Route::get('/',                     [ConsultantPositionController::class, 'index']);
-        Route::post('/',                    [ConsultantPositionController::class, 'store']);
-        Route::get('/{consultantPosition}', [ConsultantPositionController::class, 'show']);
-        Route::put('/{consultantPosition}', [ConsultantPositionController::class, 'update']);
+        Route::get('/',                        [ConsultantPositionController::class, 'index']);
+        Route::post('/',                       [ConsultantPositionController::class, 'store']);
+        Route::get('/{consultantPosition}',    [ConsultantPositionController::class, 'show']);
+        Route::put('/{consultantPosition}',    [ConsultantPositionController::class, 'update']);
         Route::delete('/{consultantPosition}', [ConsultantPositionController::class, 'destroy']);
     });
 
@@ -286,10 +285,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     */
 
     Route::prefix('notifications')->group(function () {
-        Route::get('/',                            [NotificationController::class, 'index']);
-        Route::get('/unread-count',                [NotificationController::class, 'unreadCount']);
-        Route::post('/mark-all-read',              [NotificationController::class, 'markAllRead']);
-        Route::post('/{notification}/mark-read',   [NotificationController::class, 'markRead']);
+        Route::get('/',                          [NotificationController::class, 'index']);
+        Route::get('/unread-count',              [NotificationController::class, 'unreadCount']);
+        Route::post('/mark-all-read',            [NotificationController::class, 'markAllRead']);
+        Route::post('/{notification}/mark-read', [NotificationController::class, 'markRead']);
     });
 
     /*
@@ -312,21 +311,19 @@ Route::middleware(['auth:sanctum'])->group(function () {
     */
 
     Route::prefix('manpower')->group(function () {
-        Route::get('/tree',                   [ManpowerMappingController::class, 'tree']);
-        Route::get('/report',                 [ManpowerMappingController::class, 'report']);
-        Route::get('/departments',            [ManpowerMappingController::class, 'departments']);
-        Route::get('/department/{department}',[ManpowerMappingController::class, 'departmentDetail']);
+        Route::get('/tree',                    [ManpowerMappingController::class, 'tree']);
+        Route::get('/report',                  [ManpowerMappingController::class, 'report']);
+        Route::get('/departments',             [ManpowerMappingController::class, 'departments']);
+        Route::get('/department/{department}', [ManpowerMappingController::class, 'departmentDetail']);
 
-        // Counts
-        Route::get('/plantilla-count',        [ManpowerMappingController::class, 'plantillaCount']);
-        Route::get('/cos-count',              [ManpowerMappingController::class, 'cosCount']);
-        Route::get('/consultant-count',       [ManpowerMappingController::class, 'consultantCount']);
-        Route::get('/vacant-count',           [ManpowerMappingController::class, 'vacantCount']);
+        Route::get('/plantilla-count',         [ManpowerMappingController::class, 'plantillaCount']);
+        Route::get('/cos-count',               [ManpowerMappingController::class, 'cosCount']);
+        Route::get('/consultant-count',        [ManpowerMappingController::class, 'consultantCount']);
+        Route::get('/vacant-count',            [ManpowerMappingController::class, 'vacantCount']);
 
-        // Summary & Analytics
-        Route::get('/summary',                [ManpowerMappingController::class, 'summary']);
-        Route::get('/overstaffed',            [ManpowerMappingController::class, 'overstaffed']);
-        Route::get('/division-analytics',     [ManpowerMappingController::class, 'divisionAnalytics']);
+        Route::get('/summary',                 [ManpowerMappingController::class, 'summary']);
+        Route::get('/overstaffed',             [ManpowerMappingController::class, 'overstaffed']);
+        Route::get('/division-analytics',      [ManpowerMappingController::class, 'divisionAnalytics']);
     });
 
     /*
@@ -341,11 +338,11 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/',        [TrainingController::class, 'index']);
         Route::post('/',       [TrainingController::class, 'store']);
 
-        Route::post('/{training}/join',                              [TrainingController::class, 'join']);
-        Route::post('/{training}/participants',                      [TrainingController::class, 'assignParticipants']);
-        Route::patch('/{training}/participants/{employee}',          [TrainingController::class, 'updateParticipant']);
-        Route::delete('/{training}/participants/{employee}',         [TrainingController::class, 'removeParticipant']);
-        Route::patch('/{training}/participants/{employee}/attend',   [TrainingController::class, 'markAttendance']);
+        Route::post('/{training}/join',                            [TrainingController::class, 'join']);
+        Route::post('/{training}/participants',                    [TrainingController::class, 'assignParticipants']);
+        Route::patch('/{training}/participants/{employee}',        [TrainingController::class, 'updateParticipant']);
+        Route::delete('/{training}/participants/{employee}',       [TrainingController::class, 'removeParticipant']);
+        Route::patch('/{training}/participants/{employee}/attend', [TrainingController::class, 'markAttendance']);
 
         Route::get('/{training}',    [TrainingController::class, 'show']);
         Route::put('/{training}',    [TrainingController::class, 'update']);
@@ -361,24 +358,24 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::prefix('hiring')->group(function () {
 
         // Applicants
-        Route::get('/applicants/summary',               [ApplicantController::class, 'summary']);
-        Route::get('/applicants',                       [ApplicantController::class, 'index']);
-        Route::post('/applicants',                      [ApplicantController::class, 'store']);
-        Route::get('/applicants/{applicant}',           [ApplicantController::class, 'show']);
-        Route::put('/applicants/{applicant}',           [ApplicantController::class, 'update']);
-        Route::delete('/applicants/{applicant}',        [ApplicantController::class, 'destroy']);
+        Route::get('/applicants/summary',                         [ApplicantController::class, 'summary']);
+        Route::get('/applicants',                                 [ApplicantController::class, 'index']);
+        Route::post('/applicants',                                [ApplicantController::class, 'store']);
+        Route::get('/applicants/{applicant}',                     [ApplicantController::class, 'show']);
+        Route::put('/applicants/{applicant}',                     [ApplicantController::class, 'update']);
+        Route::delete('/applicants/{applicant}',                  [ApplicantController::class, 'destroy']);
         Route::post('/applicants/{applicant}/move-to-onboarding', [ApplicantController::class, 'moveToOnboarding']);
 
         // Documents
-        Route::get('/applicants/{applicant}/documents',                    [ApplicantDocumentController::class, 'index']);
-        Route::post('/applicants/{applicant}/documents',                   [ApplicantDocumentController::class, 'store']);
-        Route::put('/applicants/{applicant}/documents/{document}',         [ApplicantDocumentController::class, 'update']);
-        Route::delete('/applicants/{applicant}/documents/{document}',      [ApplicantDocumentController::class, 'destroy']);
+        Route::get('/applicants/{applicant}/documents',               [ApplicantDocumentController::class, 'index']);
+        Route::post('/applicants/{applicant}/documents',              [ApplicantDocumentController::class, 'store']);
+        Route::put('/applicants/{applicant}/documents/{document}',    [ApplicantDocumentController::class, 'update']);
+        Route::delete('/applicants/{applicant}/documents/{document}', [ApplicantDocumentController::class, 'destroy']);
 
         // Interviews
-        Route::get('/interviews',                          [InterviewController::class, 'index']);
-        Route::get('/applicants/{applicant}/interview',    [InterviewController::class, 'show']);
-        Route::put('/applicants/{applicant}/interview',    [InterviewController::class, 'update']);
+        Route::get('/interviews',                       [InterviewController::class, 'index']);
+        Route::get('/applicants/{applicant}/interview', [InterviewController::class, 'show']);
+        Route::put('/applicants/{applicant}/interview', [InterviewController::class, 'update']);
 
         // Events / Calendar
         Route::get('/events',                  [HiringEventController::class, 'index']);
@@ -409,10 +406,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/{onboarding}', [OnboardingController::class, 'destroy']);
 
         // Tasks
-        Route::post('/{onboarding}/tasks',                  [OnboardingController::class, 'addTask']);
-        Route::patch('/{onboarding}/tasks/{task}/toggle',   [OnboardingController::class, 'toggleTask']);
-        Route::put('/{onboarding}/tasks/{task}',            [OnboardingController::class, 'updateTask']);
-        Route::delete('/{onboarding}/tasks/{task}',         [OnboardingController::class, 'deleteTask']);
+        Route::post('/{onboarding}/tasks',                [OnboardingController::class, 'addTask']);
+        Route::patch('/{onboarding}/tasks/{task}/toggle', [OnboardingController::class, 'toggleTask']);
+        Route::put('/{onboarding}/tasks/{task}',          [OnboardingController::class, 'updateTask']);
+        Route::delete('/{onboarding}/tasks/{task}',       [OnboardingController::class, 'deleteTask']);
     });
 
     /*
@@ -423,13 +420,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     Route::prefix('holidays')->group(function () {
         // !! Static segments before wildcards !!
-        Route::get('/current',                    [HolidayController::class, 'current']);
-        Route::get('/check',                      [HolidayController::class, 'checkDate']);
-        Route::get('/next',                       [HolidayController::class, 'next']);
-        Route::get('/search',                     [HolidayController::class, 'search']);
-        Route::delete('/cache/{year?}',           [HolidayController::class, 'clearCache']);
-        Route::get('/range/{startYear}/{endYear}',[HolidayController::class, 'getRange']);
-        Route::get('/{year}',                     [HolidayController::class, 'getByYear']);
+        Route::get('/current',                     [HolidayController::class, 'current']);
+        Route::get('/check',                       [HolidayController::class, 'checkDate']);
+        Route::get('/next',                        [HolidayController::class, 'next']);
+        Route::get('/search',                      [HolidayController::class, 'search']);
+        Route::delete('/cache/{year?}',            [HolidayController::class, 'clearCache']);
+        Route::get('/range/{startYear}/{endYear}', [HolidayController::class, 'getRange']);
+        Route::get('/{year}',                      [HolidayController::class, 'getByYear']);
     });
 
     /*
@@ -438,5 +435,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::post('/reports', [ReportController::class, 'store']);
+    Route::prefix('reports')->group(function () {
+        Route::get('/',            [ReportController::class, 'index']);
+        Route::post('/',           [ReportController::class, 'store']);
+        Route::get('/{report}',    [ReportController::class, 'show']);
+        Route::put('/{report}',    [ReportController::class, 'update']);
+        Route::delete('/{report}', [ReportController::class, 'destroy']);
+    });
+
 });
