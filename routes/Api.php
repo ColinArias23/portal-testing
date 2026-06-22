@@ -33,7 +33,7 @@ use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\CosPositionController;
 use App\Http\Controllers\Api\ConsultantPositionController;
 use App\Http\Controllers\Api\HolidayController;
-use App\Http\Controllers\ReportController;
+use App\Http\Controllers\Api\ReportController;
 
 /*
 |--------------------------------------------------------------------------

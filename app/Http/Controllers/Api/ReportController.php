@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreReportRequest;
 use App\Jobs\ProcessNewReport;
 use App\Models\Report;
