@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Report extends Model
 {
@@ -56,5 +57,11 @@ class Report extends Model
     public function isOpen(): bool
     {
         return $this->status === 'open';
+    }
+
+    public function releases(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(\App\Models\Release::class, 'release_reports')
+            ->withTimestamps();
     }
 }

@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\CosPositionController;
 use App\Http\Controllers\Api\ConsultantPositionController;
 use App\Http\Controllers\Api\HolidayController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\ReleaseController;
 
 /*
 |--------------------------------------------------------------------------
@@ -44,6 +45,9 @@ use App\Http\Controllers\Api\ReportController;
 Route::post('/login',          [AuthController::class, 'login']);
 Route::post('/register',       [AuthController::class, 'register']);
 Route::post('/check-username', [AuthController::class, 'checkUsername']);
+
+Route::get('/releases',           [ReleaseController::class, 'index']);
+Route::get('/releases/{release}', [ReleaseController::class, 'show']);
 
 /*
 |--------------------------------------------------------------------------
@@ -438,9 +442,25 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::prefix('reports')->group(function () {
         Route::get('/',            [ReportController::class, 'index']);
         Route::post('/',           [ReportController::class, 'store']);
+
+        // Resolved-but-unassigned reports for the release picker.
+        // Must come before /{report} or "resolved" would be parsed as a report id.
+        Route::get('/resolved/unassigned', [ReleaseController::class, 'unassignedResolved']);
+
         Route::get('/{report}',    [ReportController::class, 'show']);
         Route::put('/{report}',    [ReportController::class, 'update']);
         Route::delete('/{report}', [ReportController::class, 'destroy']);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Releases
+    |--------------------------------------------------------------------------
+    */
+
+    Route::prefix('releases')->group(function () {
+        Route::post('/',           [ReleaseController::class, 'store']);
+        Route::delete('/{release}', [ReleaseController::class, 'destroy']);
     });
 
 });
