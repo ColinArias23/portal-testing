@@ -85,7 +85,7 @@ class UserController extends Controller
 
         $user->syncPermissions($request->permissions);
 
-        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
         $user->unsetRelation('permissions');
         $user->unsetRelation('roles');
         $user->refresh();
@@ -152,7 +152,7 @@ class UserController extends Controller
             }
         }
 
-        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
         $user->refresh();
 
         ActivityLog::record(

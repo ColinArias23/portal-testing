@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Events\UserLoggedInElsewhere;
 use App\Events\UserRegistered;
 use App\Models\ActivityLog;
 use App\Models\User;
@@ -52,7 +53,7 @@ class AuthController extends Controller
         }
 
         if ($user->tokens()->exists()) {
-            broadcast(new \App\Events\UserLoggedInElsewhere($user->id));
+            broadcast(new UserLoggedInElsewhere($user->id));
             $user->tokens()->delete();
         }
 
