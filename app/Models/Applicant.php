@@ -3,16 +3,23 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\AutoUppercase;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Applicant extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, AutoUppercase;
 
     protected $table = 'applicants';
 
+    protected array $uppercaseExclude = [
+        'created_at',
+        'updated_at',
+        'deleted_at',
+    ];
+    
     protected $fillable = [
         'first_name',
         'last_name',

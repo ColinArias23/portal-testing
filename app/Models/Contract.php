@@ -3,15 +3,27 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\AutoUppercase;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Contract extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, AutoUppercase;
+
+    protected array $uppercaseExclude = [
+        'created_at',
+        'updated_at',
+        'deleted_at',
+    ];
 
     protected $fillable = [
-        'applicant_id', 'employee_name', 'position',
-        'salary', 'start_date', 'status', 'file_path',
+        'applicant_id', 
+        'employee_name', 
+        'position',
+        'salary', 
+        'start_date', 
+        'status', 
+        'file_path',
     ];
 
     protected $casts = [

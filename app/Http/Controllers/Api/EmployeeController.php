@@ -31,19 +31,12 @@ class EmployeeController extends Controller
     {
         $this->middleware('auth:sanctum');
 
-        // Only SuperAdmin and HR can create, update, or delete employees
         $this->middleware('role:SuperAdmin|HR')->only([
             'store',
             'update',
             'destroy',
         ]);
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | HELPERS
-    |--------------------------------------------------------------------------
-    */
 
     private function formatEmployee(Employee $employee): array
     {
@@ -60,7 +53,6 @@ class EmployeeController extends Controller
         $position      = $assignment?->plantillaPosition;
         $stepIncrement = $assignment?->effectiveStepIncrement();
 
-        // Get position info based on employment type
         $positionInfo = null;
         $employmentType = strtolower(trim($employee->employment_type ?? ''));
 
@@ -135,7 +127,6 @@ class EmployeeController extends Controller
                 'full_name' => $p->full_name,
             ])->toArray(),
 
-            // COS and Consultant position IDs
             'cos_position_id'        => $employee->cos_position_id,
             'consultant_position_id' => $employee->consultant_position_id,
 
@@ -150,7 +141,6 @@ class EmployeeController extends Controller
                     'annual_salary'  => $stepIncrement->annual_salary,
                 ] : null,
             ] : ($positionInfo ? [
-                // For non-Plantilla, still include position info even without assignment
                 'plantilla_position' => $positionInfo,
             ] : null),
 
@@ -245,14 +235,15 @@ class EmployeeController extends Controller
 
     private function assertUniqueEmployeeNumber(?string $number, $ignoreId = null): void
     {
-        if (! $number) return;
+        if (! $number) {
+            return;
+        }
 
-        $number = strtoupper($number);
+        $number = strtoupper(trim($number));
 
-        $exists = Employee::select('id', 'employee_number')
+        $exists = Employee::whereRaw('UPPER(TRIM(employee_number)) = ?', [$number])
             ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
-            ->get()
-            ->contains(fn($emp) => strtoupper($emp->employee_number) === $number);
+            ->exists();
 
         if ($exists) {
             abort(422, json_encode([
@@ -260,12 +251,6 @@ class EmployeeController extends Controller
             ]));
         }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | GENDER COUNT
-    |--------------------------------------------------------------------------
-    */
 
     public function genderCount(): JsonResponse
     {
@@ -278,12 +263,6 @@ class EmployeeController extends Controller
             'total'  => $male + $female,
         ]);
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | INDEX
-    |--------------------------------------------------------------------------
-    */
 
     public function index(Request $request): JsonResponse
     {
@@ -336,12 +315,6 @@ class EmployeeController extends Controller
         return response()->json($paginator);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | SHOW
-    |--------------------------------------------------------------------------
-    */
-
     public function show(Employee $employee): JsonResponse
     {
         $employee->load([
@@ -359,12 +332,6 @@ class EmployeeController extends Controller
 
         return response()->json($this->formatEmployee($employee));
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | NON-ROOT
-    |--------------------------------------------------------------------------
-    */
 
     public function nonRoot(): JsonResponse
     {
@@ -389,12 +356,6 @@ class EmployeeController extends Controller
         return response()->json($employees);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | STORE
-    |--------------------------------------------------------------------------
-    */
-
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate($this->rules());
@@ -410,7 +371,6 @@ class EmployeeController extends Controller
             $data['title']                = $request->title                ?? [];
             $data['position_designation'] = $request->position_designation ?? [];
 
-            // Handle COS and Consultant positions
             $data['cos_position_id']        = $request->cos_position_id        ?? null;
             $data['consultant_position_id'] = $request->consultant_position_id ?? null;
 
@@ -459,12 +419,6 @@ class EmployeeController extends Controller
         return response()->json($this->formatEmployee($employee), 201);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | UPDATE
-    |--------------------------------------------------------------------------
-    */
-
     public function update(Request $request, Employee $employee): JsonResponse
     {
         $data = $request->validate($this->rules());
@@ -492,7 +446,6 @@ class EmployeeController extends Controller
             $data['title']                = $request->title                ?? [];
             $data['position_designation'] = $request->position_designation ?? [];
 
-            // Handle COS and Consultant positions
             $data['cos_position_id']        = $request->cos_position_id        ?? null;
             $data['consultant_position_id'] = $request->consultant_position_id ?? null;
 
@@ -559,12 +512,6 @@ class EmployeeController extends Controller
         return response()->json($formatted);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | DESTROY
-    |--------------------------------------------------------------------------
-    */
-
     public function destroy(Request $request, Employee $employee): JsonResponse
     {
         $label = $employee->full_name;
@@ -572,7 +519,6 @@ class EmployeeController extends Controller
 
         try {
             DB::transaction(function () use ($employee) {
-                // Step 1: Check for and end active primary assignment (Plantilla only)
                 $active = EmployeeAssignment::where('employee_id', $employee->id)
                     ->whereNull('end_date')
                     ->where('is_primary', true)
@@ -591,12 +537,10 @@ class EmployeeController extends Controller
                             'assignment_id' => $active->id,
                             'error'         => $e->getMessage(),
                         ]);
-                        // Fallback: manually close the assignment
                         $active->update(['end_date' => now()->toDateString()]);
                     }
                 }
 
-                // Step 2: Delete avatar file if exists
                 $path = $employee->getRawOriginal('avatar_url');
                 if ($path && file_exists(storage_path('app/public/' . $path))) {
                     try {
@@ -609,36 +553,29 @@ class EmployeeController extends Controller
                     }
                 }
 
-                // Step 3: Delete all hierarchy records (parent-child relationships)
                 EmployeeHierarchy::where('employee_id', $employee->id)
                     ->orWhere('parent_id', $employee->id)
                     ->delete();
 
-                // Step 4: Delete all assignments (including historical)
                 EmployeeAssignment::where('employee_id', $employee->id)
                     ->delete();
 
-                // Step 5: Delete employee info (personal details)
                 if ($employee->info) {
                     $employee->info()->delete();
                 }
 
-                // Step 6: Soft delete the linked user account if exists
-                // Guard: skip SuperAdmin and HR accounts to prevent accidental lockout
                 $linkedUser = \App\Models\User::where('employee_id', $employee->id)
                     ->whereNotNull('employee_id')
                     ->first();
 
                 if ($linkedUser && ! $linkedUser->hasAnyRole(['SuperAdmin', 'HR'])) {
-                    $linkedUser->tokens()->delete(); // revoke all tokens — logs them out immediately
-                    $linkedUser->delete();           // soft delete the user account
+                    $linkedUser->tokens()->delete(); 
+                    $linkedUser->delete();           
                 }
 
-                // Step 7: Finally soft delete the employee record
                 $employee->delete();
             }, attempts: 3);
 
-            // Log the successful deletion
             ActivityLog::record(
                 action:       'employee.deleted',
                 userId:       Auth::id(),
@@ -655,7 +592,6 @@ class EmployeeController extends Controller
             ]);
 
         } catch (\Throwable $e) {
-            // Log the error with full context
             Log::error('Employee deletion failed', [
                 'employee_id'   => $id,
                 'employee_name' => $label,
@@ -673,12 +609,6 @@ class EmployeeController extends Controller
         }
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | AVATAR
-    |--------------------------------------------------------------------------
-    */
-
     public function avatar(Request $request, Employee $employee): JsonResponse
     {
         Log::channel('confidential_access')->info('Avatar accessed', [
@@ -692,12 +622,6 @@ class EmployeeController extends Controller
             'url' => $this->resolveAvatarUrl($employee->getRawOriginal('avatar_url')),
         ]);
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | PRIVATE HELPERS
-    |--------------------------------------------------------------------------
-    */
 
     private function storeAvatar(\Illuminate\Http\UploadedFile $file): string
     {
@@ -718,21 +642,8 @@ class EmployeeController extends Controller
         }
     }
 
-    /**
-     * Sync the employee's primary plantilla assignment.
-     *
-     * Cases handled:
-     *   A) No existing, no new → nothing to do
-     *   B) No existing, new position → assign
-     *   C) Existing, no new → vacate only
-     *   D) Existing same position, same step → nothing to do
-     *   E) Existing same position, different step → close + re-assign
-     *      (approve the position first so it becomes VACANT again)
-     *   F) Existing different position → vacate old, assign new
-     */
     private function syncAssignment(Employee $employee, Request $request): void
     {
-        // Only process plantilla assignments
         if ($request->employment_type !== 'Plantilla') {
             return;
         }
@@ -750,7 +661,6 @@ class EmployeeController extends Controller
         $existingPositionId = $existing ? (int) $existing->plantilla_position_id : null;
         $existingStepId     = $existing ? (int) $existing->step_increment_id     : null;
 
-        // ── Case D: truly nothing changed ────────────────────────────────────
         if (
             $existingPositionId === $newPositionId &&
             $existingStepId     === $newStepId
@@ -758,7 +668,6 @@ class EmployeeController extends Controller
             return;
         }
 
-        // ── Cases C, E, F: close existing assignment ──────────────────────────
         if ($existing) {
             $this->plantillaService->vacate(
                 $existing,
@@ -767,18 +676,14 @@ class EmployeeController extends Controller
             );
         }
 
-        // ── Case C: cleared position, nothing more to do ──────────────────────
         if (! $newPositionId) return;
 
         $position = PlantillaPosition::findOrFail($newPositionId);
 
-        // ── Case E: same position, step changed ───────────────────────────────
-        // vacate() set it to UNFILLED; approve it so assign() can proceed.
         if ($existingPositionId === $newPositionId) {
             $this->plantillaService->approve($position->fresh());
         }
 
-        // ── Cases B, E, F: assign to (possibly new) position ─────────────────
         $this->plantillaService->assign(
             position:        $position->fresh(),
             employee:        $employee,

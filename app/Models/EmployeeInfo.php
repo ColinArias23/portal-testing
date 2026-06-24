@@ -3,11 +3,25 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\AutoUppercase;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class EmployeeInfo extends Model
 {
+
+    use AutoUppercase;
+
     protected $table = 'employee_info';
+
+    protected array $uppercaseExclude = [
+        'email_address',
+        'date_of_birth',
+        'license_date_issued',
+        'license_expiry_date',
+        'govt_id_date_place',
+        'created_at',
+        'updated_at',
+    ];
 
     protected $fillable = [
         // ── Legacy fields (kept for backwards compat) ─────────────────────
@@ -161,7 +175,7 @@ class EmployeeInfo extends Model
         $nameFilled   = (!empty($employee?->first_name) && !empty($employee?->last_name)) ? 1 : 0;
         $avatarFilled = $this->resolveAvatarExists($employee) ? 1 : 0;
 
-        $totalRequired = count(self::REQUIRED_FIELDS) + 2; // +name, +avatar
+        $totalRequired = count(self::REQUIRED_FIELDS) + 2;
         $totalFilled   = $infoFilled + $nameFilled + $avatarFilled;
 
         if ($totalFilled === 0)              return 'EMPTY';

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\AutoUppercase;
 use App\Models\EmployeeHierarchy;
 use App\Models\EmployeeInfo;
 use App\Models\Division;
@@ -15,6 +16,17 @@ use App\Models\ConsultantPosition;
 
 class Employee extends Model
 {
+
+    use AutoUppercase;
+
+    protected array $uppercaseExclude = [
+        'avatar_url',
+        'border_color',
+        'notes',
+        'created_at',
+        'updated_at',
+    ];
+    
     protected $fillable = [
         'employee_number',
         'role_position',
@@ -49,12 +61,6 @@ class Employee extends Model
 
     protected $appends = ['full_name'];
 
-    /*
-    |--------------------------------------------------------------------------
-    | COMPUTED ATTRIBUTES
-    |--------------------------------------------------------------------------
-    */
-
     public function getFullNameAttribute(): string
     {
         return collect([
@@ -71,12 +77,6 @@ class Employee extends Model
         return collect($this->role_position)->filter()->implode(', ');
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | RELATIONSHIPS
-    |--------------------------------------------------------------------------
-    */
-
     public function info()
     {
         return $this->hasOne(EmployeeInfo::class);
@@ -92,21 +92,10 @@ class Employee extends Model
         return $this->belongsTo(Division::class);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | ASSIGNMENT RELATIONSHIPS
-    |--------------------------------------------------------------------------
-    */
-
     public function assignments()
     {
         return $this->hasMany(EmployeeAssignment::class);
     }
-
-    /**
-     * The single active primary assignment.
-     * Source of truth for current position slot + step.
-     */
     public function primaryAssignment()
     {
         return $this->hasOne(EmployeeAssignment::class)
@@ -114,20 +103,10 @@ class Employee extends Model
             ->where('is_primary', true)
             ->latestOfMany('start_date');
     }
-
-    /**
-     * Alias for backwards compatibility.
-     */
     public function activeAssignment()
     {
         return $this->primaryAssignment();
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | HIERARCHY RELATIONSHIPS
-    |--------------------------------------------------------------------------
-    */
 
     public function hierarchy()
     {
@@ -159,33 +138,15 @@ class Employee extends Model
         );
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | EMPLOYMENT TYPE RELATIONSHIPS
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * COS (Contract of Service) position relationship.
-     */
     public function cosPosition()
     {
         return $this->belongsTo(CosPosition::class, 'cos_position_id');
     }
 
-    /**
-     * Consultant position relationship.
-     */
     public function consultantPosition()
     {
         return $this->belongsTo(ConsultantPosition::class, 'consultant_position_id');
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | SKILL RELATIONSHIPS
-    |--------------------------------------------------------------------------
-    */
 
     public function skillAssessments()
     {
@@ -210,45 +171,21 @@ class Employee extends Model
             ->whereIn('status', ['planned', 'in_progress']);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | SALARY HISTORIES
-    |--------------------------------------------------------------------------
-    */
-
     public function salaryHistories()
     {
         return $this->hasMany(EmployeeSalaryHistory::class);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | CONVENIENCE ACCESSORS
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * Current position slot via active assignment (Plantilla only).
-     */
     public function getCurrentPlantillaPositionAttribute(): ?PlantillaPosition
     {
         return $this->primaryAssignment?->plantillaPosition;
     }
 
-    /**
-     * Current step increment via active assignment (with fallback to position default).
-     * Only applies to Plantilla employees.
-     */
     public function getCurrentStepIncrementAttribute(): ?StepIncrement
     {
         return $this->primaryAssignment?->effectiveStepIncrement();
     }
-
-    /**
-     * Get position title based on employment type.
-     * Works for Plantilla, COS, and Consultant employees.
-     */
-    public function getPositionTitleAttribute(): ?string
+ function getPositionTitleAttribute(): ?string
     {
         $type = strtolower(trim($this->employment_type ?? ''));
 
@@ -278,12 +215,6 @@ class Employee extends Model
     {
         return $this->latestAssessment?->gap_count;
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | SCOPES
-    |--------------------------------------------------------------------------
-    */
 
     public function scopeSearch($query, string $term)
     {
@@ -326,23 +257,10 @@ class Employee extends Model
         );
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | DEPARTMENT ASSIGNMENT RELATIONSHIPS (NEW)
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * All department assignments (current and historical).
-     */
     public function departmentAssignments()
     {
         return $this->hasMany(EmployeeDepartmentAssignment::class);
     }
-
-    /**
-     * The primary active department assignment.
-     */
     public function primaryDepartmentAssignment()
     {
         return $this->hasOne(EmployeeDepartmentAssignment::class)
@@ -350,9 +268,6 @@ class Employee extends Model
             ->whereNull('end_date');
     }
 
-    /**
-     * All active department assignments (for staff with multiple depts).
-     */
     public function activeDepartmentAssignments()
     {
         return $this->departmentAssignments()
@@ -360,31 +275,16 @@ class Employee extends Model
             ->orderBy('is_primary', 'desc');
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | CONVENIENCE ACCESSORS (NEW)
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * Get the primary department (via assignment).
-     */
     public function getPrimaryDepartmentAttribute(): ?Department
     {
         return $this->primaryDepartmentAssignment?->department;
     }
 
-    /**
-     * Get the primary department head (via assignment).
-     */
     public function getPrimaryDepartmentHeadAttribute(): ?Employee
     {
         return $this->primaryDepartmentAssignment?->effective_head;
     }
 
-    /**
-     * Get all departments this employee is assigned to (active only).
-     */
     public function getAssignedDepartmentsAttribute()
     {
         return $this->activeDepartmentAssignments
@@ -392,12 +292,6 @@ class Employee extends Model
             ->unique('id')
             ->values();
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | HELPER
-    |--------------------------------------------------------------------------
-    */
 
     public function isPlantilla(): bool
     {

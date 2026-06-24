@@ -6,12 +6,18 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\AutoUppercase;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Release extends Model
 {
-    use HasFactory;
+    use HasFactory, AutoUppercase;
 
+    protected array $uppercaseExclude = [
+        'created_at',
+        'updated_at',
+    ];
+    
     protected $fillable = [
         'version',
         'title',

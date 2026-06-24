@@ -3,6 +3,7 @@
 namespace App\Models;
  
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\AutoUppercase;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
@@ -11,6 +12,14 @@ use App\Models\DevelopmentPlan;
  
 class Skill extends Model
 {
+
+    use AutoUppercase;
+
+    protected array $uppercaseExclude = [
+        'created_at',
+        'updated_at',
+    ];
+    
     protected $fillable = [
         'name',
         'description',

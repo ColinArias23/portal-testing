@@ -4,9 +4,18 @@ namespace App\Models;
 
 use App\Events\NotificationCreated;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\AutoUppercase;
 
 class Notification extends Model
 {
+
+    use AutoUppercase;
+
+    protected array $uppercaseExclude = [
+        'created_at',
+        'updated_at',
+    ];
+    
     protected $fillable = [
         'type',
         'title',

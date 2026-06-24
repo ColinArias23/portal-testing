@@ -3,10 +3,19 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\AutoUppercase;
 use Illuminate\Database\Eloquent\Builder;
 
 class EmployeeAssignment extends Model
 {
+
+    use AutoUppercase;
+
+    protected array $uppercaseExclude = [
+        'created_at',
+        'updated_at',
+    ];
+    
     protected $fillable = [
         'employee_id',
         'plantilla_position_id',

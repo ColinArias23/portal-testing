@@ -3,13 +3,20 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\AutoUppercase;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Carbon\Carbon;
 
 class Training extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, AutoUppercase;
 
+    protected array $uppercaseExclude = [
+        'created_at',
+        'updated_at',
+        'deleted_at',
+    ];
+    
     protected $fillable = [
         'title',
         'description',

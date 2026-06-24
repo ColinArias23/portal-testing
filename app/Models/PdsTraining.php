@@ -3,14 +3,28 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\AutoUppercase;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PdsTraining extends Model
 {
+
+    use AutoUppercase;
+
+    protected array $uppercaseExclude = [
+        'created_at',
+        'updated_at',
+    ];
+    
     protected $table = 'pds_trainings';
     protected $fillable = [
         'employee_id',
-        'title', 'date_from', 'date_to', 'hours', 'type', 'sponsored_by',
+        'title', 
+        'date_from', 
+        'date_to', 
+        'hours', 
+        'type', 
+        'sponsored_by',
         'order',
     ];
     protected $casts = [

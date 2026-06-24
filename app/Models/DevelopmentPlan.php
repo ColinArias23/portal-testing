@@ -3,12 +3,21 @@
 namespace App\Models;
  
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\AutoUppercase;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
  
 class DevelopmentPlan extends Model
 {
+
+    use AutoUppercase;
+
+    protected array $uppercaseExclude = [
+        'created_at',
+        'updated_at',
+    ];
+    
     protected $fillable = [
         'employee_id',
         'skill_assessment_id',

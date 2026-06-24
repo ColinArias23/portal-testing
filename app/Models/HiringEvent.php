@@ -3,14 +3,21 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\AutoUppercase;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class HiringEvent extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, AutoUppercase;
 
     protected $table = 'hiring_events';
 
+    protected array $uppercaseExclude = [
+        'created_at',
+        'updated_at',
+        'deleted_at',
+    ];
+    
     protected $fillable = [
         'title', 'description', 'location', 'color',
         'all_day', 'start_date', 'end_date', 'start_time',

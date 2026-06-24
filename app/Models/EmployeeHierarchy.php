@@ -3,12 +3,20 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\AutoUppercase;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class EmployeeHierarchy extends Model
 {
+
+    use AutoUppercase;
     protected $table = 'employee_hierarchy';
 
+    protected array $uppercaseExclude = [
+        'created_at',
+        'updated_at',
+    ];
+    
     protected $fillable = [
         'employee_id',
         'parent_id',

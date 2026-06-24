@@ -3,11 +3,20 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\Pivot;
+use App\Traits\AutoUppercase;
 
 class TrainingParticipant extends Pivot
 {
+
+    use AutoUppercase;
+    
     protected $table = 'training_participants';
 
+    protected array $uppercaseExclude = [
+        'created_at',
+        'updated_at',
+    ];
+    
     protected $fillable = [
         'training_id',
         'employee_id',

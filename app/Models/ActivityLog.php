@@ -3,11 +3,18 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\AutoUppercase;
 
 class ActivityLog extends Model
 {
+    use AutoUppercase;
+
     public $timestamps = false;
 
+    protected array $uppercaseExclude = [
+        'performed_at',
+    ];
+    
     protected $fillable = [
         'user_id',
         'action',

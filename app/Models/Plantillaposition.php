@@ -3,12 +3,19 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\AutoUppercase;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PlantillaPosition extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, AutoUppercase;
 
+    protected array $uppercaseExclude = [
+        'created_at',
+        'updated_at',
+        'deleted_at',
+    ];
+    
     protected $fillable = [
         'base_item_number',
         'title',
