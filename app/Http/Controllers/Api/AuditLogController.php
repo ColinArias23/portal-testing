@@ -11,12 +11,9 @@ class AuditLogController extends Controller
     public function __construct()
     {
         $this->middleware('auth:sanctum');
-        $this->middleware('role:SuperAdmin|HR');
+        $this->middleware('role:SuperAdmin');
     }
 
-    /**
-     * Get paginated audit logs with filtering options
-     */
     public function index(Request $request)
     {
         $request->validate([
@@ -61,9 +58,6 @@ class AuditLogController extends Controller
         return response()->json($logs);
     }
 
-    /**
-     * Get available actions for filtering
-     */
     public function getActions()
     {
         $actions = ActivityLog::distinct()
@@ -76,9 +70,6 @@ class AuditLogController extends Controller
         ]);
     }
 
-    /**
-     * Get audit log summary
-     */
     public function summary(Request $request)
     {
         $request->validate([

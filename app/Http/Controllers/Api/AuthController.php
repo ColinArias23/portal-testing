@@ -251,7 +251,7 @@ class AuthController extends Controller
         );
 
         $roles = $user->getRoleNames();
-        $permissions = $user->getAllPermissions()->pluck('name')->values();
+        $permissions = $user->getDirectPermissions()->pluck('name')->values();
 
         return [
             'id'              => $user->id,

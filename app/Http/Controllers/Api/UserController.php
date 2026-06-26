@@ -11,13 +11,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 class UserController extends Controller
 {
     public function __construct()
     {
         $this->middleware('auth:sanctum');
-        $this->middleware('role:SuperAdmin|HR')->only([
+        $this->middleware('role:SuperAdmin')->only([
             'pendingCount',
             'pendingUsers',
             'approvedUsers',
@@ -62,7 +63,7 @@ class UserController extends Controller
                 'approved_at'   => $u->approved_at,
                 'roles'         => $u->getRoleNames(),
                 'role_position' => $u->employee?->role_position ?? [],
-                'permissions'   => $u->getAllPermissions()->pluck('name')->values(),
+                'permissions'   => $u->getDirectPermissions()->pluck('name')->values(),
             ]);
 
         return response()->json($users);
@@ -81,7 +82,7 @@ class UserController extends Controller
             'permissions.*' => ['string', 'exists:permissions,name'],
         ]);
 
-        $before = $user->getAllPermissions()->pluck('name')->values()->toArray();
+        $before = $user->getDirectPermissions()->pluck('name')->values()->toArray();
 
         $user->syncPermissions($request->permissions);
 
@@ -90,7 +91,7 @@ class UserController extends Controller
         $user->unsetRelation('roles');
         $user->refresh();
 
-        $updatedPermissions = $user->getAllPermissions()->pluck('name')->values();
+        $updatedPermissions = $user->getDirectPermissions()->pluck('name')->values();
 
         ActivityLog::record(
             action: 'user.permissions_updated',
@@ -115,9 +116,6 @@ class UserController extends Controller
         ]);
     }
 
-    /**
-     * Assign a single role, or "none" to strip all roles
-     */
     public function updateRole(Request $request, User $user)
     {
         if ($user->approval_status !== 'APPROVED') {
@@ -143,6 +141,8 @@ class UserController extends Controller
                 ['name' => $roleName, 'guard_name' => 'web']
             );
             $user->syncRoles([$role->name]);
+
+            $user->syncPermissions($role->permissions);
         } else {
             $toRemove = $user->getRoleNames()
                 ->filter(fn($r) => strtolower($r) !== 'superadmin')
@@ -150,6 +150,7 @@ class UserController extends Controller
             if (!empty($toRemove)) {
                 $user->removeRole(...$toRemove);
             }
+            $user->syncPermissions([]);
         }
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
@@ -196,11 +197,11 @@ class UserController extends Controller
                 ]);
             }
 
-            // Auto-assign Staff role if user has no role yet
             $user->refresh();
             if ($user->roles->isEmpty()) {
                 $staffRole = Role::firstOrCreate(['name' => 'Staff', 'guard_name' => 'web']);
                 $user->assignRole($staffRole);
+                $user->syncPermissions($staffRole->permissions);
             }
         });
 
@@ -247,7 +248,6 @@ class UserController extends Controller
 
         $currentUserId = Auth::id();
 
-        // Ensure Staff role exists once before the loop
         $staffRole = Role::firstOrCreate(['name' => 'Staff', 'guard_name' => 'web']);
 
         DB::transaction(function () use ($users, $currentUserId, $staffRole) {
@@ -270,10 +270,10 @@ class UserController extends Controller
                     ]);
                 }
 
-                // Auto-assign Staff role if user has no role yet
                 $user->refresh();
                 if ($user->roles->isEmpty()) {
                     $user->assignRole($staffRole);
+                    $user->syncPermissions($staffRole->permissions);
                 }
             }
         });
@@ -310,10 +310,6 @@ class UserController extends Controller
         ]);
     }
 
-    /**
-     * Link a User to a new Employee record, seeding name from user registration data.
-     * Uses pessimistic locking to prevent race conditions on concurrent activations.
-     */
     private function linkEmployee(User $user): void
     {
         $user->refresh();
