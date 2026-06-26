@@ -11,7 +11,7 @@ class AuditLogController extends Controller
     public function __construct()
     {
         $this->middleware('auth:sanctum');
-        $this->middleware('role:admin'); // Only admins can view audit logs
+        $this->middleware('role:SuperAdmin|HR');
     }
 
     /**
