@@ -5,25 +5,35 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Contract;
+use App\Notifications\ContractAutoRenewed;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ContractController extends Controller
 {
-    public function index()
+    // ── Existing: GET /hiring/contracts ──────────────────────────────────────
+
+    public function index(): JsonResponse
     {
         return response()->json(
-            Contract::with('applicant')->orderBy('created_at', 'desc')->get()
+            Contract::with(['applicant', 'employee'])->orderBy('created_at', 'desc')->get()
         );
     }
 
-    public function store(Request $request)
+    // ── Existing: POST /hiring/contracts ─────────────────────────────────────
+
+    public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
+            'employee_id'   => ['nullable', 'exists:employees,id'],
             'applicant_id'  => ['nullable', 'exists:applicants,id'],
             'employee_name' => ['required', 'string', 'max:150'],
             'position'      => ['nullable', 'string', 'max:100'],
-            'salary'        => ['nullable', 'numeric'],
+            'salary'        => ['nullable', 'numeric', 'min:0'],
             'start_date'    => ['nullable', 'date'],
+            'end_date'      => ['nullable', 'date', 'after_or_equal:start_date'],
             'status'        => ['nullable', 'string', 'max:30'],
         ]);
 
@@ -39,39 +49,42 @@ class ContractController extends Controller
                 'position'   => $contract->position,
                 'salary'     => $contract->salary,
                 'start_date' => $contract->start_date?->toDateTimeString(),
+                'end_date'   => $contract->end_date?->toDateString(),
                 'status'     => $contract->status,
             ],
             ip:        $request->ip(),
             userAgent: $request->userAgent(),
         );
 
-        return response()->json($contract->load('applicant'), 201);
+        return response()->json($contract->load(['applicant', 'employee']), 201);
     }
 
-    public function update(Request $request, Contract $contract)
+    // ── Existing: PUT /hiring/contracts/{contract} ────────────────────────────
+
+    public function update(Request $request, Contract $contract): JsonResponse
     {
         $data = $request->validate([
+            'employee_id'   => ['nullable', 'exists:employees,id'],
             'applicant_id'  => ['nullable', 'exists:applicants,id'],
             'employee_name' => ['sometimes', 'string', 'max:150'],
             'position'      => ['nullable', 'string', 'max:100'],
-            'salary'        => ['nullable', 'numeric'],
+            'salary'        => ['nullable', 'numeric', 'min:0'],
             'start_date'    => ['nullable', 'date'],
-            // FIX: only allow status update if explicitly sent and valid
-            // Prevents frontend from accidentally overwriting 'Signed' → 'Generated'
+            'end_date'      => ['nullable', 'date', 'after_or_equal:start_date'],
             'status'        => ['sometimes', 'nullable', 'string', 'in:Draft,Generated,Signed', 'max:30'],
         ]);
 
         $before = [
             'applicant_id' => $contract->applicant_id,
+            'employee_id'  => $contract->employee_id,
             'status'       => $contract->status,
             'salary'       => $contract->salary,
             'position'     => $contract->position,
             'start_date'   => $contract->start_date?->toDateTimeString(),
+            'end_date'     => $contract->end_date?->toDateString(),
         ];
 
-        // FIX: if the contract is already Signed, preserve its status
-        // unless the request is explicitly trying to change it
-        if ($contract->status === 'Signed' && !$request->has('status')) {
+        if ($contract->status === 'Signed' && ! $request->has('status')) {
             unset($data['status']);
         }
 
@@ -87,20 +100,24 @@ class ContractController extends Controller
                 'before' => $before,
                 'after'  => [
                     'applicant_id' => $contract->applicant_id,
+                    'employee_id'  => $contract->employee_id,
                     'status'       => $contract->status,
                     'salary'       => $contract->salary,
                     'position'     => $contract->position,
                     'start_date'   => $contract->start_date?->toDateTimeString(),
+                    'end_date'     => $contract->end_date?->toDateString(),
                 ],
             ],
             ip:        $request->ip(),
             userAgent: $request->userAgent(),
         );
 
-        return response()->json($contract->fresh()->load('applicant'));
+        return response()->json($contract->fresh()->load(['applicant', 'employee']));
     }
 
-    public function destroy(Request $request, Contract $contract)
+    // ── Existing: DELETE /hiring/contracts/{contract} ─────────────────────────
+
+    public function destroy(Request $request, Contract $contract): JsonResponse
     {
         $id    = $contract->id;
         $label = $contract->employee_name;
@@ -122,5 +139,90 @@ class ContractController extends Controller
         );
 
         return response()->json(['message' => 'Contract deleted successfully.']);
+    }
+
+    // ── New: PATCH /hiring/contracts/{contract}/auto-renewal ──────────────────
+
+    public function updateAutoRenewal(Request $request, Contract $contract): JsonResponse
+    {
+        $data = $request->validate([
+            'auto_renewal_enabled'         => ['required', 'boolean'],
+            'auto_renewal_duration_months' => ['sometimes', 'integer', Rule::in([6])],
+            'auto_renewal_month'           => ['sometimes', 'nullable', Rule::in(['JUNE', 'DECEMBER'])],
+        ]);
+
+        $before = [
+            'auto_renewal_enabled'         => $contract->auto_renewal_enabled,
+            'auto_renewal_duration_months' => $contract->auto_renewal_duration_months,
+            'auto_renewal_month'           => $contract->auto_renewal_month,
+        ];
+
+        $contract->update($data);
+
+        ActivityLog::record(
+            action:       'contract.auto_renewal_updated',
+            userId:       $request->user()?->id,
+            subjectType:  Contract::class,
+            subjectId:    $contract->id,
+            subjectLabel: $contract->employee_name,
+            payload:      ['before' => $before, 'after' => $data],
+            ip:           $request->ip(),
+            userAgent:    $request->userAgent(),
+        );
+
+        return response()->json([
+            'message' => 'Auto-renewal settings updated.',
+            'data'    => $contract->fresh()->load(['applicant', 'employee']),
+        ]);
+    }
+
+    // ── New: POST /hiring/contracts/{contract}/manual-renew ───────────────────
+
+    public function manualRenew(Request $request, Contract $contract): JsonResponse
+    {
+        if (! $contract->auto_renewal_enabled) {
+            return response()->json([
+                'message' => 'Auto-renewal is not enabled for this contract.',
+            ], 422);
+        }
+
+        $renewed = DB::transaction(function () use ($contract): Contract {
+            $contract->update([
+                'status'               => 'Expired',
+                'last_auto_renewed_at' => now(),
+            ]);
+
+            $renewal = $contract->buildRenewal();
+            $renewal->save();
+
+            // ── FIX: use direct employee_id relation instead of broken applicant->employee chain ──
+            $notifiable = $contract->employee;
+            if ($notifiable !== null) {
+                $notifiable->notify(new ContractAutoRenewed($renewal));
+            }
+
+            return $renewal;
+        });
+
+        ActivityLog::record(
+            action:       'contract.manual_renewed',
+            userId:       $request->user()?->id,
+            subjectType:  Contract::class,
+            subjectId:    $renewed->id,
+            subjectLabel: $renewed->employee_name,
+            payload:      [
+                'parent_contract_id' => $contract->id,
+                'renewal_generation' => $renewed->renewal_generation,
+                'new_start'          => $renewed->start_date?->toDateString(),
+                'new_end'            => $renewed->end_date?->toDateString(),
+            ],
+            ip:        $request->ip(),
+            userAgent: $request->userAgent(),
+        );
+
+        return response()->json([
+            'message' => 'Contract renewed successfully.',
+            'data'    => $renewed->load(['applicant', 'employee']),
+        ], 201);
     }
 }

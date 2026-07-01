@@ -35,12 +35,6 @@ return new class extends Migration
 
             $table->string('employment_status')->nullable();
 
-            // ── Employment Type Specific Foreign Keys ───────────────────────────
-            // These store the position ID based on employment_type:
-            // - Plantilla uses EmployeeAssignment (plantilla_position_id)
-            // - Contract of Service uses cos_position_id
-            // - Consultant uses consultant_position_id
-
             $table->unsignedBigInteger('cos_position_id')
                 ->nullable()
                 ->comment('FK to cos_positions for Contract of Service employees');
