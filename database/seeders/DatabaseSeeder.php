@@ -18,7 +18,6 @@ class DatabaseSeeder extends Seeder
             DepartmentSeeder::class,
             // EmployeeSeeder::class,
             SkillSeeder::class, 
-            PermissionSeeder::class,
             RbacSeeder::class,
             UserSeeder::class,
         ]);

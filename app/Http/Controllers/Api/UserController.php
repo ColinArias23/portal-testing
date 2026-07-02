@@ -10,11 +10,15 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 class UserController extends Controller
 {
+    private const GUARD = 'web';
+
     public function __construct()
     {
         $this->middleware('auth:sanctum');
@@ -22,6 +26,7 @@ class UserController extends Controller
             'pendingCount',
             'pendingUsers',
             'approvedUsers',
+            'permissions',
             'updatePermissions',
             'updateRole',
             'activate',
@@ -69,6 +74,25 @@ class UserController extends Controller
         return response()->json($users);
     }
 
+    /**
+     * List every permission valid for the 'web' guard, grouped by module prefix.
+     * Frontend should build its permission-picker UI from this endpoint rather
+     * than a hardcoded list, so the two can never drift out of sync again.
+     */
+    public function permissions()
+    {
+        $names = Permission::where('guard_name', self::GUARD)
+            ->orderBy('name')
+            ->pluck('name');
+
+        $grouped = $names->groupBy(fn (string $name) => explode('.', $name)[0] ?? $name);
+
+        return response()->json([
+            'permissions' => $names,
+            'grouped'     => $grouped,
+        ]);
+    }
+
     public function updatePermissions(Request $request, User $user)
     {
         if ($user->approval_status !== 'APPROVED') {
@@ -79,7 +103,10 @@ class UserController extends Controller
 
         $request->validate([
             'permissions'   => ['required', 'array'],
-            'permissions.*' => ['string', 'exists:permissions,name'],
+            'permissions.*' => [
+                'string',
+                Rule::exists('permissions', 'name')->where('guard_name', self::GUARD),
+            ],
         ]);
 
         $before = $user->getDirectPermissions()->pluck('name')->values()->toArray();
@@ -138,7 +165,7 @@ class UserController extends Controller
 
         if ($roleName && strtolower($roleName) !== 'none') {
             $role = Role::firstOrCreate(
-                ['name' => $roleName, 'guard_name' => 'web']
+                ['name' => $roleName, 'guard_name' => self::GUARD]
             );
             $user->syncRoles([$role->name]);
 
@@ -199,7 +226,7 @@ class UserController extends Controller
 
             $user->refresh();
             if ($user->roles->isEmpty()) {
-                $staffRole = Role::firstOrCreate(['name' => 'Staff', 'guard_name' => 'web']);
+                $staffRole = Role::firstOrCreate(['name' => 'Staff', 'guard_name' => self::GUARD]);
                 $user->assignRole($staffRole);
                 $user->syncPermissions($staffRole->permissions);
             }
@@ -248,7 +275,7 @@ class UserController extends Controller
 
         $currentUserId = Auth::id();
 
-        $staffRole = Role::firstOrCreate(['name' => 'Staff', 'guard_name' => 'web']);
+        $staffRole = Role::firstOrCreate(['name' => 'Staff', 'guard_name' => self::GUARD]);
 
         DB::transaction(function () use ($users, $currentUserId, $staffRole) {
             foreach ($users as $user) {
