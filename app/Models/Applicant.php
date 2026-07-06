@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use App\Traits\AutoUppercase;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -18,12 +19,15 @@ class Applicant extends Model
         'created_at',
         'updated_at',
         'deleted_at',
+        'employee_id',
+        'plantilla_posting_application_id',
     ];
     
     protected $fillable = [
+        'employee_id',
+        'plantilla_posting_application_id',
         'first_name',
         'last_name',
-        'username',
         'email',
         'age',
         'phone',
@@ -87,6 +91,29 @@ class Applicant extends Model
     }
 
     /**
+     * NEW: the employee this applicant was auto-provisioned from
+     * (null for external/walk-in applicants).
+     */
+    public function employee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class);
+    }
+
+    /**
+     * NEW: the plantilla posting application that produced this applicant
+     * record (null for external/walk-in applicants).
+     */
+    public function plantillaPostingApplication(): BelongsTo
+    {
+        return $this->belongsTo(PlantillaPostingApplication::class);
+    }
+ 
+    public function isInternalCandidate(): bool
+    {
+        return ! is_null($this->employee_id);
+    }
+
+    /**
      * Scope: Get only hired applicants
      */
     public function scopeHired($query)
@@ -108,5 +135,13 @@ class Applicant extends Model
     public function scopeForInterview($query)
     {
         return $query->where('status', 'For Interview');
+    }
+
+    /**
+     * Scope: Get only internally-sourced applicants (from plantilla postings)
+     */
+    public function scopeInternal($query)
+    {
+        return $query->whereNotNull('employee_id');
     }
 }

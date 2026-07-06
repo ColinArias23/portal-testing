@@ -26,7 +26,7 @@ class Employee extends Model
         'created_at',
         'updated_at',
     ];
-    
+
     protected $fillable = [
         'employee_number',
         'role_position',
@@ -185,7 +185,8 @@ class Employee extends Model
     {
         return $this->primaryAssignment?->effectiveStepIncrement();
     }
- function getPositionTitleAttribute(): ?string
+
+    public function getPositionTitleAttribute(): ?string
     {
         $type = strtolower(trim($this->employment_type ?? ''));
 
@@ -229,17 +230,17 @@ class Employee extends Model
 
     public function scopePlantilla($query)
     {
-        return $query->where('employment_type', 'Plantilla');
+        return $query->whereRaw('UPPER(employment_type) = ?', ['PLANTILLA']);
     }
 
     public function scopeCos($query)
     {
-        return $query->where('employment_type', 'Contract of Service');
+        return $query->whereRaw('UPPER(employment_type) = ?', ['CONTRACT OF SERVICE']);
     }
 
     public function scopeConsultant($query)
     {
-        return $query->where('employment_type', 'Consultant');
+        return $query->whereRaw('UPPER(employment_type) = ?', ['CONSULTANT']);
     }
 
     public function scopeWithAssessment($query)

@@ -32,7 +32,6 @@ class ApplicantController extends Controller
     {
         return [
             'id' => $applicant->id,
-            'username' => $applicant->username,
             'first_name' => $applicant->first_name,
             'last_name' => $applicant->last_name,
             'full_name' => $applicant->full_name,
@@ -66,7 +65,6 @@ class ApplicantController extends Controller
             $query->where(function ($q) use ($term) {
                 $q->where('first_name', 'like', "%{$term}%")
                     ->orWhere('last_name', 'like', "%{$term}%")
-                    ->orWhere('username', 'like', "%{$term}%")
                     ->orWhere('position', 'like', "%{$term}%");
             });
         }
@@ -97,7 +95,6 @@ class ApplicantController extends Controller
         $data = $request->validate([
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
-            'username' => ['required', 'string', 'max:100'],
             'email' => ['nullable', 'email', 'max:100'],
             'age' => ['nullable', 'string', 'max:5'],
             'phone' => ['nullable', 'string', 'max:30'],
@@ -162,7 +159,6 @@ class ApplicantController extends Controller
         $data = $request->validate([
             'first_name' => ['sometimes', 'string', 'max:100'],
             'last_name' => ['sometimes', 'string', 'max:100'],
-            'username' => ['sometimes', 'string', 'max:100'],
             'email' => ['nullable', 'email', 'max:100'],
             'age' => ['nullable', 'string', 'max:5'],
             'phone' => ['nullable', 'string', 'max:30'],
@@ -278,10 +274,10 @@ class ApplicantController extends Controller
     {
         return response()->json([
             'total' => Applicant::count(),
-            'for_interview' => Applicant::where('status', 'For Interview')->count(),
-            'hired' => Applicant::where('status', 'Hired')->count(),
-            'rejected' => Applicant::where('status', 'Rejected')->count(),
-            'no_show' => Applicant::where('status', 'No Show')->count(),
+            'for_interview' => Applicant::where('status', 'FOR INTERVIEW')->count(),
+            'hired' => Applicant::where('status', 'HIRED')->count(),
+            'rejected' => Applicant::where('status', 'REJECTED')->count(),
+            'no_show' => Applicant::where('status', 'NO SHOW')->count(),
         ]);
     }
 

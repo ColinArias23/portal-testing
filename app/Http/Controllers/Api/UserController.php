@@ -53,32 +53,26 @@ class UserController extends Controller
     {
         $currentUserId = Auth::id();
 
-        $users = User::with('employee')
+        $users = User::with(['employee', 'roles', 'permissions'])
             ->where('approval_status', 'APPROVED')
             ->where('id', '!=', $currentUserId)
+            ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'SuperAdmin'))
             ->orderBy('approved_at', 'desc')
             ->get()
-            ->filter(fn($u) => !$u->hasRole('SuperAdmin'))
-            ->values()
-            ->map(fn($u) => [
+            ->map(fn ($u) => [
                 'id'            => $u->id,
                 'username'      => $u->username,
                 'email'         => $u->email,
                 'name'          => $u->employee?->full_name ?? $u->username,
                 'approved_at'   => $u->approved_at,
-                'roles'         => $u->getRoleNames(),
+                'roles'         => $u->roles->pluck('name')->values(),
                 'role_position' => $u->employee?->role_position ?? [],
-                'permissions'   => $u->getDirectPermissions()->pluck('name')->values(),
+                'permissions'   => $u->permissions->pluck('name')->values(),
             ]);
 
         return response()->json($users);
     }
 
-    /**
-     * List every permission valid for the 'web' guard, grouped by module prefix.
-     * Frontend should build its permission-picker UI from this endpoint rather
-     * than a hardcoded list, so the two can never drift out of sync again.
-     */
     public function permissions()
     {
         $names = Permission::where('guard_name', self::GUARD)
@@ -99,6 +93,12 @@ class UserController extends Controller
             return response()->json([
                 'message' => 'Cannot update permissions for unapproved users.',
             ], 422);
+        }
+
+        if ($user->hasRole('SuperAdmin')) {
+            return response()->json([
+                'message' => 'Cannot modify permissions for a SuperAdmin account.',
+            ], 403);
         }
 
         $request->validate([
@@ -151,8 +151,19 @@ class UserController extends Controller
             ], 422);
         }
 
+        if ($user->hasRole('SuperAdmin')) {
+            return response()->json([
+                'message' => 'Cannot change the role of a SuperAdmin account.',
+            ], 403);
+        }
+
         $request->validate([
-            'role' => ['nullable', 'string', 'max:100'],
+            'role' => [
+                'nullable',
+                'string',
+                'max:100',
+                Rule::exists('roles', 'name')->where('guard_name', self::GUARD),
+            ],
         ]);
 
         $roleName = $request->input('role');
@@ -164,11 +175,11 @@ class UserController extends Controller
         $before = $user->getRoleNames()->toArray();
 
         if ($roleName && strtolower($roleName) !== 'none') {
-            $role = Role::firstOrCreate(
-                ['name' => $roleName, 'guard_name' => self::GUARD]
-            );
-            $user->syncRoles([$role->name]);
+            $role = Role::where('name', $roleName)
+                ->where('guard_name', self::GUARD)
+                ->firstOrFail();
 
+            $user->syncRoles([$role->name]);
             $user->syncPermissions($role->permissions);
         } else {
             $toRemove = $user->getRoleNames()
@@ -218,9 +229,8 @@ class UserController extends Controller
             ]);
 
             if ($user->employee_id) {
-                DB::table('employees')->where('id', $user->employee_id)->update([
-                    'employment_status' => 'active',
-                    'updated_at'        => now()->toDateTimeString(),
+                \App\Models\Employee::where('id', $user->employee_id)->update([
+                    'employment_status' => 'ACTIVE',
                 ]);
             }
 
@@ -259,7 +269,7 @@ class UserController extends Controller
     public function bulkActivate(Request $request)
     {
         $request->validate([
-            'ids'   => ['required', 'array', 'min:1'],
+            'ids'   => ['required', 'array', 'min:1', 'max:200'],
             'ids.*' => ['integer', 'exists:users,id'],
         ]);
 
@@ -291,9 +301,8 @@ class UserController extends Controller
                     ?? DB::table('users')->where('id', $user->id)->value('employee_id');
 
                 if ($employeeId) {
-                    DB::table('employees')->where('id', $employeeId)->update([
-                        'employment_status' => 'active',
-                        'updated_at'        => now()->toDateTimeString(),
+                    \App\Models\Employee::where('id', $employeeId)->update([
+                        'employment_status' => 'ACTIVE',
                     ]);
                 }
 

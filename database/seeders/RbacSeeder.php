@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Log;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
@@ -12,23 +13,172 @@ class RbacSeeder extends Seeder
 {
     private const GUARD = 'web';
 
+    private const PERMISSIONS = [
+        // Dashboard
+        'dashboard.view',
+
+        // Recruitment, Selection & Placement
+        'hiring.view',
+        'hiring.manage',
+        'hiring.plantilla.applicants.view',
+        'hiring.plantilla.applicants.manage',
+        'hiring.plantilla.applications.view',
+        'hiring.plantilla.applications.manage',
+        'hiring.plantilla.onboarding.view',
+        'hiring.plantilla.onboarding.manage',
+        'hiring.plantilla.positions.view',
+        'hiring.plantilla.positions.manage',
+        'hiring.nonplantilla.applicants.view',
+        'hiring.nonplantilla.applicants.manage',
+        'hiring.nonplantilla.applications.view',
+        'hiring.nonplantilla.applications.manage',
+        'hiring.nonplantilla.onboarding.view',
+        'hiring.nonplantilla.onboarding.manage',
+        'leave.dashboard.view',
+        'leave.approval.view',
+        'leave.approval.manage',
+        'leave.balance.view',
+        'leave.calendar.view',
+        'leave.request.view',
+        'leave.request.manage',
+        'employees.view',
+        'employees.manage',
+        'renewals.view',
+        'renewals.manage',
+        'team.view',
+        'orientation.view',
+
+        // Learning & Development
+        'trainings.view',
+        'trainings.manage',
+        'trainings.join',
+        'trainings.skill_gap',
+        'trainings.effectiveness',
+        'trainings.coaching',
+
+        // SPMS
+        'spms.view',
+        'spms.manage',
+
+        // Compensation & Benefits
+        'compensation.view',
+
+        // System Management
+        'accounts.view',
+        'accounts.manage',
+        'departments.view',
+        'departments.manage',
+        'plantilla_items.view',
+        'plantilla_items.manage',
+        'positions.view',
+
+        // Rewards & Recognition
+        'rewards.view',
+
+        // Analytics
+        'analytics.view',
+
+        // Announcements
+        'announcements.view',
+        'announcements.manage',
+
+        // Manpower Mapping
+        'manpower.view',
+        'manpower.manage',
+
+        // Task Monitoring
+        'task_monitoring.view',
+
+        // Users
+        'users.view',
+        'users.manage',
+
+        // Notifications
+        'notifications.view',
+    ];
+
     public function run(): void
     {
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        $permissions = [
+        $this->syncPermissionCatalog();
+        $this->reportStalePermissions();
+
+        $roles = $this->createRoles();
+        $this->assignRolePermissions($roles);
+        $this->assignUsersToRoles();
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+    }
+
+    private function syncPermissionCatalog(): void
+    {
+        foreach (self::PERMISSIONS as $name) {
+            Permission::firstOrCreate([
+                'name'       => $name,
+                'guard_name' => self::GUARD,
+            ]);
+        }
+    }
+
+    private function reportStalePermissions(): void
+    {
+        $stale = Permission::where('guard_name', self::GUARD)
+            ->whereNotIn('name', self::PERMISSIONS)
+            ->pluck('name');
+
+        if ($stale->isNotEmpty()) {
+            $message = 'RbacSeeder: stale permissions found in DB but not in canonical list: '
+                . $stale->implode(', ');
+
+            Log::warning($message);
+            $this->command?->warn($message);
+            $this->command?->warn('Run "php artisan rbac:prune-permissions --dry-run" to review before removing.');
+        }
+    }
+
+    private function createRoles(): array
+    {
+        return [
+            'SuperAdmin' => Role::firstOrCreate(['name' => 'SuperAdmin', 'guard_name' => self::GUARD]),
+            'Admin'      => Role::firstOrCreate(['name' => 'Admin',      'guard_name' => self::GUARD]),
+            'Director'   => Role::firstOrCreate(['name' => 'Director',   'guard_name' => self::GUARD]),
+            'HR'         => Role::firstOrCreate(['name' => 'HR',         'guard_name' => self::GUARD]),
+            'Head'       => Role::firstOrCreate(['name' => 'Head',       'guard_name' => self::GUARD]),
+            'Supervisor' => Role::firstOrCreate(['name' => 'Supervisor', 'guard_name' => self::GUARD]),
+            'Staff'      => Role::firstOrCreate(['name' => 'Staff',      'guard_name' => self::GUARD]),
+        ];
+    }
+
+    private function assignRolePermissions(array $roles): void
+    {
+        $allPermissions = Permission::where('guard_name', self::GUARD)->get();
+
+        $roles['SuperAdmin']->syncPermissions($allPermissions);
+        $roles['Admin']->syncPermissions($allPermissions);
+        $roles['HR']->syncPermissions($allPermissions);
+
+        $roles['Director']->syncPermissions([
             'dashboard.view',
             'hiring.view',
-            'hiring.manage',
-            'leave.view',
-            'leave.manage',
-            'leave.approve',
+            'hiring.plantilla.applicants.view',
+            'hiring.plantilla.applications.view',
+            'hiring.plantilla.onboarding.view',
+            'hiring.plantilla.positions.view',
+            'hiring.nonplantilla.applicants.view',
+            'hiring.nonplantilla.applications.view',
+            'hiring.nonplantilla.onboarding.view',
+            'leave.dashboard.view',
+            'leave.approval.view',
+            'leave.approval.manage',
+            'leave.balance.view',
+            'leave.calendar.view',
+            'leave.request.view',
             'employees.view',
-            'employees.manage',
+            'renewals.view',
             'team.view',
             'orientation.view',
             'trainings.view',
-            'trainings.manage',
             'trainings.join',
             'trainings.skill_gap',
             'trainings.effectiveness',
@@ -37,11 +187,8 @@ class RbacSeeder extends Seeder
             'spms.manage',
             'compensation.view',
             'accounts.view',
-            'accounts.manage',
             'departments.view',
-            'departments.manage',
             'plantilla_items.view',
-            'plantilla_items.manage',
             'positions.view',
             'rewards.view',
             'analytics.view',
@@ -50,75 +197,101 @@ class RbacSeeder extends Seeder
             'manpower.view',
             'manpower.manage',
             'task_monitoring.view',
-            'bug-reports.view',
-            'users.view',
-            'users.manage',
             'notifications.view',
-        ];
-
-        foreach ($permissions as $name) {
-            Permission::firstOrCreate([
-                'name'       => $name,
-                'guard_name' => self::GUARD,
-            ]);
-        }
-
-        $superAdmin = Role::firstOrCreate(['name' => 'SuperAdmin', 'guard_name' => self::GUARD]);
-        $admin      = Role::firstOrCreate(['name' => 'Admin',      'guard_name' => self::GUARD]);
-        $director   = Role::firstOrCreate(['name' => 'Director',   'guard_name' => self::GUARD]);
-        $hr         = Role::firstOrCreate(['name' => 'HR',         'guard_name' => self::GUARD]);
-        $head       = Role::firstOrCreate(['name' => 'Head',       'guard_name' => self::GUARD]);
-        $supervisor = Role::firstOrCreate(['name' => 'Supervisor', 'guard_name' => self::GUARD]);
-        $staff      = Role::firstOrCreate(['name' => 'Staff',      'guard_name' => self::GUARD]);
-
-        $allPermissions = Permission::where('guard_name', self::GUARD)->get();
-
-        $superAdmin->syncPermissions($allPermissions);
-        $admin->syncPermissions($allPermissions);
-        $hr->syncPermissions($allPermissions);
-
-        $director->syncPermissions([
-            'dashboard.view', 'hiring.view', 'leave.view', 'leave.approve',
-            'employees.view', 'team.view', 'orientation.view',
-            'trainings.view', 'trainings.join', 'trainings.skill_gap', 'trainings.effectiveness', 'trainings.coaching',
-            'spms.view', 'spms.manage', 'compensation.view', 'accounts.view',
-            'departments.view', 'plantilla_items.view', 'positions.view', 'rewards.view',
-            'analytics.view', 'announcements.view', 'announcements.manage',
-            'manpower.view', 'manpower.manage', 'task_monitoring.view', 'bug-reports.view', 'notifications.view',
         ]);
 
-        $head->syncPermissions([
-            'dashboard.view', 'hiring.view', 'leave.view', 'leave.approve',
-            'employees.view', 'team.view', 'orientation.view',
-            'trainings.view', 'trainings.join', 'trainings.skill_gap', 'trainings.effectiveness', 'trainings.coaching',
-            'spms.view', 'spms.manage', 'compensation.view', 'accounts.view',
-            'departments.view', 'plantilla_items.view', 'positions.view', 'rewards.view',
-            'analytics.view', 'announcements.view', 'announcements.manage',
-            'manpower.view', 'task_monitoring.view', 'bug-reports.view', 'notifications.view',
+        $roles['Head']->syncPermissions([
+            'dashboard.view',
+            'hiring.view',
+            'hiring.plantilla.applicants.view',
+            'hiring.plantilla.applications.view',
+            'hiring.plantilla.onboarding.view',
+            'hiring.plantilla.positions.view',
+            'hiring.nonplantilla.applicants.view',
+            'hiring.nonplantilla.applications.view',
+            'hiring.nonplantilla.onboarding.view',
+            'leave.dashboard.view',
+            'leave.approval.view',
+            'leave.approval.manage',
+            'leave.balance.view',
+            'leave.calendar.view',
+            'leave.request.view',
+            'employees.view',
+            'renewals.view',
+            'team.view',
+            'orientation.view',
+            'trainings.view',
+            'trainings.join',
+            'trainings.skill_gap',
+            'trainings.effectiveness',
+            'trainings.coaching',
+            'spms.view',
+            'spms.manage',
+            'compensation.view',
+            'accounts.view',
+            'departments.view',
+            'plantilla_items.view',
+            'positions.view',
+            'rewards.view',
+            'analytics.view',
+            'announcements.view',
+            'announcements.manage',
+            'manpower.view',
+            'task_monitoring.view',
+            'notifications.view',
         ]);
 
-        $supervisor->syncPermissions([
-            'dashboard.view', 'hiring.view', 'leave.view', 'leave.approve',
-            'employees.view', 'team.view', 'orientation.view',
-            'trainings.view', 'trainings.join', 'trainings.skill_gap', 'trainings.effectiveness', 'trainings.coaching',
-            'spms.view', 'spms.manage', 'compensation.view',
-            'announcements.view', 'announcements.manage', 'rewards.view',
-            'bug-reports.view', 'notifications.view',
+        $roles['Supervisor']->syncPermissions([
+            'dashboard.view',
+            'hiring.view',
+            'leave.dashboard.view',
+            'leave.approval.view',
+            'leave.approval.manage',
+            'leave.balance.view',
+            'leave.calendar.view',
+            'leave.request.view',
+            'employees.view',
+            'team.view',
+            'orientation.view',
+            'trainings.view',
+            'trainings.join',
+            'trainings.skill_gap',
+            'trainings.effectiveness',
+            'trainings.coaching',
+            'spms.view',
+            'spms.manage',
+            'compensation.view',
+            'announcements.view',
+            'announcements.manage',
+            'rewards.view',
+            'notifications.view',
         ]);
 
-        $staff->syncPermissions([
-            'leave.view', 'team.view', 'orientation.view',
-            'trainings.view', 'trainings.join',
-            'spms.view', 'spms.manage',
-            'announcements.view', 'announcements.manage', 'notifications.view',
+        $roles['Staff']->syncPermissions([
+            'dashboard.view',
+            'leave.dashboard.view',
+            'leave.balance.view',
+            'leave.calendar.view',
+            'leave.request.view',
+            'leave.request.manage',
+            'team.view',
+            'orientation.view',
+            'trainings.view',
+            'trainings.join',
+            'spms.view',
+            'spms.manage',
+            'announcements.view',
+            'announcements.manage',
+            'notifications.view',
         ]);
+    }
 
+    private function assignUsersToRoles(): void
+    {
         $this->assignRole('SUPERADMIN', 'SuperAdmin');
         $this->assignRole('ADMIN',      'Admin');
         $this->assignRole('HR',         'HR');
         $this->assignRole('STAFF',      'Staff');
-
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 
     private function assignRole(string $username, string $role): void

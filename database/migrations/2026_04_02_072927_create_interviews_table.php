@@ -12,14 +12,14 @@ return new class extends Migration
             $table->id();
 
             $table->foreignId('applicant_id')
+                ->nullable()
                 ->constrained('applicants')
                 ->cascadeOnDelete();
 
-            // Interview stages
-            $table->string('hr_status', 30)->default('Pending');   
+            $table->string('hr_status', 30)->default('Pending');
             $table->string('head_status', 30)->default('Pending');
             $table->string('final_status', 30)->default('Pending');
-            $table->string('overall_status', 60)->default('Pending'); 
+            $table->string('overall_status', 60)->default('Pending');
 
             $table->dateTime('hr_scheduled_at')->nullable();
             $table->dateTime('head_scheduled_at')->nullable();

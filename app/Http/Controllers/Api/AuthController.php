@@ -14,6 +14,8 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    private const DUMMY_PASSWORD_HASH = '$2y$12$C6UzMDM.H6dfI/f/IKcEeOKLxU5CZzXm2H.jgqM8B0IHxbLLDzWLu';
+
     public function login(Request $request)
     {
         $data = $request->validate([
@@ -23,7 +25,12 @@ class AuthController extends Controller
 
         $user = User::where('username', $data['username'])->first();
 
-        if (!$user || !Hash::check($data['password'], $user->password)) {
+        $passwordValid = Hash::check(
+            $data['password'],
+            $user->password ?? self::DUMMY_PASSWORD_HASH
+        );
+
+        if (!$user || !$passwordValid) {
             ActivityLog::record(
                 action: 'auth.login_failed',
                 payload: ['username' => $data['username']],
@@ -71,6 +78,10 @@ class AuthController extends Controller
         $user->load([
             'employee.info',
             'employee.division',
+            'employee.primaryDepartmentAssignment.department',
+            'employee.primaryAssignment.plantillaPosition',
+            'employee.cosPosition',
+            'employee.consultantPosition',
         ]);
 
         return response()->json([
@@ -87,18 +98,18 @@ class AuthController extends Controller
             'middle_name' => ['nullable', 'string', 'max:100'],
             'last_name'   => ['required', 'string', 'max:100'],
             'username'    => ['required', 'string', 'unique:users,username', 'min:2', 'max:100'],
-            'email'       => ['required', 'string', 'email', 'unique:users,email'],
-            'password'    => ['required', 'string', 'min:8', 'confirmed', 'regex:/[A-Z]/', 'regex:/[0-9]/'],
+            'email'       => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'password'    => ['required', 'string', 'min:8', 'max:72', 'confirmed', 'regex:/[A-Z]/', 'regex:/[0-9]/'],
         ]);
 
         $user = User::create([
-            'username'      => strtoupper($data['username']),
-            'email'         => $data['email'],
-            'password'      => Hash::make($data['password']),
-            'given_name'    => strtoupper($data['given_name']),
-            'middle_name'   => isset($data['middle_name']) ? strtoupper($data['middle_name']) : null,
-            'last_name'     => strtoupper($data['last_name']),
-            'approval_status' => 'PENDING',
+            'username'         => strtoupper($data['username']),
+            'email'            => $data['email'],
+            'password'         => Hash::make($data['password']),
+            'given_name'       => strtoupper($data['given_name']),
+            'middle_name'      => isset($data['middle_name']) ? strtoupper($data['middle_name']) : null,
+            'last_name'        => strtoupper($data['last_name']),
+            'approval_status'  => 'PENDING',
         ]);
 
         broadcast(new UserRegistered($user->id));
@@ -124,9 +135,9 @@ class AuthController extends Controller
     {
         $request->validate([
             'username'    => ['required', 'string', 'max:100'],
-            'given_name'  => ['nullable', 'string'],
-            'middle_name' => ['nullable', 'string'],
-            'last_name'   => ['nullable', 'string'],
+            'given_name'  => ['nullable', 'string', 'max:100'],
+            'middle_name' => ['nullable', 'string', 'max:100'],
+            'last_name'   => ['nullable', 'string', 'max:100'],
         ]);
 
         $username = mb_strtoupper(trim($request->username));
@@ -169,19 +180,18 @@ class AuthController extends Controller
                 $candidates[] = $givenUpper . $lastUpper;
             }
 
-            foreach ($candidates as $candidate) {
-                if (count($suggestions) >= 4) {
-                    break;
-                }
+            $candidates = collect($candidates)
+                ->unique()
+                ->reject(fn ($c) => $c === $username || $c === '')
+                ->values();
 
-                if (
-                    $candidate !== $username
-                    && !in_array($candidate, $suggestions)
-                    && !User::where('username', $candidate)->exists()
-                ) {
-                    $suggestions[] = $candidate;
-                }
-            }
+            $taken = User::whereIn('username', $candidates)->pluck('username')->all();
+
+            $suggestions = $candidates
+                ->reject(fn ($c) => in_array($c, $taken, true))
+                ->take(4)
+                ->values()
+                ->all();
         }
 
         return response()->json([
@@ -195,9 +205,14 @@ class AuthController extends Controller
         $user = $request->user()->load([
             'employee.info',
             'employee.division',
+            'employee.primaryDepartmentAssignment.department',
+            'employee.primaryAssignment.plantillaPosition',
+            'employee.cosPosition',
+            'employee.consultantPosition',
         ]);
 
         return response()->json([
+            'success' => true,
             'user' => $this->formatUser($user),
         ]);
     }
@@ -226,8 +241,10 @@ class AuthController extends Controller
             return null;
         }
 
-        $filePath = storage_path('app/public/' . $path);
-        if (!file_exists($filePath)) {
+        $baseDir = realpath(storage_path('app/public'));
+        $filePath = realpath(storage_path('app/public/' . $path));
+
+        if (!$baseDir || !$filePath || !str_starts_with($filePath, $baseDir . DIRECTORY_SEPARATOR)) {
             return null;
         }
 
@@ -238,6 +255,7 @@ class AuthController extends Controller
     {
         $employee = $user->employee;
         $division = $employee?->division;
+        $primaryDepartment = $employee?->primaryDepartmentAssignment?->department;
 
         $departments = [];
         if ($employee && !empty($employee->department_ids)) {
@@ -253,6 +271,20 @@ class AuthController extends Controller
         $roles = $user->getRoleNames();
         $permissions = $user->getAllPermissions()->pluck('name')->values();
 
+        // Uses Employee::getPositionTitleAttribute(), which already branches
+        // on employment_type: Plantilla → primaryAssignment.plantillaPosition,
+        // COS → cosPosition.title, Consultant → consultantPosition.title.
+        $positionLabel = $employee?->position_title;
+
+        // Department: prefer the primary department assignment record. Many
+        // COS/Consultant employees don't have one yet, so fall back to the
+        // first entry in department_ids (same source EmployeeController uses
+        // for the `departments` list) rather than showing blank.
+        $departmentLabel = $primaryDepartment;
+        if (!$departmentLabel && !empty($departments)) {
+            $departmentLabel = (object) $departments[0];
+        }
+
         return [
             'id'              => $user->id,
             'username'        => $user->username,
@@ -264,13 +296,33 @@ class AuthController extends Controller
             'last_name'       => $employee?->last_name  ?? $user->last_name  ?? null,
             'roles'           => $roles,
             'permissions'     => $permissions,
-            'employee'        => $employee,
+            'employee'            => $employee ? [
+                'id'              => $employee->id,
+                'employee_number' => $employee->employee_number,
+                'full_name'       => trim(
+                    ($employee->first_name ?? '') . ' ' .
+                    ($employee->middle_name ?? '') . ' ' .
+                    ($employee->last_name ?? '')
+                ),
+                'first_name'         => $employee->first_name,
+                'middle_name'        => $employee->middle_name,
+                'last_name'          => $employee->last_name,
+                'employment_status' => $employee->employment_status ?? null,
+                'employment_type'   => $employee->employment_type ?? null,
+                'position'   => $positionLabel,
+                'position_designation' => $employee->position_designation ?? [],
+                'role_position'         => $employee->role_position ?? [],
+                'department' => $departmentLabel ? [
+                    'id'     => $departmentLabel->id,
+                    'name'   => $departmentLabel->name,
+                ] : null,
+            ] : null,
             'avatar_url'      => $avatarUrl,
             'departments'     => $departments,
             'department_ids'  => $employee?->department_ids ?? [],
             'division'        => $division?->name,
-            'position'        => null,
-            'employee_id'     => $employee?->id ?? null,
+            'position'        => $positionLabel,
+            'employee_number' => $employee?->employee_number ?? null,
         ];
     }
 }

@@ -10,7 +10,7 @@ use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasRoles, softDeletes, AutoUppercase;
+    use HasApiTokens, HasRoles, SoftDeletes, AutoUppercase;
 
     protected $guard_name = 'web';
 
@@ -22,21 +22,24 @@ class User extends Authenticatable
         'updated_at',
         'deleted_at',
     ];
-    
+
     protected $fillable = [
-        'employee_id', 
-        'username', 
+        'employee_id',
+        'username',
         'given_name',
         'middle_name',
-        'last_name',   
-        'email', 
-        'password', 
+        'last_name',
+        'email',
+        'password',
         'has_completed_orientation',
+        'approval_status',
+        'approved_at',
+        'approved_by',
     ];
 
     protected $hidden = [
         'password',
-        'remember_token'
+        'remember_token',
     ];
 
     protected $casts = [
@@ -46,9 +49,16 @@ class User extends Authenticatable
         'has_completed_orientation' => 'boolean',
     ];
 
+    protected static function booted(): void
+    {
+        static::deleting(function (User $user) {
+            $user->tokens()->delete();
+        });
+    }
+
     public function employee()
     {
-        return $this->belongsTo(Employee::class);
+        return $this->belongsTo(Employee::class)->with('primaryDepartmentAssignment.department');
     }
 
     public function scopeApproved($query)
