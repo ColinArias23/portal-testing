@@ -16,12 +16,6 @@ return new class extends Migration
                 ->constrained('employees')
                 ->nullOnDelete();
 
-            $table->foreignId('plantilla_posting_application_id')
-                ->nullable()
-                ->unique() 
-                ->constrained('plantilla_posting_applications')
-                ->nullOnDelete();
-
             $table->string('first_name');
             $table->string('last_name');
             $table->string('email')->nullable();

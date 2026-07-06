@@ -62,6 +62,19 @@ class PlantillaPostingController extends Controller
             ->filter(fn (PlantillaPosting $p) => $p->isAvailableForApplication())
             ->values();
 
+        $employeeId = $request->user()?->employee_id ?? $request->user()?->employee?->id;
+
+        $appliedPostingIds = $employeeId
+            ? PlantillaPostingApplication::where('employee_id', $employeeId)
+                ->whereIn('plantilla_posting_id', $filtered->pluck('id'))
+                ->pluck('plantilla_posting_id')
+                ->all()
+            : [];
+
+        $filtered->each(function (PlantillaPosting $posting) use ($appliedPostingIds) {
+            $posting->already_applied = in_array($posting->id, $appliedPostingIds, true);
+        });
+
         $candidates->setCollection($filtered);
 
         return response()->json($candidates);
@@ -191,7 +204,7 @@ class PlantillaPostingController extends Controller
             'salary_grade_id' => 'nullable|exists:salary_grades,id',
             'step_increment_id' => 'nullable|exists:step_increments,id',
             'monthly_salary' => 'nullable|numeric|min:0',
-            'employment_status' => ['required', Rule::in(['Permanent', 'Casual', 'Job Order', 'Contractual'])],
+            'employment_status' => ['required', Rule::in(['Permanent'])],
             'vacancies' => 'required|integer|min:1|max:99',
             'immediate_supervisor' => 'nullable|string|max:255',
             'qualification_education' => 'nullable|string',
@@ -205,8 +218,7 @@ class PlantillaPostingController extends Controller
             'date_posted' => 'required|date',
             'closing_date' => 'required|date|after_or_equal:date_posted',
             'expected_appointment_date' => 'nullable|date',
-            'status' => ['required', Rule::in(['Open', 'Closing Soon', 'Closed', 'Filled'])],
-        ]);
+            'status' => ['required', Rule::in(['Open', 'Closing Soon', 'Closed'])],        ]);
 
         $validated['required_documents'] = collect(self::DOC_KEYS)
             ->mapWithKeys(fn ($key) => [$key => (bool) ($validated['required_documents'][$key] ?? false)])
@@ -242,14 +254,9 @@ class PlantillaPostingController extends Controller
             'certified' => 'required|accepted',
         ];
 
-        $requiredDocs = collect($posting->required_documents)
-            ->filter(fn ($required) => $required)
-            ->keys();
-
         foreach (self::DOC_KEYS as $key) {
-            $isRequired = $requiredDocs->contains($key);
             $rules["documents.{$key}"] = [
-                $isRequired ? 'required' : 'nullable',
+                'nullable',
                 'file',
                 'mimes:pdf,doc,docx',
                 'max:10240',

@@ -35,9 +35,8 @@ return new class extends Migration
                 ->nullOnDelete();
             $table->decimal('monthly_salary', 12, 2)->nullable();
 
-            $table->enum('employment_status', [
-                'Permanent', 'Casual', 'Job Order', 'Contractual',
-            ])->default('Permanent');
+            $table->enum('employment_status', ['Permanent'])
+                ->default('Permanent');
 
             $table->unsignedTinyInteger('vacancies')->default(1);
 
@@ -57,7 +56,7 @@ return new class extends Migration
             $table->date('closing_date');
             $table->date('expected_appointment_date')->nullable();
 
-            $table->enum('status', ['Open', 'Closing Soon', 'Closed', 'Filled'])
+            $table->enum('status', ['Open', 'Closing Soon', 'Closed'])
                 ->default('Open');
 
             $table->foreignId('created_by')

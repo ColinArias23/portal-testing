@@ -88,7 +88,7 @@ class PlantillaPosting extends Model
      
     public function scopeAdminOpen($query)
     {
-        return $query->whereNotIn('status', ['Closed', 'Filled'])
+        return $query->where('status', '!=', 'Closed')
             ->whereDate('closing_date', '>=', now()->toDateString());
     }
 
@@ -112,23 +112,23 @@ class PlantillaPosting extends Model
 
     public function getRemainingVacanciesAttribute(): int
     {
-        $activeApplications = $this->applications()
-            ->whereIn('status', ['Pending', 'Under Review', 'Approved'])
+        $approvedCount = $this->applications()
+            ->where('status', 'Approved')
             ->count();
 
-        $remaining = $this->vacancies - $activeApplications;
+        $remaining = $this->vacancies - $approvedCount;
 
         return max(0, min($remaining, $this->vacant_slots));
     }
 
     public function getEffectiveStatusAttribute(): string
     {
-        if (in_array($this->status, ['Closed', 'Filled'])) {
-            return $this->status;
+        if ($this->status === 'Closed') {
+            return 'Closed';
         }
 
         if ($this->remaining_vacancies <= 0 || $this->vacant_slots <= 0) {
-            return 'Filled';
+            return 'Closed';
         }
 
         $today = now()->startOfDay();
@@ -138,7 +138,7 @@ class PlantillaPosting extends Model
             return 'Closed';
         }
 
-        if ($closing && $today->diffInDays($closing, false) <= 7) {
+        if ($closing && $today->diffInDays($closing, false) <= 10) {
             return 'Closing Soon';
         }
 
