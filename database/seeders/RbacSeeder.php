@@ -142,9 +142,11 @@ class RbacSeeder extends Seeder
         return [
             'SuperAdmin' => Role::firstOrCreate(['name' => 'SuperAdmin', 'guard_name' => self::GUARD]),
             'Admin'      => Role::firstOrCreate(['name' => 'Admin',      'guard_name' => self::GUARD]),
+            'Chairman'   => Role::firstOrCreate(['name' => 'Chairman',   'guard_name' => self::GUARD]),
             'Director'   => Role::firstOrCreate(['name' => 'Director',   'guard_name' => self::GUARD]),
             'HR'         => Role::firstOrCreate(['name' => 'HR',         'guard_name' => self::GUARD]),
             'Head'       => Role::firstOrCreate(['name' => 'Head',       'guard_name' => self::GUARD]),
+            'OIC'        => Role::firstOrCreate(['name' => 'Officer In Charge', 'guard_name' => self::GUARD]),
             'Supervisor' => Role::firstOrCreate(['name' => 'Supervisor', 'guard_name' => self::GUARD]),
             'Staff'      => Role::firstOrCreate(['name' => 'Staff',      'guard_name' => self::GUARD]),
         ];
@@ -154,9 +156,58 @@ class RbacSeeder extends Seeder
     {
         $allPermissions = Permission::where('guard_name', self::GUARD)->get();
 
+        // ─── Full-access tier ────────────────────────────────────────────
+        // SuperAdmin, Admin, and HR are the only roles permitted to manage
+        // (create/update/delete/pin/archive) announcements, per explicit
+        // business decision. They retain full system access otherwise.
         $roles['SuperAdmin']->syncPermissions($allPermissions);
         $roles['Admin']->syncPermissions($allPermissions);
         $roles['HR']->syncPermissions($allPermissions);
+
+        // ─── Oversight tier (Chairman / Director / Head / OIC) ──────────
+        // These roles can VIEW announcements (and react/comment/reply,
+        // which require no separate permission — gated only by
+        // auth:sanctum), but CANNOT create/update/delete/pin/archive.
+        $roles['Chairman']->syncPermissions([
+            'dashboard.view',
+            'hiring.view',
+            'hiring.plantilla.applicants.view',
+            'hiring.plantilla.applications.view',
+            'hiring.plantilla.onboarding.view',
+            'hiring.plantilla.positions.view',
+            'hiring.nonplantilla.applicants.view',
+            'hiring.nonplantilla.applications.view',
+            'hiring.nonplantilla.onboarding.view',
+            'leave.dashboard.view',
+            'leave.approval.view',
+            'leave.approval.manage',
+            'leave.balance.view',
+            'leave.calendar.view',
+            'leave.request.view',
+            'employees.view',
+            'renewals.view',
+            'team.view',
+            'orientation.view',
+            'trainings.view',
+            'trainings.join',
+            'trainings.skill_gap',
+            'trainings.effectiveness',
+            'trainings.coaching',
+            'spms.view',
+            'spms.manage',
+            'compensation.view',
+            'accounts.view',
+            'departments.view',
+            'plantilla_items.view',
+            'positions.view',
+            'rewards.view',
+            'analytics.view',
+            'announcements.view', // manage removed — Chairman is read-only on announcements
+            'manpower.view',
+            'manpower.manage',
+            'task_monitoring.view',
+            'notifications.view',
+        ]);
 
         $roles['Director']->syncPermissions([
             'dashboard.view',
@@ -192,8 +243,7 @@ class RbacSeeder extends Seeder
             'positions.view',
             'rewards.view',
             'analytics.view',
-            'announcements.view',
-            'announcements.manage',
+            'announcements.view', // manage removed — Director is read-only on announcements
             'manpower.view',
             'manpower.manage',
             'task_monitoring.view',
@@ -234,13 +284,54 @@ class RbacSeeder extends Seeder
             'positions.view',
             'rewards.view',
             'analytics.view',
-            'announcements.view',
-            'announcements.manage',
+            'announcements.view', // manage removed — Head is read-only on announcements
             'manpower.view',
             'task_monitoring.view',
             'notifications.view',
         ]);
 
+        // OIC (Officer In Charge) — acting-head level, same scope as Head
+        $roles['OIC']->syncPermissions([
+            'dashboard.view',
+            'hiring.view',
+            'hiring.plantilla.applicants.view',
+            'hiring.plantilla.applications.view',
+            'hiring.plantilla.onboarding.view',
+            'hiring.plantilla.positions.view',
+            'hiring.nonplantilla.applicants.view',
+            'hiring.nonplantilla.applications.view',
+            'hiring.nonplantilla.onboarding.view',
+            'leave.dashboard.view',
+            'leave.approval.view',
+            'leave.approval.manage',
+            'leave.balance.view',
+            'leave.calendar.view',
+            'leave.request.view',
+            'employees.view',
+            'renewals.view',
+            'team.view',
+            'orientation.view',
+            'trainings.view',
+            'trainings.join',
+            'trainings.skill_gap',
+            'trainings.effectiveness',
+            'trainings.coaching',
+            'spms.view',
+            'spms.manage',
+            'compensation.view',
+            'accounts.view',
+            'departments.view',
+            'plantilla_items.view',
+            'positions.view',
+            'rewards.view',
+            'analytics.view',
+            'announcements.view', // manage removed — OIC is read-only on announcements
+            'manpower.view',
+            'task_monitoring.view',
+            'notifications.view',
+        ]);
+
+        // ─── Line-management tier (Supervisor) ───────────────────────────
         $roles['Supervisor']->syncPermissions([
             'dashboard.view',
             'hiring.view',
@@ -261,12 +352,12 @@ class RbacSeeder extends Seeder
             'spms.view',
             'spms.manage',
             'compensation.view',
-            'announcements.view',
-            'announcements.manage',
+            'announcements.view', // manage removed — Supervisor is read-only on announcements
             'rewards.view',
             'notifications.view',
         ]);
 
+        // ─── Base employee tier (Staff) ──────────────────────────────────
         $roles['Staff']->syncPermissions([
             'dashboard.view',
             'leave.dashboard.view',
@@ -280,8 +371,7 @@ class RbacSeeder extends Seeder
             'trainings.join',
             'spms.view',
             'spms.manage',
-            'announcements.view',
-            'announcements.manage',
+            'announcements.view', // manage removed — Staff is read-only on announcements
             'notifications.view',
         ]);
     }
@@ -290,7 +380,12 @@ class RbacSeeder extends Seeder
     {
         $this->assignRole('SUPERADMIN', 'SuperAdmin');
         $this->assignRole('ADMIN',      'Admin');
+        $this->assignRole('DIRECTOR',   'Director');
+        $this->assignRole('CHAIRMAN',   'Chairman');
         $this->assignRole('HR',         'HR');
+        $this->assignRole('OIC',        'Officer In Charge');
+        $this->assignRole('HEAD',       'Head');
+        $this->assignRole('SUPERVISOR',    'Supervisor');
         $this->assignRole('STAFF',      'Staff');
     }
 

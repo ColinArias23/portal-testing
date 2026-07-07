@@ -63,4 +63,18 @@ class Notification extends Model
             });
         });
     }
+
+    public function scopeRelevantTo($query, $user)
+    {
+        return $query->visibleTo($user)->where(function ($q) use ($user) {
+            $q->where('type', '!=', 'training')
+            ->orWhere(function ($q2) use ($user) {
+                $q2->where('type', 'training')
+                    ->where(function ($q3) use ($user) {
+                        $q3->whereNull('data->posted_by_user_id')
+                            ->orWhere('data->posted_by_user_id', '!=', $user->id);
+                    });
+            });
+        });
+    }
 }

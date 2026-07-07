@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Broadcast;
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AnnouncementController;
 use App\Http\Controllers\Api\OrientationController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\SkillController;
@@ -70,6 +71,28 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::put('/users/{user}/role',        [UserController::class, 'updateRole']);
 // ─── Audit Logs ─────────────────────────────────────────────────────
     Route::get('/audit-logs', [AuditLogController::class, 'index']);
+// ─── Announcements ─────────────────────────────────────────────────────
+Route::prefix('announcements')->middleware('throttle:announcements')->group(function () {
+    Route::get('/',                          [AnnouncementController::class, 'index']);
+    Route::post('/',                         [AnnouncementController::class, 'store']);
+    Route::get('/{announcement}',            [AnnouncementController::class, 'show']);
+    Route::put('/{announcement}',            [AnnouncementController::class, 'update']);
+    Route::delete('/{announcement}',         [AnnouncementController::class, 'destroy']);
+    Route::post('/{announcement}/pin',       [AnnouncementController::class, 'togglePin']);
+    Route::post('/{announcement}/archive',   [AnnouncementController::class, 'toggleArchive']);
+    Route::post('/{announcement}/view',      [AnnouncementController::class, 'markViewed']);
+    Route::post('/{announcement}/react',     [AnnouncementController::class, 'react']);
+    Route::get('/{announcement}/comments',   [AnnouncementController::class, 'comments']);
+    Route::post('/{announcement}/comments',  [AnnouncementController::class, 'addComment']);
+    Route::put('/comments/{comment}',        [AnnouncementController::class, 'updateComment']);
+    Route::delete('/comments/{comment}',     [AnnouncementController::class, 'deleteComment']);
+    Route::get('/{announcement}/viewers',    [AnnouncementController::class, 'viewers']);
+});
+// ─── Announcement Attachments ─────────────────────────────────────────────────────
+Route::prefix('announcement-attachments')->middleware('throttle:announcements')->group(function () {
+    Route::get('/{attachment}/download', [AnnouncementController::class, 'downloadAttachment']);
+    Route::delete('/{attachment}',        [AnnouncementController::class, 'destroyAttachment']);
+});
 // ─── Employees ─────────────────────────────────────────────────────
     Route::get('/employees/non-root',          [EmployeeController::class, 'nonRoot']);
     Route::get('/employees/gender-count',      [EmployeeController::class, 'genderCount']);

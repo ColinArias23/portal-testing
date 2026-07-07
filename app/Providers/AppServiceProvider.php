@@ -4,7 +4,10 @@ namespace App\Providers;
 
 use App\Models\Report;
 use App\Policies\ReportPolicy;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -16,5 +19,18 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::policy(Report::class, ReportPolicy::class);
+
+        $this->configureRateLimiting();
+    }
+
+    protected function configureRateLimiting(): void
+    {
+        RateLimiter::for('api', function (Request $request) {
+            return Limit::perMinute(120)->by($request->user()?->id ?: $request->ip());
+        });
+
+        RateLimiter::for('announcements', function (Request $request) {
+            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+        });
     }
 }

@@ -9,48 +9,44 @@ use Illuminate\Http\Request;
 
 class NotificationController extends Controller
 {
+    private const PAGE_SIZE = 50;
+
     public function index(Request $request)
     {
         $user = $request->user();
 
-        $notifications = Notification::visibleTo($user)
+        $notifications = Notification::relevantTo($user)
+            ->with(['reads' => fn ($q) => $q->where('user_id', $user->id)])
             ->orderByDesc('created_at')
-            ->limit(50)
+            ->limit(self::PAGE_SIZE)
             ->get()
-            // ── exclude training notifications posted by the current user ──
-            ->filter(function ($n) use ($user) {
-                if ($n->type !== 'training') return true;
-
-                $postedBy = $n->data['posted_by_user_id'] ?? null;
-
-                // If posted_by_user_id matches the current user, hide it from them
-                return $postedBy !== $user->id;
-            })
-            ->map(function ($n) use ($user) {
+            ->map(function ($n) {
                 return [
                     'id'         => $n->id,
                     'type'       => $n->type,
                     'title'      => $n->title,
                     'message'    => $n->message,
                     'data'       => $n->data,
-                    'read'       => $n->isReadBy($user->id),
+                    'read'       => $n->reads->isNotEmpty(),
                     'created_at' => $n->created_at,
                     'time'       => $n->created_at->diffForHumans(),
                 ];
-            })
-            ->values(); // re-index after filter
-
-        $unread = $notifications->where('read', false)->count();
+            });
 
         return response()->json([
-            'notifications' => $notifications,
-            'unread_count'  => $unread,
+            'notifications' => $notifications->values(),
+            'unread_count'  => $notifications->where('read', false)->count(),
         ]);
     }
 
     public function markRead(Request $request, Notification $notification)
     {
         $user = $request->user();
+
+        abort_unless(
+            Notification::relevantTo($user)->whereKey($notification->id)->exists(),
+            403
+        );
 
         NotificationRead::firstOrCreate([
             'notification_id' => $notification->id,
@@ -64,14 +60,24 @@ class NotificationController extends Controller
     {
         $user = $request->user();
 
-        $ids = Notification::visibleTo($user)->pluck('id');
+        $ids = Notification::relevantTo($user)->pluck('id');
 
-        foreach ($ids as $id) {
-            NotificationRead::firstOrCreate([
-                'notification_id' => $id,
-                'user_id'         => $user->id,
-            ]);
+        if ($ids->isEmpty()) {
+            return response()->json(['success' => true]);
         }
+
+        $now = now();
+        $rows = $ids->map(fn ($id) => [
+            'notification_id' => $id,
+            'user_id'         => $user->id,
+            'read_at'         => $now,
+        ])->all();
+
+        NotificationRead::upsert(
+            $rows,
+            uniqueBy: ['notification_id', 'user_id'],
+            update: []
+        );
 
         return response()->json(['success' => true]);
     }
@@ -80,20 +86,10 @@ class NotificationController extends Controller
     {
         $user = $request->user();
 
-        $total = Notification::visibleTo($user)
-            ->get()
-            // exclude training notifications posted by the current user
-            ->filter(function ($n) use ($user) {
-                if ($n->type !== 'training') return true;
-                $postedBy = $n->data['posted_by_user_id'] ?? null;
-                return $postedBy !== $user->id;
-            })
+        $count = Notification::relevantTo($user)
+            ->whereDoesntHave('reads', fn ($q) => $q->where('user_id', $user->id))
             ->count();
 
-        $read = NotificationRead::where('user_id', $user->id)
-            ->whereIn('notification_id', Notification::visibleTo($user)->pluck('id'))
-            ->count();
-
-        return response()->json(['count' => max(0, $total - $read)]);
+        return response()->json(['count' => $count]);
     }
 }

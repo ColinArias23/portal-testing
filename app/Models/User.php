@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Traits\AutoUppercase;
+use App\Traits\ResolvesAvatarUrl;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Laravel\Sanctum\HasApiTokens;
@@ -10,7 +11,7 @@ use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasRoles, SoftDeletes, AutoUppercase;
+    use HasApiTokens, HasRoles, SoftDeletes, AutoUppercase, ResolvesAvatarUrl;
 
     protected $guard_name = 'web';
 
@@ -22,6 +23,8 @@ class User extends Authenticatable
         'updated_at',
         'deleted_at',
     ];
+
+    protected $appends = ['name', 'avatar_url'];
 
     protected $fillable = [
         'employee_id',
@@ -59,6 +62,26 @@ class User extends Authenticatable
     public function employee()
     {
         return $this->belongsTo(Employee::class)->with('primaryDepartmentAssignment.department');
+    }
+
+    public function getNameAttribute(): string
+    {
+        $parts = array_filter([
+            $this->given_name ?? $this->first_name,
+            $this->last_name,
+        ]);
+        return $parts ? implode(' ', $parts) : $this->username;
+    }
+
+    public function getAvatarUrlAttribute(): ?string
+    {
+        if (! $this->relationLoaded('employee') && ! $this->employee_id) {
+            return null;
+        }
+
+        return $this->resolveAvatarUrl(
+            $this->employee?->getRawOriginal('avatar_url')
+        );
     }
 
     public function scopeApproved($query)

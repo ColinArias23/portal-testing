@@ -8,10 +8,6 @@ use App\Models\User;
 
 class NotificationService
 {
-    /**
-     * Notify all admins that a pending account is waiting for HR approval.
-     * Visible only to admins.
-     */
     public static function accountPending(string $username): void
     {
         Notification::create([
@@ -24,10 +20,6 @@ class NotificationService
         ]);
     }
 
-    /**
-     * FIXED: Notify a specific user that their account has been activated.
-     * Visible only to the target user.
-     */
     public static function accountActivated(int $userId): void
     {
         $user = User::find($userId);
@@ -46,12 +38,6 @@ class NotificationService
         ]);
     }
 
-    /**
-     * Notify ALL employees (except the poster) that a new training has been posted.
-     *
-     * @param  Training  $training
-     * @param  int       $postedByUserId  — the user who created the training
-     */
     public static function trainingCreated(Training $training, int $postedByUserId): void
     {
         Notification::create([
@@ -75,9 +61,6 @@ class NotificationService
         ]);
     }
 
-    /**
-     * Notify a user of a new permission assignment
-     */
     public static function permissionsUpdated(int $userId, array $permissions): void
     {
         $user = User::find($userId);
@@ -101,9 +84,6 @@ class NotificationService
         ]);
     }
 
-    /**
-     * Notify a user of a new role assignment
-     */
     public static function roleUpdated(int $userId, array $roles): void
     {
         $user = User::find($userId);
@@ -127,9 +107,6 @@ class NotificationService
         ]);
     }
 
-    /**
-     * Notify admins about important system events
-     */
     public static function systemAlert(string $title, string $message, array $data = []): void
     {
         Notification::create([
