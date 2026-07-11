@@ -10,10 +10,9 @@ class AuditLogController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('auth:sanctum');
-        $this->middleware('role:SuperAdmin');
+        $this->middleware('permission:audit_logs.view');
     }
-
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request)
     {
         $request->validate([
@@ -57,7 +56,7 @@ class AuditLogController extends Controller
 
         return response()->json($logs);
     }
-
+// ─── GetAction ─────────────────────────────────────────────────────
     public function getActions()
     {
         $actions = ActivityLog::distinct()
@@ -69,7 +68,7 @@ class AuditLogController extends Controller
             'actions' => $actions,
         ]);
     }
-
+// ─── Summary ─────────────────────────────────────────────────────
     public function summary(Request $request)
     {
         $request->validate([
