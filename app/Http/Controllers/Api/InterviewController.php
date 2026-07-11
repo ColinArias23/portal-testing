@@ -31,14 +31,10 @@ class InterviewController extends Controller
     public function __construct()
     {
         $this->middleware('auth:sanctum');
-
-        $this->middleware('role:SuperAdmin|HR')->only([
-            'index',
-            'show',
-            'update',
-        ]);
+        $this->middleware('permission:hiring.nonplantilla.applications.view')->only(['index', 'show']);
+        $this->middleware('permission:hiring.nonplantilla.applications.manage')->only(['update']);
     }
-
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request)
     {
         $perPage = min((int) $request->integer('per_page', self::DEFAULT_PER_PAGE), self::MAX_PER_PAGE);
@@ -50,13 +46,13 @@ class InterviewController extends Controller
 
         return response()->json($interviews);
     }
-
+// ─── Show ─────────────────────────────────────────────────────
     public function show(Applicant $applicant)
     {
         $interview = Interview::where('applicant_id', $applicant->id)->firstOrFail();
         return response()->json($interview);
     }
-
+// ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, Applicant $applicant)
     {
         $data = $this->validateAndUppercase($request);
@@ -75,7 +71,7 @@ class InterviewController extends Controller
 
         return response()->json($interview);
     }
-
+// ─── ValidateAndUpperCase ─────────────────────────────────────────────────────
     private function validateAndUppercase(Request $request): array
     {
         $data = $request->validate(self::VALIDATION_RULES);
@@ -88,7 +84,7 @@ class InterviewController extends Controller
 
         return $data;
     }
-
+// ─── SnapShowStatuses ─────────────────────────────────────────────────────
     private function snapshotStatuses(?Interview $interview): ?array
     {
         if (! $interview) {
@@ -99,7 +95,7 @@ class InterviewController extends Controller
             ->mapWithKeys(fn ($field) => [$field => $interview->$field])
             ->toArray();
     }
-
+// ─── LogStatusChange ─────────────────────────────────────────────────────
     private function logStatusChange(
         Request $request,
         int $subjectId,

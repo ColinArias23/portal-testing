@@ -12,17 +12,7 @@ use Illuminate\Http\JsonResponse;
 
 class EmployeeDepartmentAssignmentController extends Controller
 {
-    /*
-    |--------------------------------------------------------------------------
-    | INDEX
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * GET /api/employees/{employee}/department-assignments
-     * 
-     * List all department assignments for an employee (current and historical).
-     */
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Employee $employee): JsonResponse
     {
         $assignments = $employee->departmentAssignments()
@@ -34,26 +24,7 @@ class EmployeeDepartmentAssignmentController extends Controller
 
         return response()->json($assignments);
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | STORE
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * POST /api/employees/{employee}/department-assignments
-     * 
-     * Assign an employee to a department.
-     * 
-     * Body:
-     *   {
-     *     "department_id": 5,
-     *     "is_primary": true,
-     *     "department_head_id": null,
-     *     "start_date": "2025-05-01"
-     *   }
-     */
+// ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request, Employee $employee): JsonResponse
     {
         $data = $request->validate([
@@ -64,7 +35,6 @@ class EmployeeDepartmentAssignmentController extends Controller
             'end_date'            => ['nullable', 'date', 'after_or_equal:start_date'],
         ]);
 
-        // Check if employee is already assigned to this department
         $existing = EmployeeDepartmentAssignment::where('employee_id', $employee->id)
             ->where('department_id', $data['department_id'])
             ->whereNull('end_date')
@@ -77,7 +47,6 @@ class EmployeeDepartmentAssignmentController extends Controller
             ], 422);
         }
 
-        // If marking as primary, unmark existing primary
         if ($data['is_primary'] ?? false) {
             EmployeeDepartmentAssignment::where('employee_id', $employee->id)
                 ->where('is_primary', true)
@@ -85,7 +54,6 @@ class EmployeeDepartmentAssignmentController extends Controller
                 ->update(['is_primary' => false]);
         }
 
-        // Create the assignment
         $assignment = EmployeeDepartmentAssignment::create([
             'employee_id'        => $employee->id,
             'department_id'      => $data['department_id'],
@@ -95,7 +63,6 @@ class EmployeeDepartmentAssignmentController extends Controller
             'end_date'           => $data['end_date'] ?? null,
         ]);
 
-        // Log the action
         ActivityLog::record(
             action:       'employee_department_assignment.created',
             userId:       $request->user()?->id,
@@ -116,24 +83,9 @@ class EmployeeDepartmentAssignmentController extends Controller
             201
         );
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | UPDATE
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * PATCH /api/employees/{employee}/department-assignments/{assignment}
-     * 
-     * Update a department assignment.
-     */
-    public function update(
-        Request $request,
-        Employee $employee,
-        EmployeeDepartmentAssignment $assignment
+// ─── Update ─────────────────────────────────────────────────────
+    public function update(Request $request, Employee $employee, EmployeeDepartmentAssignment $assignment
     ): JsonResponse {
-        // Verify assignment belongs to this employee
         if ($assignment->employee_id !== $employee->id) {
             return response()->json([
                 'message' => 'Assignment does not belong to this employee.',
@@ -152,7 +104,6 @@ class EmployeeDepartmentAssignmentController extends Controller
             'end_date'           => $assignment->end_date,
         ];
 
-        // If marking as primary, unmark other primaries
         if (($data['is_primary'] ?? false) && !$assignment->is_primary) {
             EmployeeDepartmentAssignment::where('employee_id', $employee->id)
                 ->where('is_primary', true)
@@ -184,31 +135,15 @@ class EmployeeDepartmentAssignmentController extends Controller
             $this->format($assignment->fresh(['department.division', 'departmentHead']))
         );
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | DESTROY
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * DELETE /api/employees/{employee}/department-assignments/{assignment}
-     * 
-     * End a department assignment by setting end_date to today.
-     */
-    public function destroy(
-        Request $request,
-        Employee $employee,
-        EmployeeDepartmentAssignment $assignment
+// ─── Destroy ─────────────────────────────────────────────────────
+    public function destroy(Request $request, Employee $employee, EmployeeDepartmentAssignment $assignment
     ): JsonResponse {
-        // Verify assignment belongs to this employee
         if ($assignment->employee_id !== $employee->id) {
             return response()->json([
                 'message' => 'Assignment does not belong to this employee.',
             ], 403);
         }
 
-        // Prevent ending if already ended
         if ($assignment->end_date) {
             return response()->json([
                 'message' => 'This assignment has already been ended.',
@@ -229,16 +164,7 @@ class EmployeeDepartmentAssignmentController extends Controller
 
         return response()->json(['message' => 'Department assignment ended.']);
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | PRIVATE HELPERS
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * Format an assignment for JSON response.
-     */
+// ─── Format ─────────────────────────────────────────────────────
     private function format(EmployeeDepartmentAssignment $assignment): array
     {
         return [

@@ -70,11 +70,9 @@ class PdsProfileController extends Controller
         'license_expiry_date',
         'govt_id_date_place',
     ];
-
-
+// ─── Status ─────────────────────────────────────────────────────
     public function status(Request $request)
     {
-        /** @var \App\Models\User $user */
         $user     = $request->user();
         $employee = $user->employee;
 
@@ -84,7 +82,6 @@ class PdsProfileController extends Controller
 
         $info = $employee->info;
 
-        // No employee_info row yet at all → definitely incomplete/empty.
         if (! $info) {
             return response()->json([
                 'is_complete'    => false,
@@ -99,7 +96,7 @@ class PdsProfileController extends Controller
             'missing_fields' => $isComplete ? [] : $this->resolveMissingFields($info, $employee),
         ]);
     }
-    
+// ─── ResolveMissingFields ─────────────────────────────────────────────────────
     private function resolveMissingFields(EmployeeInfo $info, Employee $employee): array
     {
         $requiredFields = [
@@ -125,9 +122,7 @@ class PdsProfileController extends Controller
 
         return $missing;
     }
-
-    // ───────────────────────────── COMPLETE / UPDATE PROFILE ────────────────────────────────────────────
-
+// ─── Complete ─────────────────────────────────────────────────────
     public function complete(Request $request)
     {
         /** @var \App\Models\User $user */
@@ -169,9 +164,7 @@ class PdsProfileController extends Controller
 
         return response()->json(['message' => 'Profile completed successfully.']);
     }
-
-    // ──────────────────────────── VALIDATION RULES ─────────────────────────────────────────────
-
+// ─── ValidationRules ─────────────────────────────────────────────────────
     private function validationRules(): array
     {
         return [
@@ -283,7 +276,7 @@ class PdsProfileController extends Controller
             'references'                => ['nullable', 'string'],
         ];
     }
-
+// ─── BuildScalarPayload ─────────────────────────────────────────────────────
     private function buildScalarPayload(Request $request): array
     {
         $payload = [];
@@ -311,7 +304,7 @@ class PdsProfileController extends Controller
 
         return $payload;
     }
-
+// ─── SyncRelational ─────────────────────────────────────────────────────
     private function syncRelational(Employee $employee, Request $request): void
     {
         $empId = $employee->id;
@@ -451,9 +444,7 @@ class PdsProfileController extends Controller
             ]);
         }
     }
-
-    // ──────────────────────────────────PRIVATE HELPERS─────────────────────────────────────── 
-
+// ─── DecodeJson ─────────────────────────────────────────────────────
     private function decodeJson(Request $request, string $field): array
     {
         $raw = $request->input($field);
@@ -462,14 +453,14 @@ class PdsProfileController extends Controller
         $decoded = json_decode($raw, true);
         return is_array($decoded) ? $decoded : [];
     }
-
+// ─── Up ─────────────────────────────────────────────────────
     private function up(mixed $value): string
     {
         if (! is_string($value)) return '';
         $trimmed = trim($value);
         return $trimmed !== '' ? strtoupper($trimmed) : '';
     }
-
+// ─── DateOrNull ─────────────────────────────────────────────────────
     private function dateOrNull(mixed $value): ?string
     {
         if (! is_string($value)) return null;

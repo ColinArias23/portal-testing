@@ -16,24 +16,27 @@ use Illuminate\Validation\ValidationException;
 class PlantillaPostingController extends Controller
 {
     private const DOC_KEYS = [
-        'resume', 'pds', 'transcript', 'diploma', 'eligibility', 'certificates', 'others',
+        'resume', 'pds', 'transcript', 'diploma', 'eligibility', 'certificates', 'others'];
+    private const REVIEW_STATUSES = [
+        'Initial Review/Evaluation',
+        'For Initial Deliberation',
+        'Scheduled for Interview',
+        'For HRMPSB Compliance',
+        'For HRMPSB Deliberation',
+        'Completed',
+        'Rejected',
     ];
 
     public function __construct()
     {
         $this->middleware('auth:sanctum');
 
-        $this->middleware('role:SuperAdmin|HR')->only([
-            'index',              
-            'store',
-            'update',
-            'destroy',
-            'applications',       
-            'allApplications',    
-            'reviewApplication',
-        ]);
+        $this->middleware('permission:hiring.plantilla.postings.view')->only(['index']);
+        $this->middleware('permission:hiring.plantilla.postings.manage')->only(['store', 'update', 'destroy']);
+        $this->middleware('permission:hiring.plantilla.applications.view')->only(['applications']);
+        $this->middleware('permission:hiring.plantilla.applications.manage')->only(['reviewApplication']);
     }
-
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request)
     {
         $query = PlantillaPosting::withCount('applications')
@@ -46,7 +49,7 @@ class PlantillaPostingController extends Controller
 
         return response()->json($postings);
     }
-
+// ─── available ─────────────────────────────────────────────────────
     public function available(Request $request)
     {
         $query = PlantillaPosting::adminOpen()
@@ -79,7 +82,7 @@ class PlantillaPostingController extends Controller
 
         return response()->json($candidates);
     }
-
+// ─── applyFilters ─────────────────────────────────────────────────────
     private function applyFilters($query, Request $request): void
     {
         if ($search = $request->get('search')) {
@@ -104,7 +107,7 @@ class PlantillaPostingController extends Controller
             $query->where('status', $status);
         }
     }
-
+// ─── VacantItems ─────────────────────────────────────────────────────
     public function vacantItems()
     {
         $vacant = PlantillaPosition::where('status', 'VACANT')
@@ -127,7 +130,7 @@ class PlantillaPostingController extends Controller
 
         return response()->json($items);
     }
-
+// ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request)
     {
         $data = $this->validatePosting($request);
@@ -164,7 +167,7 @@ class PlantillaPostingController extends Controller
 
         return response()->json($posting->fresh(['department', 'division', 'salaryGrade']), 201);
     }
-
+// ─── Show ─────────────────────────────────────────────────────
     public function show($id)
     {
         $posting = PlantillaPosting::withCount('applications')
@@ -173,7 +176,7 @@ class PlantillaPostingController extends Controller
 
         return response()->json($posting);
     }
-
+// ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, $id)
     {
         $posting = PlantillaPosting::findOrFail($id);
@@ -183,7 +186,7 @@ class PlantillaPostingController extends Controller
 
         return response()->json($posting->fresh(['department', 'division', 'salaryGrade']));
     }
-
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy($id)
     {
         $posting = PlantillaPosting::findOrFail($id);
@@ -191,7 +194,7 @@ class PlantillaPostingController extends Controller
 
         return response()->json(['message' => 'Posting deleted.']);
     }
-
+// ─── VAlidatePosting ─────────────────────────────────────────────────────
     private function validatePosting(Request $request, $ignoreId = null): array
     {
         $validated = $request->validate([
@@ -226,7 +229,7 @@ class PlantillaPostingController extends Controller
 
         return $validated;
     }
-
+// ─── Apply ─────────────────────────────────────────────────────
     public function apply(Request $request, $id)
     {
         $posting = PlantillaPosting::findOrFail($id);
@@ -298,7 +301,7 @@ class PlantillaPostingController extends Controller
 
         return response()->json($application->load('documents'), 201);
     }
-
+// ─── ResolveEmployeeID ─────────────────────────────────────────────────────
     private function resolveEmployeeId(Request $request): int
     {
         $user = $request->user();
@@ -313,7 +316,7 @@ class PlantillaPostingController extends Controller
 
         return $employeeId;
     }
-
+// ─── MyApplications ─────────────────────────────────────────────────────
     public function myApplications(Request $request)
     {
         $employeeId = $this->resolveEmployeeId($request);
@@ -325,7 +328,77 @@ class PlantillaPostingController extends Controller
 
         return response()->json($applications);
     }
+// ─── UploadDocuments (submit missing docs / resubmit existing ones) ──────
+    public function uploadDocuments(Request $request, PlantillaPostingApplication $application)
+    {
+        $employeeId = $this->resolveEmployeeId($request);
 
+        if ($application->employee_id !== $employeeId) {
+            abort(403, 'Hindi mo pag-aari ang application na ito.');
+        }
+
+        if (in_array($application->status, ['Completed', 'Rejected'], true)) {
+            throw ValidationException::withMessages([
+                'status' => 'Sarado na ang application na ito — hindi na pwedeng magpasa o magpalit ng dokumento.',
+            ]);
+        }
+
+        $rules = [];
+        foreach (self::DOC_KEYS as $key) {
+            $rules["documents.{$key}"] = [
+                'nullable',
+                'file',
+                'mimes:pdf,doc,docx,jpg,jpeg,png',
+                'max:10240',
+            ];
+        }
+
+        $validated = $request->validate($rules);
+
+        if (empty($validated['documents'] ?? [])) {
+            throw ValidationException::withMessages([
+                'documents' => 'Wala kang pinili na file na i-upload.',
+            ]);
+        }
+
+        DB::transaction(function () use ($request, $application) {
+            foreach (self::DOC_KEYS as $key) {
+                $file = $request->file("documents.{$key}");
+                if (! $file) {
+                    continue;
+                }
+
+                // Resubmission: replace the existing document under the same key.
+                $existing = PlantillaPostingApplicationDocument::where('plantilla_posting_application_id', $application->id)
+                    ->where('document_key', $key)
+                    ->first();
+
+                if ($existing) {
+                    Storage::disk('local')->delete($existing->stored_path);
+                    $existing->delete();
+                }
+
+                $path = $file->store(
+                    "plantilla-postings/{$application->plantilla_posting_id}/{$application->id}",
+                    'local'
+                );
+
+                PlantillaPostingApplicationDocument::create([
+                    'plantilla_posting_application_id' => $application->id,
+                    'document_key' => $key,
+                    'original_filename' => $file->getClientOriginalName(),
+                    'stored_path' => $path,
+                    'mime_type' => $file->getClientMimeType(),
+                    'size' => $file->getSize(),
+                ]);
+            }
+        });
+
+        return response()->json(
+            $application->fresh(['posting.department', 'posting.division', 'documents', 'interview'])
+        );
+    }
+// ─── Applications ─────────────────────────────────────────────────────
     public function applications($postingId)
     {
         $posting = PlantillaPosting::findOrFail($postingId);
@@ -337,7 +410,7 @@ class PlantillaPostingController extends Controller
 
         return response()->json($applications);
     }
-
+// ─── AllApplications ─────────────────────────────────────────────────────
     public function allApplications(Request $request)
     {
         $query = PlantillaPostingApplication::with(['posting.department', 'employee', 'documents', 'interview'])
@@ -351,22 +424,37 @@ class PlantillaPostingController extends Controller
             $query->where('plantilla_posting_id', $postingId);
         }
 
+        $user = $request->user();
+        $canViewAll = $user->hasRole('SuperAdmin')
+            || $user->can('hiring.plantilla.applications.manage');
+
+        if (! $canViewAll) {
+            $employeeId = $user->employee_id ?? $user->employee?->id;
+
+            // No linked employee record → nothing to show, but don't 500/403.
+            if (! $employeeId) {
+                return response()->json([]);
+            }
+
+            $query->where('employee_id', $employeeId);
+        }
+
         return response()->json($query->get());
     }
-
+// ─── ReviewApplication ─────────────────────────────────────────────────────
     public function reviewApplication(Request $request, $applicationId)
     {
         $application = PlantillaPostingApplication::with(['posting.department', 'employee.info', 'employee.user', 'interview'])
             ->findOrFail($applicationId);
 
         $validated = $request->validate([
-            'status' => ['required', Rule::in(['Under Review', 'Approved', 'Rejected'])],
+            'status' => ['required', Rule::in(self::REVIEW_STATUSES)],
             'remarks' => 'nullable|string|max:2000',
         ]);
 
-        if ($validated['status'] === 'Approved' && ! $application->interview?->hasCompleted()) {
+        if ($validated['status'] === 'Completed' && ! $application->interview?->hasCompleted()) {
             throw ValidationException::withMessages([
-                'status' => 'Hindi pa pwedeng i-approve ang application na ito. Kailangan munang i-schedule at i-mark as COMPLETED ang interview.',
+                'status' => 'Hindi pa pwedeng i-mark as Completed ang application na ito. Kailangan munang i-schedule at i-mark as COMPLETED ang interview.',
             ]);
         }
 
@@ -381,7 +469,7 @@ class PlantillaPostingController extends Controller
             $application->fresh(['employee', 'documents', 'interview'])
         );
     }
-
+// ─── DownloadDocument ─────────────────────────────────────────────────────
     public function downloadDocument(Request $request, $documentId)
     {
         $document = PlantillaPostingApplicationDocument::with('application')->findOrFail($documentId);
@@ -389,9 +477,9 @@ class PlantillaPostingController extends Controller
         $isOwner = $document->application->employee_id === ($request->user()->employee_id
             ?? $request->user()->employee?->id);
 
-        $isHrOrAdmin = $request->user()->hasRole(['SuperAdmin', 'HR']);
+        $canManage = $request->user()->can('hiring.plantilla.applications.view');
 
-        if (! $isOwner && ! $isHrOrAdmin) {
+        if (! $isOwner && ! $canManage) {
             abort(403);
         }
 

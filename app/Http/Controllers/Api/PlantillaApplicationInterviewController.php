@@ -35,14 +35,10 @@ class PlantillaApplicationInterviewController extends Controller
     public function __construct()
     {
         $this->middleware('auth:sanctum');
-
-        $this->middleware('role:SuperAdmin|HR')->only([
-            'index',
-            'show',
-            'update',
-        ]);
-    }
-
+        $this->middleware('permission:hiring.plantilla.applications.view')->only(['index', 'show']);
+        $this->middleware('permission:hiring.plantilla.applications.manage')->only(['update']);
+}
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request)
     {
         $perPage = min((int) $request->integer('per_page', self::DEFAULT_PER_PAGE), self::MAX_PER_PAGE);
@@ -64,7 +60,7 @@ class PlantillaApplicationInterviewController extends Controller
 
         return response()->json($interviews);
     }
-
+// ─── Show ─────────────────────────────────────────────────────
     public function show(PlantillaPostingApplication $application)
     {
         $interview = PlantillaPostingApplicationInterview::where('plantilla_posting_application_id', $application->id)
@@ -73,7 +69,7 @@ class PlantillaApplicationInterviewController extends Controller
 
         return response()->json($interview);
     }
-
+// ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, PlantillaPostingApplication $application)
     {
         $data = $this->validateAndUppercase($request);
@@ -112,7 +108,7 @@ class PlantillaApplicationInterviewController extends Controller
 
         return response()->json($interview);
     }
-
+// ─── ValidateAndUppercase ─────────────────────────────────────────────────────
     private function validateAndUppercase(Request $request): array
     {
         $data = $request->validate(self::VALIDATION_RULES);
@@ -125,7 +121,7 @@ class PlantillaApplicationInterviewController extends Controller
 
         return $data;
     }
-
+// ─── SnapshotStatuses ─────────────────────────────────────────────────────
     private function snapshotStatuses(?PlantillaPostingApplicationInterview $interview): ?array
     {
         if (! $interview) {
@@ -136,7 +132,7 @@ class PlantillaApplicationInterviewController extends Controller
             ->mapWithKeys(fn ($field) => [$field => $interview->$field])
             ->toArray();
     }
-
+// ─── LogStatusChange ─────────────────────────────────────────────────────
     private function logStatusChange(
         Request $request,
         int $applicationId,

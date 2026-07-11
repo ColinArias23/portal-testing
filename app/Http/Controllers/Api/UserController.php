@@ -20,26 +20,19 @@ class UserController extends Controller
     private const GUARD = 'web';
 
     public function __construct()
-    {
-        $this->middleware('auth:sanctum');
-        $this->middleware('role:SuperAdmin')->only([
-            'pendingCount',
-            'pendingUsers',
-            'approvedUsers',
-            'permissions',
-            'updatePermissions',
-            'updateRole',
-            'activate',
-            'bulkActivate',
-        ]);
-    }
+{
+    $this->middleware('auth:sanctum');
 
+    $this->middleware('permission:users.manage')->only(['pendingCount', 'pendingUsers', 'approvedUsers', 'permissions', 'activate', 'bulkActivate',]);
+    $this->middleware('permission:users.manage.roles')->only(['updatePermissions', 'updateRole',]);
+}
+// ─── PendingCount ─────────────────────────────────────────────────────
     public function pendingCount()
     {
         $count = User::where('approval_status', 'PENDING')->count();
         return response()->json(['count' => $count]);
     }
-
+// ─── PendingUsers ─────────────────────────────────────────────────────
     public function pendingUsers()
     {
         $users = User::where('approval_status', 'PENDING')
@@ -48,7 +41,7 @@ class UserController extends Controller
 
         return response()->json($users);
     }
-
+// ─── ApprovedUsers ─────────────────────────────────────────────────────
     public function approvedUsers()
     {
         $currentUserId = Auth::id();
@@ -72,7 +65,7 @@ class UserController extends Controller
 
         return response()->json($users);
     }
-
+// ─── Permissions ─────────────────────────────────────────────────────
     public function permissions()
     {
         $names = Permission::where('guard_name', self::GUARD)
@@ -86,7 +79,7 @@ class UserController extends Controller
             'grouped'     => $grouped,
         ]);
     }
-
+// ─── UpdatePermissions ─────────────────────────────────────────────────────
     public function updatePermissions(Request $request, User $user)
     {
         if ($user->approval_status !== 'APPROVED') {
@@ -101,6 +94,12 @@ class UserController extends Controller
             ], 403);
         }
 
+        if ($user->id === Auth::id()) {
+            return response()->json([
+                'message' => 'You cannot modify your own permissions.',
+            ], 403);
+        }
+
         $request->validate([
             'permissions'   => ['required', 'array'],
             'permissions.*' => [
@@ -109,8 +108,18 @@ class UserController extends Controller
             ],
         ]);
 
-        $before = $user->getDirectPermissions()->pluck('name')->values()->toArray();
+        $restricted = config('rbac.super_admin_only_permissions');
+        $requested  = collect($request->permissions);
+        $blocked    = $requested->intersect($restricted);
 
+        if ($blocked->isNotEmpty() && !Auth::user()->hasRole('SuperAdmin')) {
+            return response()->json([
+                'message' => 'You are not authorized to grant restricted permission(s): '
+                    . $blocked->implode(', '),
+            ], 403);
+        }
+
+        $before = $user->getDirectPermissions()->pluck('name')->values()->toArray();
         $user->syncPermissions($request->permissions);
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
@@ -140,9 +149,10 @@ class UserController extends Controller
         return response()->json([
             'message'     => 'Permissions updated successfully.',
             'permissions' => $updatedPermissions,
+            'roles'       => $user->getRoleNames(),
         ]);
     }
-
+// ─── UpdateRole ─────────────────────────────────────────────────────
     public function updateRole(Request $request, User $user)
     {
         if ($user->approval_status !== 'APPROVED') {
@@ -154,6 +164,12 @@ class UserController extends Controller
         if ($user->hasRole('SuperAdmin')) {
             return response()->json([
                 'message' => 'Cannot change the role of a SuperAdmin account.',
+            ], 403);
+        }
+
+        if ($user->id === Auth::id()) {
+            return response()->json([
+                'message' => 'You cannot change your own role.',
             ], 403);
         }
 
@@ -180,15 +196,15 @@ class UserController extends Controller
                 ->firstOrFail();
 
             $user->syncRoles([$role->name]);
-            $user->syncPermissions($role->permissions);
+            // Permissions are deliberately left untouched — see method docblock.
         } else {
             $toRemove = $user->getRoleNames()
-                ->filter(fn($r) => strtolower($r) !== 'superadmin')
+                ->filter(fn ($r) => strtolower($r) !== 'superadmin')
                 ->toArray();
             if (!empty($toRemove)) {
                 $user->removeRole(...$toRemove);
             }
-            $user->syncPermissions([]);
+            // Permissions are deliberately left untouched — see method docblock.
         }
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
@@ -216,7 +232,7 @@ class UserController extends Controller
             'roles'   => $user->getRoleNames(),
         ]);
     }
-
+// ─── Activate ─────────────────────────────────────────────────────
     public function activate(Request $request, User $user)
     {
         DB::transaction(function () use ($user) {
@@ -238,7 +254,6 @@ class UserController extends Controller
             if ($user->roles->isEmpty()) {
                 $staffRole = Role::firstOrCreate(['name' => 'Staff', 'guard_name' => self::GUARD]);
                 $user->assignRole($staffRole);
-                $user->syncPermissions($staffRole->permissions);
             }
         });
 
@@ -265,7 +280,7 @@ class UserController extends Controller
             'user'    => $fresh,
         ]);
     }
-
+// ─── BulkActivate ─────────────────────────────────────────────────────
     public function bulkActivate(Request $request)
     {
         $request->validate([
@@ -308,8 +323,8 @@ class UserController extends Controller
 
                 $user->refresh();
                 if ($user->roles->isEmpty()) {
+                    $staffRole = Role::firstOrCreate(['name' => 'Staff', 'guard_name' => self::GUARD]);
                     $user->assignRole($staffRole);
-                    $user->syncPermissions($staffRole->permissions);
                 }
             }
         });
@@ -345,7 +360,7 @@ class UserController extends Controller
             'count'   => $users->count(),
         ]);
     }
-
+// ─── LinkEmployee ─────────────────────────────────────────────────────
     private function linkEmployee(User $user): void
     {
         $user->refresh();

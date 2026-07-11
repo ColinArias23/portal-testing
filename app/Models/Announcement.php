@@ -11,7 +11,7 @@ class Announcement extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'title', 'description', 'priority', 'category', 'plantilla_posting_id', 'is_pinned', 'is_archived', 'created_by',
+        'title', 'description', 'priority', 'category', 'is_pinned', 'is_archived', 'created_by',
     ];
 
     protected $casts = [
@@ -19,6 +19,12 @@ class Announcement extends Model
     ];
 
     protected $appends = [];
+
+    public function plantillaPostings()
+    {
+        return $this->belongsToMany(PlantillaPosting::class, 'announcement_plantilla_posting')
+            ->withTimestamps();
+    }
 
     public function attachments()
     {
@@ -38,11 +44,6 @@ class Announcement extends Model
     public function views()
     {
         return $this->hasMany(AnnouncementView::class);
-    }
-
-    public function plantillaPosting()
-    {
-        return $this->belongsTo(PlantillaPosting::class);
     }
 
     public function creator()

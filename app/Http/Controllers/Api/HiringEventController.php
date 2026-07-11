@@ -9,6 +9,14 @@ use Illuminate\Http\Request;
 
 class HiringEventController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+
+        $this->middleware('permission:hiring.view')->only(['index']);
+        $this->middleware('permission:hiring.manage')->only(['store', 'update','destroy']);
+    }
+// ─── Format ─────────────────────────────────────────────────────
     private function format(HiringEvent $event): array
     {
         return [
@@ -30,7 +38,7 @@ class HiringEventController extends Controller
             'created_at'   => $event->created_at,
         ];
     }
-
+// ─── Index ─────────────────────────────────────────────────────
     public function index()
     {
         $events = HiringEvent::with(['interviewer', 'applicants'])
@@ -40,7 +48,7 @@ class HiringEventController extends Controller
 
         return response()->json($events);
     }
-
+// ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -79,7 +87,7 @@ class HiringEventController extends Controller
 
         return response()->json($this->format($event), 201);
     }
-
+// ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, HiringEvent $hiringEvent)
     {
         $data = $request->validate([
@@ -116,7 +124,7 @@ class HiringEventController extends Controller
 
         return response()->json($this->format($hiringEvent));
     }
-
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(Request $request, HiringEvent $hiringEvent)
     {
         $id    = $hiringEvent->id;

@@ -9,10 +9,13 @@ use Illuminate\Http\Request;
 
 class ConsultantPositionController extends Controller
 {
-    /**
-     * GET /api/consultant-positions
-     * Query params: search, per_page
-     */
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+        $this->middleware('permission:employees.view')->only(['index', 'show']);
+        $this->middleware('permission:employees.manage')->only(['store', 'update', 'destroy']);
+    }
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
         $query = ConsultantPosition::query()->orderBy('title');
@@ -25,10 +28,7 @@ class ConsultantPositionController extends Controller
 
         return response()->json($query->paginate($perPage));
     }
-
-    /**
-     * POST /api/consultant-positions
-     */
+// ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -43,18 +43,12 @@ class ConsultantPositionController extends Controller
             'data'    => $position,
         ], 201);
     }
-
-    /**
-     * GET /api/consultant-positions/{id}
-     */
+// ─── Show ─────────────────────────────────────────────────────
     public function show(ConsultantPosition $consultantPosition): JsonResponse
     {
         return response()->json(['data' => $consultantPosition]);
     }
-
-    /**
-     * PUT /api/consultant-positions/{id}
-     */
+// ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, ConsultantPosition $consultantPosition): JsonResponse
     {
         $validated = $request->validate([
@@ -69,10 +63,7 @@ class ConsultantPositionController extends Controller
             'data'    => $consultantPosition->fresh(),
         ]);
     }
-
-    /**
-     * DELETE /api/consultant-positions/{id}
-     */
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(ConsultantPosition $consultantPosition): JsonResponse
     {
         $consultantPosition->delete();

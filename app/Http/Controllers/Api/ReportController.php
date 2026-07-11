@@ -12,10 +12,11 @@ use Illuminate\Http\Request;
 
 class ReportController extends Controller
 {
-    /**
-     * List all reports — admin only.
-     * Supports filtering by ?type=, ?status=, ?category=, ?severity=
-     */
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+    }
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
         $this->authorize('viewAny', Report::class);
@@ -32,7 +33,7 @@ class ReportController extends Controller
 
         return response()->json($reports);
     }
-
+// ─── Show ─────────────────────────────────────────────────────
     public function show(Report $report): JsonResponse
     {
         $this->authorize('view', $report);
@@ -41,7 +42,7 @@ class ReportController extends Controller
 
         return response()->json(['data' => $report]);
     }
-
+// ─── Store ─────────────────────────────────────────────────────
     public function store(StoreReportRequest $request): JsonResponse
     {
         $report = Report::create([
@@ -65,7 +66,7 @@ class ReportController extends Controller
             ],
         ], 201);
     }
-
+// ─── Update ─────────────────────────────────────────────────────
     public function update(UpdateReportRequest $request, Report $report): JsonResponse
     {
         $this->authorize('update', $report);
@@ -77,7 +78,7 @@ class ReportController extends Controller
             'data'    => $report->fresh(),
         ]);
     }
-
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(Report $report): JsonResponse
     {
         $this->authorize('delete', $report);

@@ -9,9 +9,14 @@ use Illuminate\Http\Request;
 
 class SkillAssessmentController extends Controller
 {
-    /**
-     * GET /api/skill-assessments
-     */
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+        $this->middleware('permission:trainings.view')->only(['index', 'show']);
+        $this->middleware('permission:trainings.manage')->only(['store', 'update', 'submit', 'destroy']);
+    }
+
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
         $query = SkillAssessment::with(['employee', 'department']);
@@ -26,11 +31,7 @@ class SkillAssessmentController extends Controller
 
         return response()->json($query->latestSubmitted()->paginate(50));
     }
-
-    /**
-     * POST /api/skill-assessments
-     * Creates and immediately submits the assessment in one atomic operation.
-     */
+// ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -48,7 +49,6 @@ class SkillAssessmentController extends Controller
             ], 422);
         }
 
-        // Reuse existing pending assessment instead of creating duplicates
         $assessment = SkillAssessment::where('employee_id', $employee->id)
             ->where('status', SkillAssessment::STATUS_PENDING)
             ->first();
@@ -56,7 +56,6 @@ class SkillAssessmentController extends Controller
         if ($assessment) {
             $assessment->update(['scores' => $validated['scores']]);
         } else {
-            // Block if already done
             $existing = SkillAssessment::where('employee_id', $employee->id)
                 ->where('status', SkillAssessment::STATUS_DONE)
                 ->exists();
@@ -75,7 +74,6 @@ class SkillAssessmentController extends Controller
             ]);
         }
 
-        // Immediately submit
         $assessment->calculateMetrics()->submit();
 
         return response()->json([
@@ -85,21 +83,14 @@ class SkillAssessmentController extends Controller
             'data'         => $assessment->fresh()->load(['employee', 'department']),
         ], 201);
     }
-
-    /**
-     * GET /api/skill-assessments/{id}
-     */
+// ─── Show ─────────────────────────────────────────────────────
     public function show(SkillAssessment $assessment): JsonResponse
     {
         return response()->json([
             'data' => $assessment->load(['employee', 'department']),
         ]);
     }
-
-    /**
-     * PUT /api/skill-assessments/{id}
-     * Only allowed while status is pending.
-     */
+// ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, SkillAssessment $assessment): JsonResponse
     {
         if ($assessment->isDone()) {
@@ -122,11 +113,7 @@ class SkillAssessmentController extends Controller
             'data'    => $assessment->fresh(),
         ]);
     }
-
-    /**
-     * POST /api/skill-assessments/{id}/submit
-     * Submits the assessment and locks it as done.
-     */
+// ─── Submit ─────────────────────────────────────────────────────
     public function submit(SkillAssessment $assessment): JsonResponse
     {
         if ($assessment->isDone()) {
@@ -153,11 +140,7 @@ class SkillAssessmentController extends Controller
             'data'         => $assessment->fresh()->load(['employee', 'department']),
         ]);
     }
-
-    /**
-     * DELETE /api/skill-assessments/{id}
-     * Only pending assessments can be deleted.
-     */
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(SkillAssessment $assessment): JsonResponse
     {
         if ($assessment->isDone()) {

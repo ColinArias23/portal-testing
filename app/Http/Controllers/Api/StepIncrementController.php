@@ -9,6 +9,13 @@ use Illuminate\Http\Request;
 
 class StepIncrementController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+        $this->middleware('permission:compensation.view')->only(['index', 'show']);
+        $this->middleware('permission:compensation.manage')->only(['store', 'update', 'destroy']);
+    }
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
         $query = StepIncrement::query()->with('salaryGrade');
@@ -23,7 +30,7 @@ class StepIncrementController extends Controller
                   ->get(['id', 'salary_grade_id', 'step', 'monthly_salary', 'annual_salary'])
         );
     }
-
+// ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -49,12 +56,12 @@ class StepIncrementController extends Controller
             201
         );
     }
-
+// ─── Show ─────────────────────────────────────────────────────
     public function show(StepIncrement $stepIncrement): JsonResponse
     {
         return response()->json($stepIncrement->load('salaryGrade'));
     }
-
+// ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, StepIncrement $stepIncrement): JsonResponse
     {
         $data = $request->validate([
@@ -83,7 +90,7 @@ class StepIncrementController extends Controller
 
         return response()->json($stepIncrement->fresh('salaryGrade'));
     }
-
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(StepIncrement $stepIncrement): JsonResponse
     {
         $stepIncrement->delete();

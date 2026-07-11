@@ -13,17 +13,20 @@ use Illuminate\Validation\Rule;
 
 class ContractController extends Controller
 {
-    // ── Existing: GET /hiring/contracts ──────────────────────────────────────
-
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+        $this->middleware('permission:renewals.view')->only(['index']);
+        $this->middleware('permission:renewals.manage')->only(['store', 'update', 'destroy', 'updateAutoRenewal', 'manualRenew']);
+    }
+// ─── Index ─────────────────────────────────────────────────────
     public function index(): JsonResponse
     {
         return response()->json(
             Contract::with(['applicant', 'employee'])->orderBy('created_at', 'desc')->get()
         );
     }
-
-    // ── Existing: POST /hiring/contracts ─────────────────────────────────────
-
+// ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -58,9 +61,7 @@ class ContractController extends Controller
 
         return response()->json($contract->load(['applicant', 'employee']), 201);
     }
-
-    // ── Existing: PUT /hiring/contracts/{contract} ────────────────────────────
-
+// ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, Contract $contract): JsonResponse
     {
         $data = $request->validate([
@@ -114,9 +115,7 @@ class ContractController extends Controller
 
         return response()->json($contract->fresh()->load(['applicant', 'employee']));
     }
-
-    // ── Existing: DELETE /hiring/contracts/{contract} ─────────────────────────
-
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(Request $request, Contract $contract): JsonResponse
     {
         $id    = $contract->id;
@@ -140,9 +139,7 @@ class ContractController extends Controller
 
         return response()->json(['message' => 'Contract deleted successfully.']);
     }
-
-    // ── New: PATCH /hiring/contracts/{contract}/auto-renewal ──────────────────
-
+// ─── UpdateAutoRenewal ─────────────────────────────────────────────────────
     public function updateAutoRenewal(Request $request, Contract $contract): JsonResponse
     {
         $data = $request->validate([
@@ -175,9 +172,7 @@ class ContractController extends Controller
             'data'    => $contract->fresh()->load(['applicant', 'employee']),
         ]);
     }
-
-    // ── New: POST /hiring/contracts/{contract}/manual-renew ───────────────────
-
+// ─── ManualRenew ─────────────────────────────────────────────────────
     public function manualRenew(Request $request, Contract $contract): JsonResponse
     {
         if (! $contract->auto_renewal_enabled) {
@@ -195,7 +190,6 @@ class ContractController extends Controller
             $renewal = $contract->buildRenewal();
             $renewal->save();
 
-            // ── FIX: use direct employee_id relation instead of broken applicant->employee chain ──
             $notifiable = $contract->employee;
             if ($notifiable !== null) {
                 $notifiable->notify(new ContractAutoRenewed($renewal));

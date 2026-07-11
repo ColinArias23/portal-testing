@@ -10,9 +10,13 @@ use Illuminate\Http\Request;
  
 class DevelopmentPlanController extends Controller
 {
-    /**
-     * GET /api/development-plans
-     */
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+        $this->middleware('permission:trainings.view')->only(['index', 'show', 'byEmployee']);
+        $this->middleware('permission:trainings.manage')->only(['store', 'update', 'updateProgress', 'complete', 'destroy']);
+    }
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
         $query = DevelopmentPlan::with(['employee', 'skill', 'assessment']);
@@ -29,10 +33,7 @@ class DevelopmentPlanController extends Controller
  
         return response()->json($query->latest()->paginate($perPage));
     }
- 
-    /**
-     * POST /api/development-plans
-     */
+ // ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -54,20 +55,14 @@ class DevelopmentPlanController extends Controller
             'data'    => $plan,
         ], 201);
     }
- 
-    /**
-     * GET /api/development-plans/{id}
-     */
+ // ─── Show ─────────────────────────────────────────────────────
     public function show(DevelopmentPlan $plan): JsonResponse
     {
         return response()->json([
             'data' => $plan->load(['employee', 'skill', 'assessment']),
         ]);
     }
- 
-    /**
-     * GET /api/development-plans/employee/{employeeId}
-     */
+ // ─── ByEmployee ─────────────────────────────────────────────────────
     public function byEmployee(Employee $employee): JsonResponse
     {
         $plans = DevelopmentPlan::where('employee_id', $employee->id)
@@ -79,10 +74,7 @@ class DevelopmentPlanController extends Controller
             'data' => $plans,
         ]);
     }
- 
-    /**
-     * PUT /api/development-plans/{id}
-     */
+ // ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, DevelopmentPlan $plan): JsonResponse
     {
         $validated = $request->validate([
@@ -102,10 +94,7 @@ class DevelopmentPlanController extends Controller
             'data'    => $plan->fresh(),
         ]);
     }
- 
-    /**
-     * PATCH /api/development-plans/{id}/progress
-     */
+ // ─── UpdateProgress ─────────────────────────────────────────────────────
     public function updateProgress(Request $request, DevelopmentPlan $plan): JsonResponse
     {
         $validated = $request->validate([
@@ -125,10 +114,7 @@ class DevelopmentPlanController extends Controller
             'data'    => $plan->fresh(),
         ]);
     }
- 
-    /**
-     * PATCH /api/development-plans/{id}/complete
-     */
+ // ─── Complete ─────────────────────────────────────────────────────
     public function complete(Request $request, DevelopmentPlan $plan): JsonResponse
     {
         $plan->markAsCompleted();
@@ -138,10 +124,7 @@ class DevelopmentPlanController extends Controller
             'data'    => $plan->fresh(),
         ]);
     }
- 
-    /**
-     * DELETE /api/development-plans/{id}
-     */
+ // ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(DevelopmentPlan $plan): JsonResponse
     {
         $plan->delete();

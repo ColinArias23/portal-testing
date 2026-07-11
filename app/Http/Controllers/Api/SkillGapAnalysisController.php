@@ -15,11 +15,13 @@ class SkillGapAnalysisController extends Controller
     public function __construct(SkillGapAnalysisService $analysisService)
     {
         $this->analysisService = $analysisService;
+
+        $this->middleware('auth:sanctum');
+        $this->middleware('permission:trainings.view')->only(['generate', 'departmentStats', 'employeeSummary', 'export']);
+        $this->middleware('permission:trainings.manage')->only(['createPlans']);
     }
 
-    /**
-     * GET /api/skill-gap-analysis/{assessmentId}
-     */
+// ─── Generate ─────────────────────────────────────────────────────
     public function generate(SkillAssessment $assessment): JsonResponse
     {
         $report = $this->analysisService->generateReport($assessment);
@@ -28,10 +30,7 @@ class SkillGapAnalysisController extends Controller
             'data' => $report,
         ]);
     }
-
-    /**
-     * POST /api/skill-gap-analysis/{assessmentId}/create-plans
-     */
+// ─── CreatePlans ─────────────────────────────────────────────────────
     public function createPlans(SkillAssessment $assessment): JsonResponse
     {
         $plans = $this->analysisService->createDevelopmentPlans($assessment);
@@ -41,10 +40,7 @@ class SkillGapAnalysisController extends Controller
             'data'    => $plans,
         ], 201);
     }
-
-    /**
-     * GET /api/skill-gap-analysis/department/{departmentId}/stats
-     */
+// ─── DepartmentStats ─────────────────────────────────────────────────────
     public function departmentStats($departmentId): JsonResponse
     {
         $stats = $this->analysisService->getDepartmentStats($departmentId);
@@ -53,10 +49,7 @@ class SkillGapAnalysisController extends Controller
             'data' => $stats,
         ]);
     }
-
-    /**
-     * GET /api/skill-gap-analysis/employee/{employeeId}/summary
-     */
+// ─── EmployeeSummary ─────────────────────────────────────────────────────
     public function employeeSummary(Employee $employee): JsonResponse
     {
         $latestAssessment = $employee->skillAssessments()
@@ -85,10 +78,7 @@ class SkillGapAnalysisController extends Controller
             ],
         ]);
     }
-
-    /**
-     * GET /api/skill-gap-analysis/export/{assessmentId}
-     */
+// ─── Export ─────────────────────────────────────────────────────
     public function export(SkillAssessment $assessment): JsonResponse
     {
         $report = $this->analysisService->generateReport($assessment);

@@ -13,14 +13,10 @@ class HolidayController extends Controller
 {
     private const API_URL = 'https://date.nager.at/api/v3/publicholidays';
     private const COUNTRY_CODE = 'PH';
-    private const CACHE_DURATION = 24 * 60; // 24 hours in minutes
-
-    /**
-     * Get Philippines public holidays for a specific year
-     */
+    private const CACHE_DURATION = 24 * 60; 
+// ─── GetByYear ─────────────────────────────────────────────────────
     public function getByYear(int $year): JsonResponse
     {
-        // Validate year
         if ($year < 1900 || $year > 2100) {
             return response()->json([
                 'error' => 'Invalid year. Please provide a year between 1900 and 2100.'
@@ -28,10 +24,8 @@ class HolidayController extends Controller
         }
 
         try {
-            // Cache key
             $cacheKey = "ph_holidays_{$year}";
 
-            // Try to get from cache first
             $holidays = Cache::remember($cacheKey, self::CACHE_DURATION, function () use ($year) {
                 return $this->fetchHolidaysFromApi($year);
             });
@@ -49,18 +43,12 @@ class HolidayController extends Controller
             ], 500);
         }
     }
-
-    /**
-     * Get current year holidays
-     */
+// ─── Current ─────────────────────────────────────────────────────
     public function current(): JsonResponse
     {
         return $this->getByYear(now()->year);
     }
-
-    /**
-     * Get holidays for multiple years
-     */
+// ─── GetRange ─────────────────────────────────────────────────────
     public function getRange(int $startYear, int $endYear): JsonResponse
     {
         if ($startYear > $endYear) {
@@ -98,10 +86,7 @@ class HolidayController extends Controller
             ], 500);
         }
     }
-
-    /**
-     * Check if a specific date is a holiday
-     */
+// ─── CheckData ─────────────────────────────────────────────────────
     public function checkDate(Request $request): JsonResponse
     {
         $date = $request->query('date');
@@ -136,10 +121,7 @@ class HolidayController extends Controller
             ], 400);
         }
     }
-
-    /**
-     * Get next upcoming holiday
-     */
+// ─── Next ─────────────────────────────────────────────────────
     public function next(): JsonResponse
     {
         try {
@@ -155,7 +137,6 @@ class HolidayController extends Controller
                 ->filter(fn($holiday) => $holiday['date'] >= $today)
                 ->first();
 
-            // Check next year if none found
             if (!$nextHoliday && $year < 2100) {
                 $nextCacheKey = "ph_holidays_" . ($year + 1);
                 $nextYearHolidays = Cache::remember($nextCacheKey, self::CACHE_DURATION, function () use ($year) {
@@ -175,10 +156,7 @@ class HolidayController extends Controller
             ], 500);
         }
     }
-
-    /**
-     * Search holidays by name
-     */
+// ─── Search ─────────────────────────────────────────────────────
     public function search(Request $request): JsonResponse
     {
         $query = $request->query('q');
@@ -217,10 +195,7 @@ class HolidayController extends Controller
             ], 500);
         }
     }
-
-    /**
-     * Clear cache for a specific year or all years
-     */
+// ─── ClearCache ─────────────────────────────────────────────────────
     public function clearCache(?int $year = null): JsonResponse
     {
         if ($year) {
@@ -231,7 +206,6 @@ class HolidayController extends Controller
             ]);
         }
 
-        // Clear all
         for ($y = 1900; $y <= 2100; $y++) {
             Cache::forget("ph_holidays_{$y}");
         }
@@ -241,10 +215,7 @@ class HolidayController extends Controller
             'message' => 'All holiday caches cleared'
         ]);
     }
-
-    /**
-     * Fetch holidays from the API (private method)
-     */
+// ─── FetchHolidaysFromApi ─────────────────────────────────────────────────────
     private function fetchHolidaysFromApi(int $year): array
     {
         $response = Http::timeout(10)

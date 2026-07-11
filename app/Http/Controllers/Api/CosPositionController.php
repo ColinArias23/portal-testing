@@ -9,10 +9,13 @@ use Illuminate\Http\Request;
 
 class CosPositionController extends Controller
 {
-    /**
-     * GET /api/cos-positions
-     * Query params: search, per_page
-     */
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+        $this->middleware('permission:employees.view')->only(['index', 'show']);
+        $this->middleware('permission:employees.manage')->only(['store', 'update', 'destroy']);
+    }
+    // ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
         $query = CosPosition::query()->orderBy('title');
@@ -25,10 +28,7 @@ class CosPositionController extends Controller
 
         return response()->json($query->paginate($perPage));
     }
-
-    /**
-     * POST /api/cos-positions
-     */
+// ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -43,18 +43,12 @@ class CosPositionController extends Controller
             'data'    => $position,
         ], 201);
     }
-
-    /**
-     * GET /api/cos-positions/{id}
-     */
+// ─── Show ─────────────────────────────────────────────────────
     public function show(CosPosition $cosPosition): JsonResponse
     {
         return response()->json(['data' => $cosPosition]);
     }
-
-    /**
-     * PUT /api/cos-positions/{id}
-     */
+// ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, CosPosition $cosPosition): JsonResponse
     {
         $validated = $request->validate([
@@ -69,10 +63,7 @@ class CosPositionController extends Controller
             'data'    => $cosPosition->fresh(),
         ]);
     }
-
-    /**
-     * DELETE /api/cos-positions/{id}
-     */
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(CosPosition $cosPosition): JsonResponse
     {
         $cosPosition->delete();

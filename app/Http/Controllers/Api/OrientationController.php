@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 
 class OrientationController extends Controller
 {
+// ─── Complete ─────────────────────────────────────────────────────
     public function complete(Request $request): JsonResponse
     {
         $request->user()->update([

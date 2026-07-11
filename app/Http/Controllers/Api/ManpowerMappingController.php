@@ -16,11 +16,8 @@ class ManpowerMappingController extends Controller
 {
     use ResolvesAvatarUrl;
 
-    private const HEAD_ROLES = [
-        'CHIEF', 'DIRECTOR', 'ASSISTANT DIRECTOR', 'OFFICER IN CHARGE',
-        'CHAIRMAN', 'HEAD', 'SUPERVISOR',
-    ];
-
+    private const HEAD_ROLES = ['CHIEF', 'DIRECTOR', 'ASSISTANT DIRECTOR', 'OFFICER IN CHARGE', 'CHAIRMAN', 'HEAD', 'SUPERVISOR',];
+// ─── Department ─────────────────────────────────────────────────────
     public function departments(Request $request): JsonResponse
     {
         $divisionId = $request->filled('division_id')
@@ -47,7 +44,7 @@ class ManpowerMappingController extends Controller
             $divisions->map(fn($div) => $this->formatDivision($div))->values()
         );
     }
-
+// ─── DepartmentDetail ─────────────────────────────────────────────────────
     public function departmentDetail($departmentId): JsonResponse
     {
         $dept = Department::with([
@@ -76,7 +73,7 @@ class ManpowerMappingController extends Controller
             'vacant_positions' => $this->formatVacantPositions($positions),
         ]);
     }
-
+// ─── Summary ─────────────────────────────────────────────────────
     public function summary(): JsonResponse
     {
         $divisions = Division::with([
@@ -102,7 +99,7 @@ class ManpowerMappingController extends Controller
             ]),
         ]);
     }
-
+// ─── PlantillaCount ─────────────────────────────────────────────────────
     public function plantillaCount(): JsonResponse
     {
         $count = Employee::where('employment_type', 'Plantilla')
@@ -111,7 +108,7 @@ class ManpowerMappingController extends Controller
 
         return response()->json(['count' => $count]);
     }
-
+// ─── CosCount ─────────────────────────────────────────────────────
     public function cosCount(): JsonResponse
     {
         $count = Employee::where('employment_type', 'Contract of Service')
@@ -120,7 +117,7 @@ class ManpowerMappingController extends Controller
 
         return response()->json(['count' => $count]);
     }
-
+// ─── ConsultCount ─────────────────────────────────────────────────────
     public function consultantCount(): JsonResponse
     {
         $count = Employee::where('employment_type', 'Consultant')
@@ -129,14 +126,14 @@ class ManpowerMappingController extends Controller
 
         return response()->json(['count' => $count]);
     }
-
+// ─── VacantCount ─────────────────────────────────────────────────────
     public function vacantCount(): JsonResponse
     {
         $count = PlantillaPosition::where('status', 'VACANT')->count();
 
         return response()->json(['count' => $count]);
     }
-
+// ─── Tree ─────────────────────────────────────────────────────
     public function tree(Request $request): JsonResponse
     {
         $departmentId = $request->filled('department_id') && $request->department_id !== 'All'
@@ -221,7 +218,6 @@ class ManpowerMappingController extends Controller
                 return response()->json(['nodes' => []]);
             }
 
-            // FIX: $departmentsByParent was already passed correctly here — verified OK.
             $node = $this->formatDepartmentNode($dept, $departmentsByParent, $employeesByDept, $vacantByDept);
 
             $division = $dept->division_id
@@ -246,13 +242,11 @@ class ManpowerMappingController extends Controller
                 return response()->json(['nodes' => []]);
             }
 
-            // FIX: Pass $departmentsByParent so child departments of sub-departments
-            // are resolved correctly when filtering by a single division.
             $node = $this->formatDivisionNode(
                 $division, $allDivisions,
                 $departmentsByDivision, $departmentsByParentDivision,
                 $employeesByDept, $vacantByDept, $vacantByDivision,
-                $departmentsByParent  // was missing — caused empty children on sub-departments
+                $departmentsByParent 
             );
 
             $current = $division;
@@ -260,7 +254,6 @@ class ManpowerMappingController extends Controller
                 $parent = $allDivisions->firstWhere('id', $current->parent_id);
                 if (!$parent) break;
 
-                // FIX: Also pass $departmentsByParent when wrapping ancestor nodes.
                 $parentNode             = $this->formatDivisionNode(
                     $parent, collect(), [], [], $employeesByDept, $vacantByDept, $vacantByDivision, $departmentsByParent
                 );
@@ -295,7 +288,7 @@ class ManpowerMappingController extends Controller
 
         return response()->json(['nodes' => array_merge($divisionNodes, $orphanNodes)]);
     }
-
+// ─── CollectDescendantIds ─────────────────────────────────────────────────────
     private function collectDescendantIds($allDepartments, int $parentId): array
     {
         $ids = [];
@@ -305,7 +298,7 @@ class ManpowerMappingController extends Controller
         }
         return $ids;
     }
-
+// ─── FormatDepartmentNode ─────────────────────────────────────────────────────
     private function formatDepartmentNode($dept, array $departmentsByParent = [], array $employeesByDept = [], array $vacantByDept = []): array
     {
         $assignedEmployees = collect($employeesByDept[$dept->id] ?? []);
@@ -447,7 +440,7 @@ class ManpowerMappingController extends Controller
             'children' => array_merge($children, $vacantChildren),
         ];
     }
-
+// ─── FormatDivisionNode ─────────────────────────────────────────────────────
     private function formatDivisionNode(
         $division,
         $allDivisions,
@@ -593,7 +586,7 @@ class ManpowerMappingController extends Controller
             'children' => array_merge($childDivisionNodes, $departmentNodes, $vacantChildren),
         ];
     }
-
+// ─── Report ─────────────────────────────────────────────────────
     public function report(Request $request): JsonResponse
     {
         $divisionId   = $request->filled('division_id') ? $request->division_id : null;
@@ -643,7 +636,7 @@ class ManpowerMappingController extends Controller
             'report' => $report,
         ]);
     }
-
+// ─── OverStaffed ─────────────────────────────────────────────────────
     public function overstaffed(): JsonResponse
     {
         $departments = Department::with([
@@ -653,8 +646,6 @@ class ManpowerMappingController extends Controller
             }
         ])->get();
 
-        // FIX: Cache the plantilla count per department to avoid running the
-        // same query 3x per department inside filter + map.
         $overstaffed = $departments
             ->filter(function ($dept) {
                 $plantillaCount = PlantillaPosition::whereHas('item', fn($q) =>
@@ -664,7 +655,6 @@ class ManpowerMappingController extends Controller
                     ->where('status', 'FILLED')
                     ->count();
 
-                // Stash on the model so map() can reuse without re-querying.
                 $dept->_plantilla_count = $plantillaCount;
 
                 return $dept->assignedEmployees->count() > $plantillaCount;
@@ -680,7 +670,7 @@ class ManpowerMappingController extends Controller
 
         return response()->json(['data' => $overstaffed]);
     }
-
+// ─── DivisionAnalytics ─────────────────────────────────────────────────────
     public function divisionAnalytics(): JsonResponse
     {
         $divisions = Division::with(['departments' => function ($q) {
@@ -726,7 +716,7 @@ class ManpowerMappingController extends Controller
 
         return response()->json(['data' => $analytics]);
     }
-
+// ─── FormatDivision ─────────────────────────────────────────────────────
     private function formatDivision($division)
     {
         return [
@@ -737,7 +727,7 @@ class ManpowerMappingController extends Controller
                 ->values(),
         ];
     }
-
+// ─── FormatDepartment ─────────────────────────────────────────────────────
     private function formatDepartment($dept, $positions = null)
     {
         if ($positions === null) {
@@ -788,7 +778,7 @@ class ManpowerMappingController extends Controller
             'total_headcount' => count($leadership) + count($staff),
         ];
     }
-
+// ─── FormatEmplyee ─────────────────────────────────────────────────────
     private function formatEmployee($emp, $assignment = null)
     {
         return [
@@ -806,7 +796,7 @@ class ManpowerMappingController extends Controller
             'is_primary_head'   => $assignment?->is_primary ?? false,
         ];
     }
-
+// ─── FormatVacantPositions ─────────────────────────────────────────────────────
     private function formatVacantPositions($positions)
     {
         return $positions
@@ -821,7 +811,7 @@ class ManpowerMappingController extends Controller
             ->values()
             ->toArray();
     }
-
+// ─── FormatNodeTree ─────────────────────────────────────────────────────
     private function formatNodeTree($employee): array
     {
         return [
@@ -870,7 +860,7 @@ class ManpowerMappingController extends Controller
             'children' => $employee->children->map(fn($child) => $this->formatNodeTree($child))->toArray(),
         ];
     }
-
+// ─── GetEmployeeSection ─────────────────────────────────────────────────────
     private function getEmployeeSection($rolePosition): string
     {
         $roles = is_array($rolePosition)
@@ -892,7 +882,7 @@ class ManpowerMappingController extends Controller
 
         return 'staff';
     }
-
+// ─── GerPrimaryRole ─────────────────────────────────────────────────────
     private function getPrimaryRole($rolePosition): string
     {
         $roles = is_array($rolePosition)
@@ -917,7 +907,7 @@ class ManpowerMappingController extends Controller
 
         return $roles_upper[0] ?? 'STAFF';
     }
-
+// ─── GetRoleOrder ─────────────────────────────────────────────────────
     private function getRoleOrder(string $role): int
     {
         $orders = [
@@ -932,7 +922,7 @@ class ManpowerMappingController extends Controller
 
         return $orders[strtoupper($role)] ?? 99;
     }
-
+// ─── BuildFullName ─────────────────────────────────────────────────────
     private function buildFullName($employee): string
     {
         if (!$employee) return 'Unknown';

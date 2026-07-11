@@ -10,13 +10,20 @@ use Illuminate\Http\Request;
 
 class DivisionController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+        $this->middleware('permission:departments.view')->only(['index', 'show']);
+        $this->middleware('permission:departments.manage')->only(['store', 'update', 'destroy']);
+    }
+// ─── Index ─────────────────────────────────────────────────────
     public function index()
     {
         return Division::with(['departments', 'head', 'parent', 'children'])
             ->orderBy('name')
             ->get();
     }
-
+// ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -30,12 +37,12 @@ class DivisionController extends Controller
 
         return Division::create($data)->load(['departments', 'head', 'parent', 'children']);
     }
-
+// ─── Show ─────────────────────────────────────────────────────
     public function show(Division $division)
     {
         return $division->load(['departments', 'head', 'parent', 'children']);
     }
-
+// ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, Division $division)
     {
         $data = $request->validate([
@@ -59,7 +66,7 @@ class DivisionController extends Controller
 
         return $division->fresh(['departments', 'head', 'parent', 'children']);
     }
-
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(Division $division)
     {
         Division::where('parent_id', $division->id)

@@ -38,6 +38,7 @@ use App\Http\Controllers\Api\ConsultantPositionController;
 use App\Http\Controllers\Api\HolidayController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\ReleaseController;
+use App\Http\Controllers\Api\DocumentCommentController;
 
 // ─── Public Routes ─────────────────────────────────────────────────────
 Route::post('/login',          [AuthController::class, 'login'])
@@ -185,7 +186,13 @@ Route::prefix('announcement-attachments')->middleware('throttle:announcements')-
     // Cross-posting application management (list-all was previously missing)
     Route::get('/plantilla-posting-applications', [PlantillaPostingController::class, 'allApplications']);
     Route::patch('/plantilla-posting-applications/{application}/review', [PlantillaPostingController::class, 'reviewApplication']);
+    Route::post('/plantilla-posting-applications/{application}/documents', [PlantillaPostingController::class, 'uploadDocuments']);
     Route::get('/plantilla-posting-applications/documents/{document}/download', [PlantillaPostingController::class, 'downloadDocument']);
+    // Document review comments (general notes, no positioning — works for any file type)
+    Route::get('/plantilla-posting-applications/documents/{document}/comments', [DocumentCommentController::class, 'index']);
+    Route::post('/plantilla-posting-applications/documents/{document}/comments', [DocumentCommentController::class, 'store']);
+    Route::patch('/plantilla-posting-applications/comments/{comment}', [DocumentCommentController::class, 'update']);
+    Route::delete('/plantilla-posting-applications/comments/{comment}', [DocumentCommentController::class, 'destroy']);
 // ─── Plantilla Application Interviews (internal applicant interview stage — separate from external Hiring pipeline) ─────────────────────────────────────────────────────
     Route::prefix('plantilla-applications')->group(function () {
         Route::get('/interviews',              [PlantillaApplicationInterviewController::class, 'index']);

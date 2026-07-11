@@ -12,10 +12,13 @@ use Illuminate\Http\Request;
 
 class EmployeeAssignmentController extends Controller
 {
-    public function __construct(private PlantillaService $service) {}
-
-    // ─── Index (history for one employee) ─────────────────────────────────
-
+    public function __construct(private PlantillaService $service)
+    {
+        $this->middleware('auth:sanctum');
+        $this->middleware('permission:employees.view')->only(['index']);
+        $this->middleware('permission:employees.manage')->only(['store', 'end', 'destroy']);
+    }
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Employee $employee): JsonResponse
     {
         $assignments = EmployeeAssignment::with([
@@ -30,9 +33,7 @@ class EmployeeAssignmentController extends Controller
 
         return response()->json($assignments);
     }
-
-    // ─── Store (assign employee to a VACANT slot) ──────────────────────────
-
+// ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -67,9 +68,7 @@ class EmployeeAssignmentController extends Controller
             201
         );
     }
-
-    // ─── End (vacate — FILLED → UNFILLED, requires city approval) ─────────
-
+// ─── End ─────────────────────────────────────────────────────
     public function end(Request $request, EmployeeAssignment $assignment): JsonResponse
     {
         $data = $request->validate([
@@ -89,9 +88,7 @@ class EmployeeAssignmentController extends Controller
 
         return response()->json(['message' => 'Assignment closed. Position is now UNFILLED and awaiting approval.']);
     }
-
-    // ─── Destroy (hard delete — only allowed on inactive assignments) ──────
-
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(EmployeeAssignment $assignment): JsonResponse
     {
         if ($assignment->isActive()) {
@@ -104,9 +101,7 @@ class EmployeeAssignmentController extends Controller
 
         return response()->json(['message' => 'Assignment deleted.']);
     }
-
-    // ─── Format ───────────────────────────────────────────────────────────
-
+// ─── Format ─────────────────────────────────────────────────────
     private function format(EmployeeAssignment $a): array
     {
         $position = $a->plantillaPosition;

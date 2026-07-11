@@ -48,7 +48,7 @@ class Notification extends Model
 
     public function scopeVisibleTo($query, User $user)
     {
-        $isAdmin = $user->hasAnyRole(['SuperAdmin', 'HR', 'Head']);
+        $isAdmin = $user->hasAnyRole(['SuperAdmin', 'HR', 'Admin']);
 
         return $query->where(function ($q) use ($user, $isAdmin) {
             $q->where('visibility', 'all');
@@ -66,15 +66,17 @@ class Notification extends Model
 
     public function scopeRelevantTo($query, $user)
     {
-        return $query->visibleTo($user)->where(function ($q) use ($user) {
-            $q->where('type', '!=', 'training')
-            ->orWhere(function ($q2) use ($user) {
-                $q2->where('type', 'training')
-                    ->where(function ($q3) use ($user) {
-                        $q3->whereNull('data->posted_by_user_id')
-                            ->orWhere('data->posted_by_user_id', '!=', $user->id);
-                    });
-            });
+        $selfExcludedTypes = ['training', 'announcement'];
+
+        return $query->visibleTo($user)->where(function ($q) use ($user, $selfExcludedTypes) {
+            $q->whereNotIn('type', $selfExcludedTypes)
+                ->orWhere(function ($q2) use ($user, $selfExcludedTypes) {
+                    $q2->whereIn('type', $selfExcludedTypes)
+                        ->where(function ($q3) use ($user) {
+                            $q3->whereNull('data->posted_by_user_id')
+                                ->orWhere('data->posted_by_user_id', '!=', $user->id);
+                        });
+                });
         });
     }
 }

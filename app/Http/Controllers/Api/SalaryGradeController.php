@@ -9,6 +9,13 @@ use Illuminate\Http\Request;
 
 class SalaryGradeController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+        $this->middleware('permission:compensation.view')->only(['index', 'show']);
+        $this->middleware('permission:compensation.manage')->only(['store', 'update', 'destroy']);
+    }
+// ─── Index ─────────────────────────────────────────────────────
     public function index(): JsonResponse
     {
         return response()->json(
@@ -16,7 +23,7 @@ class SalaryGradeController extends Controller
                 ->get(['id', 'salary_grade', 'monthly_salary', 'annual_salary'])
         );
     }
-
+// ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -27,12 +34,12 @@ class SalaryGradeController extends Controller
 
         return response()->json(SalaryGrade::create($data), 201);
     }
-
+// ─── Show ─────────────────────────────────────────────────────
     public function show(SalaryGrade $salaryGrade): JsonResponse
     {
         return response()->json($salaryGrade->load('stepIncrements'));
     }
-
+// ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, SalaryGrade $salaryGrade): JsonResponse
     {
         $data = $request->validate([
@@ -45,7 +52,7 @@ class SalaryGradeController extends Controller
 
         return response()->json($salaryGrade->fresh());
     }
-
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(SalaryGrade $salaryGrade): JsonResponse
     {
         if ($salaryGrade->plantillaItems()->exists()) {

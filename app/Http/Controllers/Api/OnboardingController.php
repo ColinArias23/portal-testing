@@ -22,6 +22,13 @@ class OnboardingController extends Controller
         'Complete mandatory trainings',
     ];
 
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+        $this->middleware('permission:hiring.nonplantilla.onboarding.view')->only(['index', 'show', 'summary']);
+        $this->middleware('permission:hiring.nonplantilla.onboarding.manage')->only(['store', 'update', 'destroy', 'toggleTask', 'addTask', 'updateTask', 'deleteTask']);
+    }
+// ─── Format ─────────────────────────────────────────────────────
     private function format(Onboarding $onboarding): array
     {
         $tasks     = $onboarding->tasks;
@@ -50,12 +57,12 @@ class OnboardingController extends Controller
             'created_at'   => $onboarding->created_at,
         ];
     }
-
+// ─── Broadcast ─────────────────────────────────────────────────────
     private function broadcast(Onboarding $onboarding): void
     {
         broadcast(new OnboardingUpdated($this->format($onboarding)))->toOthers();
     }
-
+// ─── Summary ─────────────────────────────────────────────────────
     public function summary()
     {
         return response()->json([
@@ -65,7 +72,7 @@ class OnboardingController extends Controller
             'pending_tasks' => OnboardingTask::where('completed', false)->count(),
         ]);
     }
-
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request)
     {
         $query = Onboarding::with(['tasks', 'employee', 'applicant'])
@@ -96,7 +103,7 @@ class OnboardingController extends Controller
             ],
         ]);
     }
-
+// ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -152,18 +159,17 @@ class OnboardingController extends Controller
             userAgent: $request->userAgent(),
         );
 
-        // Broadcast to others that a new onboarding was created
         broadcast(new OnboardingUpdated($this->format($onboarding)))->toOthers();
 
         return response()->json($this->format($onboarding), 201);
     }
-
+// ─── Show ─────────────────────────────────────────────────────
     public function show(Onboarding $onboarding)
     {
         $onboarding->load(['tasks', 'employee', 'applicant']);
         return response()->json($this->format($onboarding));
     }
-
+// ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, Onboarding $onboarding)
     {
         $data = $request->validate([
@@ -209,7 +215,7 @@ class OnboardingController extends Controller
 
         return response()->json($this->format($onboarding));
     }
-
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(Request $request, Onboarding $onboarding)
     {
         $id        = $onboarding->id;
@@ -233,12 +239,11 @@ class OnboardingController extends Controller
             userAgent: $request->userAgent(),
         );
 
-        // Broadcast deleted event — frontend will remove it by id
         broadcast(new \App\Events\OnboardingDeleted($id))->toOthers();
 
         return response()->json(['message' => 'Onboarding record deleted.']);
     }
-
+// ─── ToggleTask ─────────────────────────────────────────────────────
     public function toggleTask(Request $request, Onboarding $onboarding, OnboardingTask $task)
     {
         $wasCompleted = $task->completed;
@@ -287,7 +292,7 @@ class OnboardingController extends Controller
 
         return response()->json($this->format($onboarding));
     }
-
+// ─── AddTask ─────────────────────────────────────────────────────
     public function addTask(Request $request, Onboarding $onboarding)
     {
         $data = $request->validate([
@@ -324,7 +329,7 @@ class OnboardingController extends Controller
 
         return response()->json($this->format($onboarding));
     }
-
+// ─── UpdateTask ─────────────────────────────────────────────────────
     public function updateTask(Request $request, Onboarding $onboarding, OnboardingTask $task)
     {
         $data = $request->validate([
@@ -355,7 +360,7 @@ class OnboardingController extends Controller
 
         return response()->json($this->format($onboarding));
     }
-
+// ─── DeleteTask ─────────────────────────────────────────────────────
     public function deleteTask(Request $request, Onboarding $onboarding, OnboardingTask $task)
     {
         $taskId    = $task->id;

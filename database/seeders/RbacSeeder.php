@@ -17,23 +17,35 @@ class RbacSeeder extends Seeder
         // Dashboard
         'dashboard.view',
 
-        // Recruitment, Selection & Placement
+        // Recruitment, Selection & Placement — Hiring (general/calendar)
         'hiring.view',
         'hiring.manage',
-        'hiring.plantilla.applicants.view',
-        'hiring.plantilla.applicants.manage',
+
+        // Recruitment — Plantilla (PSB) postings
+        'hiring.plantilla.postings.view',
+        'hiring.plantilla.postings.manage',
+
+        // Recruitment — Plantilla (PSB) applications/interviews
         'hiring.plantilla.applications.view',
         'hiring.plantilla.applications.manage',
+
+        // Recruitment — Plantilla (PSB) onboarding
         'hiring.plantilla.onboarding.view',
         'hiring.plantilla.onboarding.manage',
-        'hiring.plantilla.positions.view',
-        'hiring.plantilla.positions.manage',
+
+        // Recruitment — Non-Plantilla (external) applicants
         'hiring.nonplantilla.applicants.view',
         'hiring.nonplantilla.applicants.manage',
+
+        // Recruitment — Non-Plantilla applications
         'hiring.nonplantilla.applications.view',
         'hiring.nonplantilla.applications.manage',
+
+        // Recruitment — Non-Plantilla onboarding
         'hiring.nonplantilla.onboarding.view',
         'hiring.nonplantilla.onboarding.manage',
+
+        // Leave
         'leave.dashboard.view',
         'leave.approval.view',
         'leave.approval.manage',
@@ -41,10 +53,16 @@ class RbacSeeder extends Seeder
         'leave.calendar.view',
         'leave.request.view',
         'leave.request.manage',
+
+        // Employees
         'employees.view',
         'employees.manage',
+
+        // Renewals
         'renewals.view',
         'renewals.manage',
+
+        // Team / Orientation
         'team.view',
         'orientation.view',
 
@@ -62,8 +80,9 @@ class RbacSeeder extends Seeder
 
         // Compensation & Benefits
         'compensation.view',
+        'compensation.manage',
 
-        // System Management
+        // System Management — accounts, departments, plantilla items
         'accounts.view',
         'accounts.manage',
         'departments.view',
@@ -81,6 +100,7 @@ class RbacSeeder extends Seeder
         // Announcements
         'announcements.view',
         'announcements.manage',
+        'announcements.manage.all',
 
         // Manpower Mapping
         'manpower.view',
@@ -89,12 +109,16 @@ class RbacSeeder extends Seeder
         // Task Monitoring
         'task_monitoring.view',
 
-        // Users
+        // Users (RBAC administration)
         'users.view',
         'users.manage',
+        'users.manage.roles',
 
         // Notifications
         'notifications.view',
+
+        // Audit Logs
+        'audit_logs.view',
     ];
 
     public function run(): void
@@ -105,7 +129,7 @@ class RbacSeeder extends Seeder
         $this->reportStalePermissions();
 
         $roles = $this->createRoles();
-        $this->assignRolePermissions($roles);
+        $this->stripRolePermissions($roles);
         $this->assignUsersToRoles();
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
@@ -140,241 +164,33 @@ class RbacSeeder extends Seeder
     private function createRoles(): array
     {
         return [
-            'SuperAdmin' => Role::firstOrCreate(['name' => 'SuperAdmin', 'guard_name' => self::GUARD]),
-            'Admin'      => Role::firstOrCreate(['name' => 'Admin',      'guard_name' => self::GUARD]),
-            'Chairman'   => Role::firstOrCreate(['name' => 'Chairman',   'guard_name' => self::GUARD]),
-            'Director'   => Role::firstOrCreate(['name' => 'Director',   'guard_name' => self::GUARD]),
-            'HR'         => Role::firstOrCreate(['name' => 'HR',         'guard_name' => self::GUARD]),
-            'Head'       => Role::firstOrCreate(['name' => 'Head',       'guard_name' => self::GUARD]),
-            'OIC'        => Role::firstOrCreate(['name' => 'Officer In Charge', 'guard_name' => self::GUARD]),
-            'Supervisor' => Role::firstOrCreate(['name' => 'Supervisor', 'guard_name' => self::GUARD]),
-            'Staff'      => Role::firstOrCreate(['name' => 'Staff',      'guard_name' => self::GUARD]),
+            'SuperAdmin' => Role::firstOrCreate(['name' => 'SuperAdmin',           'guard_name' => self::GUARD]),
+            'Admin'      => Role::firstOrCreate(['name' => 'Admin',                'guard_name' => self::GUARD]),
+            'Chairman'   => Role::firstOrCreate(['name' => 'Chairman',             'guard_name' => self::GUARD]),
+            'Director'   => Role::firstOrCreate(['name' => 'Director',             'guard_name' => self::GUARD]),
+            'HR'         => Role::firstOrCreate(['name' => 'HR',                   'guard_name' => self::GUARD]),
+            'Head'       => Role::firstOrCreate(['name' => 'Head',                 'guard_name' => self::GUARD]),
+            'OIC'        => Role::firstOrCreate(['name' => 'Officer In Charge',    'guard_name' => self::GUARD]),
+            'Supervisor' => Role::firstOrCreate(['name' => 'Supervisor',           'guard_name' => self::GUARD]),
+            'Staff'      => Role::firstOrCreate(['name' => 'Staff',                'guard_name' => self::GUARD]),
         ];
     }
 
-    private function assignRolePermissions(array $roles): void
+    private function stripRolePermissions(array $roles): void
     {
-        $allPermissions = Permission::where('guard_name', self::GUARD)->get();
-
-        // ─── Full-access tier ────────────────────────────────────────────
-        // SuperAdmin, Admin, and HR are the only roles permitted to manage
-        // (create/update/delete/pin/archive) announcements, per explicit
-        // business decision. They retain full system access otherwise.
-        $roles['SuperAdmin']->syncPermissions($allPermissions);
-        $roles['Admin']->syncPermissions($allPermissions);
-        $roles['HR']->syncPermissions($allPermissions);
-
-        // ─── Oversight tier (Chairman / Director / Head / OIC) ──────────
-        // These roles can VIEW announcements (and react/comment/reply,
-        // which require no separate permission — gated only by
-        // auth:sanctum), but CANNOT create/update/delete/pin/archive.
-        $roles['Chairman']->syncPermissions([
+        $defaultPermissions = [
             'dashboard.view',
-            'hiring.view',
-            'hiring.plantilla.applicants.view',
-            'hiring.plantilla.applications.view',
-            'hiring.plantilla.onboarding.view',
-            'hiring.plantilla.positions.view',
-            'hiring.nonplantilla.applicants.view',
-            'hiring.nonplantilla.applications.view',
-            'hiring.nonplantilla.onboarding.view',
-            'leave.dashboard.view',
-            'leave.approval.view',
-            'leave.approval.manage',
-            'leave.balance.view',
-            'leave.calendar.view',
-            'leave.request.view',
-            'employees.view',
-            'renewals.view',
-            'team.view',
-            'orientation.view',
-            'trainings.view',
-            'trainings.join',
-            'trainings.skill_gap',
-            'trainings.effectiveness',
-            'trainings.coaching',
-            'spms.view',
-            'spms.manage',
-            'compensation.view',
-            'accounts.view',
-            'departments.view',
-            'plantilla_items.view',
-            'positions.view',
-            'rewards.view',
-            'analytics.view',
-            'announcements.view', // manage removed — Chairman is read-only on announcements
-            'manpower.view',
-            'manpower.manage',
-            'task_monitoring.view',
-            'notifications.view',
-        ]);
+            'announcements.view',
+        ];
 
-        $roles['Director']->syncPermissions([
-            'dashboard.view',
-            'hiring.view',
-            'hiring.plantilla.applicants.view',
-            'hiring.plantilla.applications.view',
-            'hiring.plantilla.onboarding.view',
-            'hiring.plantilla.positions.view',
-            'hiring.nonplantilla.applicants.view',
-            'hiring.nonplantilla.applications.view',
-            'hiring.nonplantilla.onboarding.view',
-            'leave.dashboard.view',
-            'leave.approval.view',
-            'leave.approval.manage',
-            'leave.balance.view',
-            'leave.calendar.view',
-            'leave.request.view',
-            'employees.view',
-            'renewals.view',
-            'team.view',
-            'orientation.view',
-            'trainings.view',
-            'trainings.join',
-            'trainings.skill_gap',
-            'trainings.effectiveness',
-            'trainings.coaching',
-            'spms.view',
-            'spms.manage',
-            'compensation.view',
-            'accounts.view',
-            'departments.view',
-            'plantilla_items.view',
-            'positions.view',
-            'rewards.view',
-            'analytics.view',
-            'announcements.view', // manage removed — Director is read-only on announcements
-            'manpower.view',
-            'manpower.manage',
-            'task_monitoring.view',
-            'notifications.view',
-        ]);
-
-        $roles['Head']->syncPermissions([
-            'dashboard.view',
-            'hiring.view',
-            'hiring.plantilla.applicants.view',
-            'hiring.plantilla.applications.view',
-            'hiring.plantilla.onboarding.view',
-            'hiring.plantilla.positions.view',
-            'hiring.nonplantilla.applicants.view',
-            'hiring.nonplantilla.applications.view',
-            'hiring.nonplantilla.onboarding.view',
-            'leave.dashboard.view',
-            'leave.approval.view',
-            'leave.approval.manage',
-            'leave.balance.view',
-            'leave.calendar.view',
-            'leave.request.view',
-            'employees.view',
-            'renewals.view',
-            'team.view',
-            'orientation.view',
-            'trainings.view',
-            'trainings.join',
-            'trainings.skill_gap',
-            'trainings.effectiveness',
-            'trainings.coaching',
-            'spms.view',
-            'spms.manage',
-            'compensation.view',
-            'accounts.view',
-            'departments.view',
-            'plantilla_items.view',
-            'positions.view',
-            'rewards.view',
-            'analytics.view',
-            'announcements.view', // manage removed — Head is read-only on announcements
-            'manpower.view',
-            'task_monitoring.view',
-            'notifications.view',
-        ]);
-
-        // OIC (Officer In Charge) — acting-head level, same scope as Head
-        $roles['OIC']->syncPermissions([
-            'dashboard.view',
-            'hiring.view',
-            'hiring.plantilla.applicants.view',
-            'hiring.plantilla.applications.view',
-            'hiring.plantilla.onboarding.view',
-            'hiring.plantilla.positions.view',
-            'hiring.nonplantilla.applicants.view',
-            'hiring.nonplantilla.applications.view',
-            'hiring.nonplantilla.onboarding.view',
-            'leave.dashboard.view',
-            'leave.approval.view',
-            'leave.approval.manage',
-            'leave.balance.view',
-            'leave.calendar.view',
-            'leave.request.view',
-            'employees.view',
-            'renewals.view',
-            'team.view',
-            'orientation.view',
-            'trainings.view',
-            'trainings.join',
-            'trainings.skill_gap',
-            'trainings.effectiveness',
-            'trainings.coaching',
-            'spms.view',
-            'spms.manage',
-            'compensation.view',
-            'accounts.view',
-            'departments.view',
-            'plantilla_items.view',
-            'positions.view',
-            'rewards.view',
-            'analytics.view',
-            'announcements.view', // manage removed — OIC is read-only on announcements
-            'manpower.view',
-            'task_monitoring.view',
-            'notifications.view',
-        ]);
-
-        // ─── Line-management tier (Supervisor) ───────────────────────────
-        $roles['Supervisor']->syncPermissions([
-            'dashboard.view',
-            'hiring.view',
-            'leave.dashboard.view',
-            'leave.approval.view',
-            'leave.approval.manage',
-            'leave.balance.view',
-            'leave.calendar.view',
-            'leave.request.view',
-            'employees.view',
-            'team.view',
-            'orientation.view',
-            'trainings.view',
-            'trainings.join',
-            'trainings.skill_gap',
-            'trainings.effectiveness',
-            'trainings.coaching',
-            'spms.view',
-            'spms.manage',
-            'compensation.view',
-            'announcements.view', // manage removed — Supervisor is read-only on announcements
-            'rewards.view',
-            'notifications.view',
-        ]);
-
-        // ─── Base employee tier (Staff) ──────────────────────────────────
-        $roles['Staff']->syncPermissions([
-            'dashboard.view',
-            'leave.dashboard.view',
-            'leave.balance.view',
-            'leave.calendar.view',
-            'leave.request.view',
-            'leave.request.manage',
-            'team.view',
-            'orientation.view',
-            'trainings.view',
-            'trainings.join',
-            'spms.view',
-            'spms.manage',
-            'announcements.view', // manage removed — Staff is read-only on announcements
-            'notifications.view',
-        ]);
-    }
+        foreach ($roles as $name => $role) {
+            if ($name === 'SuperAdmin') {
+                $role->syncPermissions(self::PERMISSIONS);
+            } else {
+                $role->syncPermissions($defaultPermissions);
+            }
+        }
+}
 
     private function assignUsersToRoles(): void
     {
@@ -385,15 +201,17 @@ class RbacSeeder extends Seeder
         $this->assignRole('HR',         'HR');
         $this->assignRole('OIC',        'Officer In Charge');
         $this->assignRole('HEAD',       'Head');
-        $this->assignRole('SUPERVISOR',    'Supervisor');
+        $this->assignRole('SUPERVISOR', 'Supervisor');
         $this->assignRole('STAFF',      'Staff');
     }
 
     private function assignRole(string $username, string $role): void
     {
         $user = User::where('username', $username)->first();
-        if ($user) {
-            $user->syncRoles([$role]);
+        if (! $user) {
+            return;
         }
+
+        $user->syncRoles([$role]);
     }
 }

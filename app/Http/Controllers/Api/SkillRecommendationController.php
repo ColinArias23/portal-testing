@@ -9,9 +9,14 @@ use Illuminate\Http\Request;
  
 class SkillRecommendationController extends Controller
 {
-    /**
-     * GET /api/skill-recommendations
-     */
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+        $this->middleware('permission:trainings.view')->only(['index', 'show', 'bySkill']);
+        $this->middleware('permission:trainings.manage')->only(['store', 'update', 'destroy']);
+    }
+
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
         $query = SkillRecommendation::with('skill');
@@ -22,10 +27,7 @@ class SkillRecommendationController extends Controller
  
         return response()->json($query->paginate(50));
     }
- 
-    /**
-     * POST /api/skill-recommendations
-     */
+// ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -43,20 +45,14 @@ class SkillRecommendationController extends Controller
             'data'    => $recommendation,
         ], 201);
     }
- 
-    /**
-     * GET /api/skill-recommendations/{id}
-     */
+// ─── Show ─────────────────────────────────────────────────────
     public function show(SkillRecommendation $recommendation): JsonResponse
     {
         return response()->json([
             'data' => $recommendation->load('skill'),
         ]);
     }
- 
-    /**
-     * PUT /api/skill-recommendations/{id}
-     */
+// ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, SkillRecommendation $recommendation): JsonResponse
     {
         $validated = $request->validate([
@@ -73,10 +69,7 @@ class SkillRecommendationController extends Controller
             'data'    => $recommendation->fresh(),
         ]);
     }
- 
-    /**
-     * DELETE /api/skill-recommendations/{id}
-     */
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(SkillRecommendation $recommendation): JsonResponse
     {
         $recommendation->delete();
@@ -85,10 +78,7 @@ class SkillRecommendationController extends Controller
             'message' => 'Recommendation deleted.',
         ]);
     }
- 
-    /**
-     * GET /api/skill-recommendations/skill/{skillId}
-     */
+// ─── BySkill ─────────────────────────────────────────────────────
     public function bySkill($skillId): JsonResponse
     {
         $recommendation = SkillRecommendation::where('skill_id', $skillId)->first();

@@ -20,6 +20,14 @@ class ReleaseController extends Controller
 {
     private const REPORT_SUMMARY_COLUMNS = ['id', 'subject', 'type', 'category', 'severity'];
 
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum')->only(['store', 'destroy']);
+        $this->middleware('role:SuperAdmin')->only(['store', 'destroy']);
+        $this->middleware('auth:sanctum')->only(['unassignedResolved']);
+        $this->middleware('role:SuperAdmin')->only(['unassignedResolved']);
+    }
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
         $perPage = (int) $request->integer('per_page', 15);
@@ -41,7 +49,7 @@ class ReleaseController extends Controller
             ],
         ]);
     }
-
+// ─── Show ─────────────────────────────────────────────────────
     public function show(Release $release): JsonResponse
     {
         if (! $release->isPublished()) {
@@ -86,7 +94,7 @@ class ReleaseController extends Controller
             'data' => new ReleaseResource($release),
         ], 201);
     }
-
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(Release $release): JsonResponse
     {
         DB::transaction(function () use ($release) {
@@ -96,7 +104,7 @@ class ReleaseController extends Controller
 
         return response()->json(['message' => 'Release deleted successfully.']);
     }
-
+// ─── UnaasignedResolved ─────────────────────────────────────────────────────
     public function unassignedResolved(): JsonResponse
     {
         $reports = Report::query()

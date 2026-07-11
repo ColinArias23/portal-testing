@@ -11,6 +11,11 @@ class NotificationController extends Controller
 {
     private const PAGE_SIZE = 50;
 
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+    }
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request)
     {
         $user = $request->user();
@@ -38,7 +43,7 @@ class NotificationController extends Controller
             'unread_count'  => $notifications->where('read', false)->count(),
         ]);
     }
-
+// ─── MarkRead ─────────────────────────────────────────────────────
     public function markRead(Request $request, Notification $notification)
     {
         $user = $request->user();
@@ -55,7 +60,7 @@ class NotificationController extends Controller
 
         return response()->json(['success' => true]);
     }
-
+// ─── MarkAllRead ─────────────────────────────────────────────────────
     public function markAllRead(Request $request)
     {
         $user = $request->user();
@@ -81,7 +86,7 @@ class NotificationController extends Controller
 
         return response()->json(['success' => true]);
     }
-
+// ─── UnreadCount ─────────────────────────────────────────────────────
     public function unreadCount(Request $request)
     {
         $user = $request->user();

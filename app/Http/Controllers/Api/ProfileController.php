@@ -22,14 +22,15 @@ use Illuminate\Support\Str;
 
 class ProfileController extends Controller
 {
-    // ── Status ────────────────────────────────────────────────────────────────
-
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+    }
+// ── Status ────────────────────────────────────────────────────────────────
     public function status(Request $request)
     {
         $user = $request->user()->load('employee.info');
 
-        // SuperAdmin skips PDS and orientation modals entirely —
-        // always return is_complete: true so no modal is triggered.
         if ($user->hasRole('SuperAdmin')) {
             return response()->json([
                 'is_complete'    => true,
@@ -66,9 +67,7 @@ class ProfileController extends Controller
             'user'           => $user,
         ]);
     }
-
-    // ── Complete ──────────────────────────────────────────────────────────────
-
+// ── Complete ──────────────────────────────────────────────────────────────
     public function complete(Request $request)
     {
         $this->nullifyBlankDates($request);
@@ -136,16 +135,7 @@ class ProfileController extends Controller
             'status'  => $employee->info?->status ?? 'EMPTY',
         ]);
     }
-
-    // ── Validation rules ──────────────────────────────────────────────────────
-
-    /**
-     * The frontend (profileCompletionModal.jsx) appends every non-null/undefined
-     * value to FormData, including empty strings for date fields the user left
-     * blank (e.g. license_date_issued when there's no professional license).
-     * Laravel's `date` rule rejects '' even alongside `nullable`, so these are
-     * normalized to actual null before validation runs.
-     */
+// ── Validationrules ──────────────────────────────────────────────────────
     private function nullifyBlankDates(Request $request): void
     {
         $dateFields = [
@@ -301,9 +291,7 @@ class ProfileController extends Controller
             'references' => ['nullable', 'string'],
         ];
     }
-
-    // ── Extract scalar fields destined for employee_info ─────────────────────
-
+// ── ExtractInfoFields ─────────────────────
     private function extractInfoFields(array $data): array
     {
         $scalar = [
@@ -336,15 +324,12 @@ class ProfileController extends Controller
             // Professional License
             'license_number', 'license_date_issued', 'license_expiry_date', 'license_place_issued',
         ];
-
         return collect($scalar)
             ->filter(fn($key) => array_key_exists($key, $data))
             ->mapWithKeys(fn($key) => [$key => $data[$key]])
             ->toArray();
     }
-
-    // ── Relational sync helpers ───────────────────────────────────────────────
-
+// ── SyncRows ───────────────────────────────────────────────
     private function syncRows(string $model, int $employeeId, array $rows, callable $map): void
     {
         $model::where('employee_id', $employeeId)->delete();
@@ -364,7 +349,6 @@ class ProfileController extends Controller
         return is_array($decoded) ? $decoded : [];
     }
 
-    /** Normalize a date value from a repeatable row: blank/empty → null. */
     private function dateOrNull(mixed $value): ?string
     {
         if (! is_string($value)) return null;
@@ -380,7 +364,7 @@ class ProfileController extends Controller
             'date_of_birth' => $this->dateOrNull($r['date_of_birth'] ?? null),
         ]);
     }
-
+// ─── SyncEducation ─────────────────────────────────────────────────────
     private function syncEducation(int $employeeId, array $data): void
     {
         PdsEducation::where('employee_id', $employeeId)->delete();
@@ -404,7 +388,7 @@ class ProfileController extends Controller
             }
         }
     }
-
+// ─── SyncEligibilities ─────────────────────────────────────────────────────
     private function syncEligibilities(int $employeeId, string|array $raw): void
     {
         $rows = is_string($raw) ? $this->decodeJson($raw) : $raw;
@@ -417,7 +401,7 @@ class ProfileController extends Controller
             'valid_until' => $this->dateOrNull($r['valid_until'] ?? null),
         ]);
     }
-
+// ─── SyncWordExperiences ─────────────────────────────────────────────────────
     private function syncWorkExperiences(int $employeeId, string|array $raw): void
     {
         $rows = is_string($raw) ? $this->decodeJson($raw) : $raw;
@@ -432,7 +416,7 @@ class ProfileController extends Controller
             'govt_service'       => $r['govt_service']   ?? null,
         ]);
     }
-
+// ─── SyncVoluntaryWorks ─────────────────────────────────────────────────────
     private function syncVoluntaryWorks(int $employeeId, string|array $raw): void
     {
         $rows = is_string($raw) ? $this->decodeJson($raw) : $raw;
@@ -444,7 +428,7 @@ class ProfileController extends Controller
             'position'         => $r['position']         ?? null,
         ]);
     }
-
+// ─── SyncTrainings ─────────────────────────────────────────────────────
     private function syncTrainings(int $employeeId, string|array $raw): void
     {
         $rows = is_string($raw) ? $this->decodeJson($raw) : $raw;
@@ -457,7 +441,7 @@ class ProfileController extends Controller
             'sponsored_by' => $r['sponsored_by'] ?? null,
         ]);
     }
-
+// ─── SyncSpecialSkills ─────────────────────────────────────────────────────
     private function syncSpecialSkills(int $employeeId, string|array $raw): void
     {
         $rows = is_string($raw) ? $this->decodeJson($raw) : $raw;
@@ -465,7 +449,7 @@ class ProfileController extends Controller
             'skill' => $r['skill'] ?? null,
         ]);
     }
-
+// ─── SyncNonAcademicDistinctions ─────────────────────────────────────────────────────
     private function syncNonAcademicDistinctions(int $employeeId, string|array $raw): void
     {
         $rows = is_string($raw) ? $this->decodeJson($raw) : $raw;
@@ -473,7 +457,7 @@ class ProfileController extends Controller
             'distinction' => $r['distinction'] ?? null,
         ]);
     }
-
+// ─── SyncOrganizationMemberships ─────────────────────────────────────────────────────
     private function syncOrganizationMemberships(int $employeeId, string|array $raw): void
     {
         $rows = is_string($raw) ? $this->decodeJson($raw) : $raw;
@@ -481,7 +465,7 @@ class ProfileController extends Controller
             'organization' => $r['organization'] ?? null,
         ]);
     }
-
+// ─── SyncReferences ─────────────────────────────────────────────────────
     private function syncReferences(int $employeeId, string|array $raw): void
     {
         $rows = is_string($raw) ? $this->decodeJson($raw) : $raw;

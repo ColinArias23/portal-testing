@@ -30,14 +30,10 @@ class EmployeeController extends Controller
     public function __construct(private PlantillaService $plantillaService)
     {
         $this->middleware('auth:sanctum');
-
-        $this->middleware('role:SuperAdmin|HR')->only([
-            'store',
-            'update',
-            'destroy',
-        ]);
+        $this->middleware('permission:employees.view')->only(['index', 'show', 'nonRoot', 'genderCount', 'avatar']);
+        $this->middleware('permission:employees.manage')->only(['store', 'update', 'destroy']);
     }
-
+// ─── FormatEmployee ─────────────────────────────────────────────────────
     private function formatEmployee(Employee $employee): array
     {
         $allDepts = Department::all(['id', 'name'])->keyBy('id');
@@ -171,7 +167,7 @@ class EmployeeController extends Controller
             'updated_at' => $employee->updated_at,
         ];
     }
-
+// ─── EmployeeQuery ─────────────────────────────────────────────────────
     private function employeeQuery(Request $request)
     {
         $query = Employee::with([
@@ -198,7 +194,7 @@ class EmployeeController extends Controller
 
         return $query->orderBy('id');
     }
-
+// ─── Rules ─────────────────────────────────────────────────────
     private function rules(): array
     {
         return [
@@ -232,7 +228,7 @@ class EmployeeController extends Controller
             'parent_ids.*'           => ['exists:employees,id'],
         ];
     }
-
+// ─── AssertUniqueEmployeeNumber ─────────────────────────────────────────────────────
     private function assertUniqueEmployeeNumber(?string $number, $ignoreId = null): void
     {
         if (! $number) {
@@ -251,7 +247,7 @@ class EmployeeController extends Controller
             ]));
         }
     }
-
+// ─── GenderCount ─────────────────────────────────────────────────────
     public function genderCount(): JsonResponse
     {
         $male   = EmployeeInfo::where('gender', 'MALE')->count();
@@ -263,7 +259,7 @@ class EmployeeController extends Controller
             'total'  => $male + $female,
         ]);
     }
-
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
         $perPage  = max(1, (int) ($request->per_page ?? self::PER_PAGE));
@@ -314,7 +310,7 @@ class EmployeeController extends Controller
 
         return response()->json($paginator);
     }
-
+// ─── Show ─────────────────────────────────────────────────────
     public function show(Employee $employee): JsonResponse
     {
         $employee->load([
@@ -332,7 +328,7 @@ class EmployeeController extends Controller
 
         return response()->json($this->formatEmployee($employee));
     }
-
+// ─── NonRoot ─────────────────────────────────────────────────────
     public function nonRoot(): JsonResponse
     {
         $rootIds = DB::table('employee_hierarchy')
@@ -355,7 +351,7 @@ class EmployeeController extends Controller
 
         return response()->json($employees);
     }
-
+// ─── Root ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate($this->rules());
@@ -418,7 +414,7 @@ class EmployeeController extends Controller
 
         return response()->json($this->formatEmployee($employee), 201);
     }
-
+// ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, Employee $employee): JsonResponse
     {
         $data = $request->validate($this->rules());
@@ -511,7 +507,7 @@ class EmployeeController extends Controller
 
         return response()->json($formatted);
     }
-
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(Request $request, Employee $employee): JsonResponse
     {
         $label = $employee->full_name;
@@ -608,7 +604,7 @@ class EmployeeController extends Controller
             ], 500);
         }
     }
-
+// ─── Avatar ─────────────────────────────────────────────────────
     public function avatar(Request $request, Employee $employee): JsonResponse
     {
         Log::channel('confidential_access')->info('Avatar accessed', [
@@ -641,7 +637,7 @@ class EmployeeController extends Controller
             ]);
         }
     }
-
+// ─── SyncAssignment ─────────────────────────────────────────────────────
     private function syncAssignment(Employee $employee, Request $request): void
     {
         if ($request->employment_type !== 'Plantilla') {

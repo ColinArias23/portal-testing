@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 class AuthController extends Controller
 {
     private const DUMMY_PASSWORD_HASH = '$2y$12$C6UzMDM.H6dfI/f/IKcEeOKLxU5CZzXm2H.jgqM8B0IHxbLLDzWLu';
-
+// ─── Login ─────────────────────────────────────────────────────
     public function login(Request $request)
     {
         $data = $request->validate([
@@ -23,7 +23,9 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $user = User::where('username', $data['username'])->first();
+        $username = mb_strtoupper(trim($data['username']));
+
+        $user = User::where('username', $username)->first();
 
         $passwordValid = Hash::check(
             $data['password'],
@@ -33,7 +35,7 @@ class AuthController extends Controller
         if (!$user || !$passwordValid) {
             ActivityLog::record(
                 action: 'auth.login_failed',
-                payload: ['username' => $data['username']],
+                payload: ['username' => $username],
                 ip: $request->ip(),
                 userAgent: $request->userAgent(),
             );
@@ -90,7 +92,7 @@ class AuthController extends Controller
             'user' => $this->formatUser($user),
         ]);
     }
-
+// ─── Register ─────────────────────────────────────────────────────
     public function register(Request $request)
     {
         $data = $request->validate([
@@ -130,7 +132,7 @@ class AuthController extends Controller
             'user' => $this->formatUser($user),
         ], 201);
     }
-
+// ─── CheckUsername ─────────────────────────────────────────────────────
     public function checkUsername(Request $request)
     {
         $request->validate([
@@ -199,7 +201,7 @@ class AuthController extends Controller
             'suggestions' => $suggestions,
         ]);
     }
-
+// ─── Me ─────────────────────────────────────────────────────
     public function me(Request $request)
     {
         $user = $request->user()->load([
@@ -216,7 +218,7 @@ class AuthController extends Controller
             'user' => $this->formatUser($user),
         ]);
     }
-
+// ─── Logout ─────────────────────────────────────────────────────
     public function logout(Request $request)
     {
         $user = $request->user();
@@ -234,7 +236,7 @@ class AuthController extends Controller
 
         return response()->json(['success' => true]);
     }
-
+// ─── ResolveAvatarUrl ─────────────────────────────────────────────────────
     private function resolveAvatarUrl(?string $path): ?string
     {
         if (!$path) {
@@ -250,7 +252,7 @@ class AuthController extends Controller
 
         return rtrim(config('app.url'), '/') . '/storage/' . $path;
     }
-
+// ─── FormatUser ─────────────────────────────────────────────────────
     private function formatUser(User $user): array
     {
         $employee = $user->employee;
@@ -271,15 +273,8 @@ class AuthController extends Controller
         $roles = $user->getRoleNames();
         $permissions = $user->getAllPermissions()->pluck('name')->values();
 
-        // Uses Employee::getPositionTitleAttribute(), which already branches
-        // on employment_type: Plantilla → primaryAssignment.plantillaPosition,
-        // COS → cosPosition.title, Consultant → consultantPosition.title.
         $positionLabel = $employee?->position_title;
 
-        // Department: prefer the primary department assignment record. Many
-        // COS/Consultant employees don't have one yet, so fall back to the
-        // first entry in department_ids (same source EmployeeController uses
-        // for the `departments` list) rather than showing blank.
         $departmentLabel = $primaryDepartment;
         if (!$departmentLabel && !empty($departments)) {
             $departmentLabel = (object) $departments[0];

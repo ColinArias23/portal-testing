@@ -18,12 +18,14 @@ use Illuminate\Support\Facades\Log;
 
 class TrainingController extends Controller
 {
-    /*
-    |--------------------------------------------------------------------------
-    | FORMAT HELPERS
-    |--------------------------------------------------------------------------
-    */
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+        $this->middleware('permission:trainings.view')->only(['index', 'show', 'summary']);
+        $this->middleware('permission:trainings.manage')->only([ 'store', 'update', 'destroy', 'assignParticipants', 'updateParticipant', 'removeParticipant', 'markAttendance']);
+    }
 
+// ─── FormatTraining ───────────────────────────────────────────────────
     private function formatTraining(Training $training, ?int $currentUserId = null): array
     {
         $resolvedStatus = $training->resolveStatus();
@@ -75,13 +77,7 @@ class TrainingController extends Controller
             'updatedAt' => $training->updated_at?->toISOString(),
         ];
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | INDEX — GET /api/trainings
-    |--------------------------------------------------------------------------
-    */
-
+// ─── Index ───────────────────────────────────────────────────
     public function index(Request $request)
     {
         try {
@@ -114,13 +110,7 @@ class TrainingController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | STORE — POST /api/trainings
-    |--------------------------------------------------------------------------
-    */
-
+// ─── Store ───────────────────────────────────────────────────
     public function store(StoreTrainingRequest $request)
     {
         try {
@@ -175,13 +165,7 @@ class TrainingController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | SHOW — GET /api/trainings/{id}
-    |--------------------------------------------------------------------------
-    */
-
+// ─── Show ───────────────────────────────────────────────────
     public function show(Request $request, Training $training)
     {
         try {
@@ -192,13 +176,7 @@ class TrainingController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | UPDATE — PUT /api/trainings/{id}
-    |--------------------------------------------------------------------------
-    */
-
+// ─── Update ───────────────────────────────────────────────────
     public function update(UpdateTrainingRequest $request, Training $training)
     {
         try {
@@ -272,13 +250,7 @@ class TrainingController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | DESTROY — DELETE /api/trainings/{id}
-    |--------------------------------------------------------------------------
-    */
-
+// ─── Destroy ───────────────────────────────────────────────────
     public function destroy(Request $request, Training $training)
     {
         try {
@@ -306,13 +278,7 @@ class TrainingController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | ASSIGN PARTICIPANTS — POST /api/trainings/{id}/participants
-    |--------------------------------------------------------------------------
-    */
-
+// ─── AssignParticipants ───────────────────────────────────────────────────
     public function assignParticipants(Request $request, Training $training)
     {
         if ($request->has('employee_ids')) {
@@ -377,13 +343,7 @@ class TrainingController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | UPDATE PARTICIPANT STATUS — PATCH /api/trainings/{id}/participants/{employeeId}
-    |--------------------------------------------------------------------------
-    */
-
+// ─── UpdateParticipant ───────────────────────────────────────────────────
     public function updateParticipant(Request $request, Training $training, Employee $employee)
     {
         $request->validate([
@@ -427,13 +387,7 @@ class TrainingController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | REMOVE PARTICIPANT — DELETE /api/trainings/{id}/participants/{employeeId}
-    |--------------------------------------------------------------------------
-    */
-
+// ─── RemoveParticipant ───────────────────────────────────────────────────
     public function removeParticipant(Request $request, Training $training, Employee $employee)
     {
         try {
@@ -469,13 +423,7 @@ class TrainingController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | MARK ATTENDANCE — PATCH /api/trainings/{id}/participants/{employeeId}/attend
-    |--------------------------------------------------------------------------
-    */
-
+// ─── MarkAttendance ───────────────────────────────────────────────────
     public function markAttendance(Request $request, Training $training, Employee $employee)
     {
         try {
@@ -521,13 +469,7 @@ class TrainingController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | SUMMARY — GET /api/trainings/summary
-    |--------------------------------------------------------------------------
-    */
-
+// ─── Summary ───────────────────────────────────────────────────
     public function summary()
     {
         try {
@@ -550,13 +492,7 @@ class TrainingController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | JOIN — POST /api/trainings/{id}/join
-    |--------------------------------------------------------------------------
-    */
-
+// ─── Join ───────────────────────────────────────────────────
     public function join(Request $request, Training $training)
     {
         $employee = $request->user()->employee;

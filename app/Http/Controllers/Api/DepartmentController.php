@@ -9,6 +9,13 @@ use Illuminate\Http\Request;
 
 class DepartmentController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+        $this->middleware('permission:departments.view')->only(['index', 'show']);
+        $this->middleware('permission:departments.manage')->only(['store', 'update', 'destroy']);
+    }
+// ─── Index ─────────────────────────────────────────────────────
     public function index()
     {
         $departments = Department::with(['head', 'division'])
@@ -31,7 +38,7 @@ class DepartmentController extends Controller
             ]);
         });
     }
-
+// ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -47,7 +54,7 @@ class DepartmentController extends Controller
 
         return Department::create($data)->load(['head', 'division', 'parent', 'parentDivision']);
     }
-
+// ─── Show ─────────────────────────────────────────────────────
     public function show(Department $department)
     {
         return $department->load(['head', 'division', 'parent']);
@@ -105,7 +112,7 @@ class DepartmentController extends Controller
 
         return $department->fresh(['head', 'division', 'parent', 'parentDivision']);
     }
-
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(Department $department)
     {
         $deptId = (int) $department->id;

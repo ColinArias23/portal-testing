@@ -14,10 +14,10 @@ class PlantillaPositionController extends Controller
     public function __construct()
     {
         $this->middleware('auth:sanctum');
+        $this->middleware('permission:plantilla_items.view')->only(['index', 'show', 'steps', 'summary', 'salaryConfig', 'availableItems']);
+        $this->middleware('permission:plantilla_items.manage')->only([ 'store', 'addSlots', 'update', 'destroy', 'bulkDelete', 'restore', 'bulkRestore', 'approve']);
     }
-
-    // ─── Index ─────────────────────────────────────────────────────────────
-
+// ─── Index ─────────────────────────────────────────────────────────────
     public function index(Request $request)
     {
         $query = PlantillaPosition::query()
@@ -68,9 +68,7 @@ class PlantillaPositionController extends Controller
             ],
         ]);
     }
-
-    // ─── Show ──────────────────────────────────────────────────────────────
-
+// ─── Show ──────────────────────────────────────────────────────────────
     public function show(PlantillaPosition $plantillaPosition)
     {
         $plantillaPosition->load([
@@ -83,9 +81,7 @@ class PlantillaPositionController extends Controller
 
         return response()->json($this->format($plantillaPosition));
     }
-
-    // ─── Steps ─────────────────────────────────────────────────────────────
-
+// ─── Steps ─────────────────────────────────────────────────────────────
     public function steps(PlantillaPosition $plantillaPosition)
     {
         if (!$plantillaPosition->salary_grade_id) {
@@ -98,9 +94,7 @@ class PlantillaPositionController extends Controller
 
         return response()->json($steps);
     }
-
-    // ─── Store ─────────────────────────────────────────────────────────────
-
+// ─── Store ─────────────────────────────────────────────────────────────
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -119,15 +113,6 @@ class PlantillaPositionController extends Controller
         unset($data['slots']);
 
         DB::transaction(function () use ($data, $slots, $request) {
-            // FIX: position_slot_name has a unique constraint
-            // (plantilla_positions_position_slot_name_unique). Soft-deleted
-            // positions (via SoftDeletes) keep their row + position_slot_name
-            // in the DB. If the user deletes an item and then creates a new
-            // one reusing the same base_item_number, the new rows would
-            // collide with the old slot names (e.g. "150", "150-1") and
-            // throw a 23000 integrity constraint violation. Permanently
-            // remove any stale soft-deleted rows for this base_item_number
-            // first so the slate is clean for the new slots.
             PlantillaPosition::onlyTrashed()
                 ->where('base_item_number', $data['base_item_number'])
                 ->forceDelete();
@@ -174,9 +159,7 @@ class PlantillaPositionController extends Controller
             'positions' => $positions->map(fn(PlantillaPosition $pos) => $this->format($pos)),
         ], 201);
     }
-
-    // ─── Add Slots ─────────────────────────────────────────────────────────
-
+// ─── AddSlots ─────────────────────────────────────────────────────────
     public function addSlots(Request $request)
     {
         $data = $request->validate([
@@ -192,9 +175,6 @@ class PlantillaPositionController extends Controller
         }
 
         DB::transaction(function () use ($template, $data, $highest, $request) {
-            // FIX: same stale-soft-delete issue as store() — clean up any
-            // trashed rows for this base_item_number whose position_slot_name
-            // would collide with the new slot numbers we're about to create.
             PlantillaPosition::onlyTrashed()
                 ->where('base_item_number', $template->base_item_number)
                 ->forceDelete();
@@ -241,9 +221,7 @@ class PlantillaPositionController extends Controller
             'message' => "Added {$data['count']} new slot(s) to {$template->title}.",
         ]);
     }
-
-    // ─── Update ────────────────────────────────────────────────────────────
-
+// ─── Update ────────────────────────────────────────────────────────────
     public function update(Request $request, PlantillaPosition $plantillaPosition)
     {
         $data = $request->validate([
@@ -272,13 +250,10 @@ class PlantillaPositionController extends Controller
             $data['vacated_at'] = $data['requires_approval'] ? now() : null;
         }
 
-        // Role and department/division are locked once filled
         if ($plantillaPosition->isFilled()) {
             unset($data['role'], $data['display_department_id'], $data['display_division_id']);
         }
 
-        // If switching the display target from department to division (or vice
-        // versa), make sure the other column is explicitly cleared.
         if (array_key_exists('display_department_id', $data) && !empty($data['display_department_id'])) {
             $data['display_division_id'] = null;
         } elseif (array_key_exists('display_division_id', $data) && !empty($data['display_division_id'])) {
@@ -309,9 +284,7 @@ class PlantillaPositionController extends Controller
             $this->format($plantillaPosition->fresh(['displayDepartment', 'displayDivision', 'salaryGrade', 'stepIncrement']))
         );
     }
-
-    // ─── Destroy ───────────────────────────────────────────────────────────
-
+// ─── Destroy ───────────────────────────────────────────────────────────
     public function destroy(Request $request, PlantillaPosition $plantillaPosition)
     {
         if ($plantillaPosition->isFilled()) {
@@ -343,9 +316,7 @@ class PlantillaPositionController extends Controller
 
         return response()->json(['message' => 'Position slot deleted.']);
     }
-
-    // ─── Bulk Delete ───────────────────────────────────────────────────────
-
+// ─── BulkDelete ───────────────────────────────────────────────────────
     public function bulkDelete(Request $request)
     {
         $data = $request->validate([
@@ -381,9 +352,7 @@ class PlantillaPositionController extends Controller
             'count'   => $positions->count(),
         ]);
     }
-
-    // ─── Restore ───────────────────────────────────────────────────────────
-
+// ─── Restore ───────────────────────────────────────────────────────────
     public function restore(Request $request, $id)
     {
         $position = PlantillaPosition::onlyTrashed()->find($id);
@@ -406,9 +375,7 @@ class PlantillaPositionController extends Controller
             'position' => $this->format($position->fresh(['displayDepartment', 'displayDivision', 'salaryGrade', 'stepIncrement'])),
         ]);
     }
-
-    // ─── Bulk Restore ──────────────────────────────────────────────────────
-
+// ─── BulkRestore ──────────────────────────────────────────────────────
     public function bulkRestore(Request $request)
     {
         $data = $request->validate([
@@ -438,9 +405,7 @@ class PlantillaPositionController extends Controller
             'count'   => $positions->count(),
         ]);
     }
-
-    // ─── Approve ───────────────────────────────────────────────────────────
-
+// ─── Approve ───────────────────────────────────────────────────────────
     public function approve(Request $request, PlantillaPosition $plantillaPosition)
     {
         if (!$plantillaPosition->requires_approval) {
@@ -462,9 +427,7 @@ class PlantillaPositionController extends Controller
             'position' => $this->format($plantillaPosition->fresh(['displayDepartment', 'displayDivision', 'salaryGrade', 'stepIncrement'])),
         ]);
     }
-
-    // ─── Summary ───────────────────────────────────────────────────────────
-
+// ─── Summary ───────────────────────────────────────────────────────────
     public function summary()
     {
         return response()->json([
@@ -485,17 +448,13 @@ class PlantillaPositionController extends Controller
                 ]),
         ]);
     }
-
-    // ─── Salary Config ─────────────────────────────────────────────────────
-
+// ─── SalaryConfig ─────────────────────────────────────────────────────
     public function salaryConfig(PlantillaPosition $plantillaPosition)
     {
         $plantillaPosition->load(['salaryGrade.stepIncrements', 'stepIncrement']);
         return response()->json($plantillaPosition->formatSalaryInfo());
     }
-
-    // ─── Available Items ───────────────────────────────────────────────────
-
+// ─── AvailableItems ───────────────────────────────────────────────────
     public function availableItems()
     {
         $items = PlantillaPosition::selectRaw('DISTINCT base_item_number, title, role, display_department_id, display_division_id')
@@ -521,9 +480,7 @@ class PlantillaPositionController extends Controller
 
         return response()->json($items);
     }
-
-    // ─── Private Helpers ───────────────────────────────────────────────────
-
+// ─── Format ───────────────────────────────────────────────────
     private function format(PlantillaPosition $position): array
     {
         $activeAssignments = $position->relationLoaded('activeAssignments')
