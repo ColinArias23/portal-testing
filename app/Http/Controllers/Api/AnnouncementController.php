@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\AnnouncementCreated;
+use App\Events\AnnouncementDeleted;
+use App\Events\AnnouncementUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\Announcement;
 use App\Models\AnnouncementAttachment;
 use App\Models\AnnouncementComment;
 use App\Models\AnnouncementReaction;
 use App\Models\AnnouncementView;
+use App\Models\Notification;
 use App\Traits\ResolvesAvatarUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -20,33 +24,24 @@ class AnnouncementController extends Controller
     public function __construct()
     {
         $this->middleware('auth:sanctum');
-
-        $this->middleware('permission:announcements.view')->only([
-            'index', 'show', 'comments', 'viewers', 'downloadAttachment',
-        ]);
-        $this->middleware('role:SuperAdmin|HR')->only(['store']);
-
-        $this->middleware('permission:announcements.manage')->only([
-            'update', 'destroy', 'togglePin', 'toggleArchive', 'destroyAttachment',
-        ]);
+        $this->middleware('permission:announcements.view')->only(['index', 'show', 'comments', 'viewers', 'downloadAttachment', 'addComment', 'updateComment', 'deleteComment', 'react', 'markViewed']);
+        $this->middleware('permission:announcements.manage')->only(['store']);
+        $this->middleware('permission:announcements.manage')->only(['update', 'destroy', 'togglePin', 'toggleArchive', 'destroyAttachment']);
     }
-
+// ─── AuthorozeOwnerOrSuoerAdmin ─────────────────────────────────────────────────────
     private function authorizeOwnerOrSuperAdmin(Request $request, Announcement $announcement): void
     {
         $user = $request->user();
 
-        if ($announcement->created_by === $user->id || $user->hasRole('SuperAdmin')) {
+        if ($announcement->created_by === $user->id || $user->can('announcements.manage.all')) {
             return;
         }
-
         abort(403, 'You can only manage your own announcements.');
     }
-
-    // ─── Feed ─────────────────────────────────────────────────────
-
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request)
     {
-        $query = Announcement::with(['creator.employee', 'attachments'])
+        $query = Announcement::with(['creator.employee', 'attachments', 'plantillaPostings'])
             ->withCount(['comments', 'views'])
             ->where('is_archived', $request->boolean('archived'));
 
@@ -100,11 +95,11 @@ class AnnouncementController extends Controller
 
         return response()->json($announcements);
     }
-
+// ─── Show ─────────────────────────────────────────────────────
     public function show(Request $request, $id)
     {
         $announcement = Announcement::with([
-            'creator.employee', 'attachments',
+            'creator.employee', 'attachments', 'plantillaPostings',
             'comments.user.employee', 'comments.replies.user.employee',
         ])->withCount('views')->findOrFail($id);
 
@@ -124,7 +119,7 @@ class AnnouncementController extends Controller
 
         return response()->json($announcement);
     }
-
+// ─── HydrateComputerFields ─────────────────────────────────────────────────────
     private function hydrateComputedFields($collection, int $userId): void
     {
         $ids = $collection->pluck('id');
@@ -156,49 +151,74 @@ class AnnouncementController extends Controller
                 ->toArray();
         });
     }
-
-    // ─── CRUD ─────────────────────────────────────────────────────
-
+// ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request)
     {
         $data = $this->validateAnnouncement($request);
+        $postingIds = $data['plantilla_posting_ids'] ?? [];
+        unset($data['plantilla_posting_ids']);
 
         $data['created_by'] = $request->user()->id;
 
         $announcement = Announcement::create($data);
+        $announcement->plantillaPostings()->sync($postingIds);
 
         $this->storeAttachments($request, $announcement);
 
-        return response()->json(
-            $announcement->fresh(['creator.employee', 'attachments']),
-            201
-        );
-    }
+        $fresh = $announcement->fresh(['creator.employee', 'attachments', 'plantillaPostings']);
 
+        broadcast(new AnnouncementCreated($fresh))->toOthers();
+
+        Notification::create([
+            'type' => 'announcement',
+            'title' => 'New announcement',
+            'message' => $fresh->title,
+            'data' => [
+                'announcement_id' => $fresh->id,
+                'priority' => $fresh->priority,
+                'category' => $fresh->category,
+                'posted_by_user_id' => $fresh->created_by,
+            ],
+            'visibility' => 'all',
+        ]);
+
+        return response()->json($fresh, 201);
+    }
+// ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, $id)
     {
         $announcement = Announcement::findOrFail($id);
         $this->authorizeOwnerOrSuperAdmin($request, $announcement);
 
         $data = $this->validateAnnouncement($request);
+        $postingIds = $data['plantilla_posting_ids'] ?? [];
+        unset($data['plantilla_posting_ids']);
 
         $announcement->update($data);
+        $announcement->plantillaPostings()->sync($postingIds);
 
         $this->storeAttachments($request, $announcement);
 
-        return response()->json($announcement->fresh(['creator.employee', 'attachments']));
-    }
+        $fresh = $announcement->fresh(['creator.employee', 'attachments', 'plantillaPostings']);
 
+        broadcast(new AnnouncementUpdated($fresh))->toOthers();
+
+        return response()->json($fresh);
+    }
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(Request $request, $id)
     {
         $announcement = Announcement::findOrFail($id);
         $this->authorizeOwnerOrSuperAdmin($request, $announcement);
 
+        $announcementId = $announcement->id;
         $announcement->delete();
+
+        broadcast(new AnnouncementDeleted($announcementId))->toOthers();
 
         return response()->json(['message' => 'Announcement deleted.']);
     }
-
+// ─── ValidateAnnouncement ─────────────────────────────────────────────────────
     private function validateAnnouncement(Request $request): array
     {
         return $request->validate([
@@ -206,11 +226,8 @@ class AnnouncementController extends Controller
             'description' => 'required|string|max:10000',
             'priority' => ['required', Rule::in(['normal', 'important', 'urgent'])],
             'category' => ['required', Rule::in(['General', 'Job Posting'])],
-            'plantilla_posting_id' => [
-                'nullable',
-                'required_if:category,Job Posting',
-                'exists:plantilla_postings,id',
-            ],
+            'plantilla_posting_ids' => ['nullable', 'required_if:category,Job Posting', 'array', 'min:1'],
+            'plantilla_posting_ids.*' => ['exists:plantilla_postings,id'],
             'attachments' => 'nullable|array|max:10',
             'attachments.*' => [
                 'file',
@@ -219,7 +236,7 @@ class AnnouncementController extends Controller
             ],
         ]);
     }
-
+// ─── StoreAttachments ─────────────────────────────────────────────────────
     private function storeAttachments(Request $request, Announcement $announcement): void
     {
         if (! $request->hasFile('attachments')) {
@@ -238,7 +255,7 @@ class AnnouncementController extends Controller
             ]);
         }
     }
-
+// ─── DownloadAttachment ─────────────────────────────────────────────────────
     public function downloadAttachment($attachmentId)
     {
         $attachment = AnnouncementAttachment::findOrFail($attachmentId);
@@ -250,7 +267,7 @@ class AnnouncementController extends Controller
             $attachment->original_filename
         );
     }
-
+// ─── Viewers ─────────────────────────────────────────────────────
     public function viewers($id)
     {
         $announcement = Announcement::findOrFail($id);
@@ -278,7 +295,7 @@ class AnnouncementController extends Controller
             'total' => $announcement->views()->count(),
         ]);
     }
-
+// ─── DestroyAttachment ─────────────────────────────────────────────────────
     public function destroyAttachment(Request $request, $attachmentId)
     {
         $attachment = AnnouncementAttachment::with('announcement')->findOrFail($attachmentId);
@@ -289,9 +306,7 @@ class AnnouncementController extends Controller
 
         return response()->json(['message' => 'Attachment removed.']);
     }
-
-    // ─── Pin / Archive toggles ─────────────────────────────────────
-
+// ─── Pin  ─────────────────────────────────────
     public function togglePin(Request $request, $id)
     {
         $announcement = Announcement::findOrFail($id);
@@ -299,9 +314,13 @@ class AnnouncementController extends Controller
 
         $announcement->update(['is_pinned' => ! $announcement->is_pinned]);
 
+        broadcast(new AnnouncementUpdated(
+            $announcement->fresh(['creator.employee', 'attachments', 'plantillaPostings'])
+        ))->toOthers();
+
         return response()->json($announcement);
     }
-
+// ─── ToggleArchive ─────────────────────────────────────────────────────
     public function toggleArchive(Request $request, $id)
     {
         $announcement = Announcement::findOrFail($id);
@@ -309,11 +328,13 @@ class AnnouncementController extends Controller
 
         $announcement->update(['is_archived' => ! $announcement->is_archived]);
 
+        broadcast(new AnnouncementUpdated(
+            $announcement->fresh(['creator.employee', 'attachments', 'plantillaPostings'])
+        ))->toOthers();
+
         return response()->json($announcement);
     }
-
-    // ─── Views (read-tracking) ──────────────────────────────────────
-
+    // ─── markViewed ──────────────────────────────────────
     public function markViewed(Request $request, $id)
     {
         $announcement = Announcement::findOrFail($id);
@@ -330,9 +351,7 @@ class AnnouncementController extends Controller
 
         return response()->json(['views_count' => $announcement->views()->count()]);
     }
-
-    // ─── Reactions ──────────────────────────────────────────────────
-
+// ─── React ──────────────────────────────────────────────────
     public function react(Request $request, $id)
     {
         $validated = $request->validate([
@@ -367,9 +386,7 @@ class AnnouncementController extends Controller
             'my_reaction' => $announcement->reactions()->where('user_id', $userId)->value('type'),
         ]);
     }
-
-    // ─── Comments & Replies ───────────────────────────────────────────
-
+// ─── Comments ───────────────────────────────────────────
     public function comments($id)
     {
         $announcement = Announcement::findOrFail($id);
@@ -381,7 +398,7 @@ class AnnouncementController extends Controller
 
         return response()->json($comments);
     }
-
+// ─── Add Comment ─────────────────────────────────────────────────────
     public function addComment(Request $request, $id)
     {
         $announcement = Announcement::findOrFail($id);
@@ -404,7 +421,7 @@ class AnnouncementController extends Controller
 
         return response()->json($comment->fresh('user.employee'), 201);
     }
-
+// ─── Update Comment ─────────────────────────────────────────────────────
     public function updateComment(Request $request, $commentId)
     {
         $comment = AnnouncementComment::findOrFail($commentId);
@@ -424,15 +441,16 @@ class AnnouncementController extends Controller
 
         return response()->json($comment->fresh('user.employee'));
     }
-
+// ─── Delete Comment ─────────────────────────────────────────────────────
     public function deleteComment(Request $request, $commentId)
     {
         $comment = AnnouncementComment::findOrFail($commentId);
 
         $isOwner = $comment->user_id === $request->user()->id;
-        $isHrOrAdmin = $request->user()->hasRole(['SuperAdmin', 'Admin', 'HR']);
 
-        if (! $isOwner && ! $isHrOrAdmin) {
+        $canManageAny = $request->user()->can('announcements.manage');
+
+        if (! $isOwner && ! $canManageAny) {
             abort(403);
         }
 
