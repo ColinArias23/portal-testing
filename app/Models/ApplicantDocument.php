@@ -28,4 +28,9 @@ class ApplicantDocument extends Model
     {
         return $this->belongsTo(Applicant::class);
     }
+
+    public function comments()
+    {
+        return $this->hasMany(DocumentComment::class, 'plantilla_posting_application_document_id');
+    }
 }

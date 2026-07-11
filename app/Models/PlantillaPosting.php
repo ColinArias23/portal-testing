@@ -112,11 +112,11 @@ class PlantillaPosting extends Model
 
     public function getRemainingVacanciesAttribute(): int
     {
-        $approvedCount = $this->applications()
-            ->where('status', 'Approved')
+        $completedCount = $this->applications()
+            ->where('status', 'Completed')
             ->count();
 
-        $remaining = $this->vacancies - $approvedCount;
+        $remaining = $this->vacancies - $completedCount;
 
         return max(0, min($remaining, $this->vacant_slots));
     }

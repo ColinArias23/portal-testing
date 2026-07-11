@@ -19,4 +19,9 @@ class PlantillaPostingApplicationDocument extends Model
     {
         return $this->belongsTo(PlantillaPostingApplication::class, 'plantilla_posting_application_id');
     }
+
+    public function comments()
+    {
+        return $this->hasMany(DocumentComment::class, 'plantilla_posting_application_document_id');
+    }
 }

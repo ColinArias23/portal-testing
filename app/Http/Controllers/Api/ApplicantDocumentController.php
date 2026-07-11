@@ -10,6 +10,13 @@ use Illuminate\Http\Request;
 
 class ApplicantDocumentController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+        $this->middleware('permission:hiring.nonplantilla.applicants.view')->only(['index']);
+        $this->middleware('permission:hiring.nonplantilla.applicants.manage')->only(['store', 'update', 'destroy']);
+    }
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Applicant $applicant)
     {
         return response()->json($applicant->documents);
@@ -44,7 +51,7 @@ class ApplicantDocumentController extends Controller
 
         return response()->json($doc, 201);
     }
-
+// ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, Applicant $applicant, ApplicantDocument $document)
     {
         $data = $request->validate([
@@ -73,7 +80,7 @@ class ApplicantDocumentController extends Controller
 
         return response()->json($document);
     }
-
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(Request $request, Applicant $applicant, ApplicantDocument $document)
     {
         $docId   = $document->id;

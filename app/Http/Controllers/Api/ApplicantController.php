@@ -26,8 +26,10 @@ class ApplicantController extends Controller
     public function __construct()
     {
         $this->middleware('auth:sanctum');
+        $this->middleware('permission:hiring.nonplantilla.applicants.view')->only(['index', 'show', 'summary']);
+        $this->middleware('permission:hiring.nonplantilla.applicants.manage')->only([ 'store', 'update', 'destroy', 'restore', 'moveToOnboarding']);
     }
-
+// ─── Format ─────────────────────────────────────────────────────
     private function format(Applicant $applicant): array
     {
         return [
@@ -54,7 +56,7 @@ class ApplicantController extends Controller
             'created_at' => $applicant->created_at,
         ];
     }
-
+// ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request)
     {
         $query = Applicant::with(['documents', 'interview', 'contract', 'onboarding'])
@@ -89,7 +91,7 @@ class ApplicantController extends Controller
             ],
         ]);
     }
-
+// ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -147,13 +149,13 @@ class ApplicantController extends Controller
 
         return response()->json($this->format($applicant), 201);
     }
-
+// ─── Show ─────────────────────────────────────────────────────
     public function show(Applicant $applicant)
     {
         $applicant->load(['documents', 'interview', 'contract', 'onboarding']);
         return response()->json($this->format($applicant));
     }
-
+// ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, Applicant $applicant)
     {
         $data = $request->validate([
@@ -204,10 +206,7 @@ class ApplicantController extends Controller
         $applicant->load(['documents', 'interview', 'contract', 'onboarding']);
         return response()->json($this->format($applicant));
     }
-
-    /**
-     * IMPROVED: Soft delete instead of hard delete for audit trail
-     */
+// ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(Request $request, Applicant $applicant)
     {
         $id = $applicant->id;
@@ -218,7 +217,7 @@ class ApplicantController extends Controller
             'status' => $applicant->status,
         ];
 
-        $applicant->delete(); // Soft delete if model uses SoftDeletes trait
+        $applicant->delete(); 
 
         ActivityLog::record(
             action: 'applicant.deleted',
@@ -235,10 +234,7 @@ class ApplicantController extends Controller
             'message' => 'Applicant deleted successfully.',
         ]);
     }
-
-    /**
-     * Restore soft-deleted applicant
-     */
+// ─── Restore ─────────────────────────────────────────────────────
     public function restore(Request $request, $id)
     {
         $applicant = Applicant::onlyTrashed()->find($id);
@@ -269,7 +265,7 @@ class ApplicantController extends Controller
             'message' => 'Applicant restored successfully.',
         ]);
     }
-
+// ─── Summary ─────────────────────────────────────────────────────
     public function summary()
     {
         return response()->json([
@@ -280,14 +276,9 @@ class ApplicantController extends Controller
             'no_show' => Applicant::where('status', 'NO SHOW')->count(),
         ]);
     }
-
-    /**
-     * MOVE TO ONBOARDING — POST /hiring/applicants/{applicant}/move-to-onboarding
-     * FIXED: Contract creation logic now works correctly
-     */
+// ─── MoveToOnboarding ─────────────────────────────────────────────────────
     public function moveToOnboarding(Request $request, Applicant $applicant)
     {
-        // Prevent duplicate onboarding
         if (Onboarding::where('applicant_id', $applicant->id)->exists()) {
             return response()->json([
                 'message' => 'This applicant already has an onboarding record.',
@@ -295,12 +286,9 @@ class ApplicantController extends Controller
         }
 
         DB::transaction(function () use ($request, $applicant) {
-            // Mark as Hired if not yet
             if ($applicant->status !== 'Hired') {
                 $applicant->update(['status' => 'Hired']);
             }
-
-            // Create onboarding
             $onboarding = Onboarding::create([
                 'applicant_id' => $applicant->id,
                 'name' => $applicant->full_name,
@@ -309,7 +297,6 @@ class ApplicantController extends Controller
                 'status' => 'Pending',
             ]);
 
-            // Create default onboarding tasks
             foreach (self::DEFAULT_TASKS as $index => $title) {
                 OnboardingTask::create([
                     'onboarding_id' => $onboarding->id,
@@ -319,7 +306,6 @@ class ApplicantController extends Controller
                 ]);
             }
 
-            // FIXED: Check contract before creating, and store the result
             $contractAlreadyExists = Contract::where('applicant_id', $applicant->id)->exists();
             $contractCreated = false;
 
