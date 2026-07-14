@@ -24,8 +24,8 @@ Broadcast::channel('notifications', function ($user) {
 });
 
 Broadcast::channel('admin.notifications', function ($user) {
-    return $user->hasAnyRole(['SuperAdmin', 'HR', 'Admin']);
-});
+      return $user->can('users.manage') || $user->hasRole('SuperAdmin');
+  });
 
 Broadcast::channel('admin.reports', function (User $user): bool {
     return $user->hasRole('SuperAdmin');

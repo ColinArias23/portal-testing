@@ -3,42 +3,42 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Broadcast;
 
-use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\AnnouncementController;
-use App\Http\Controllers\Api\OrientationController;
-use App\Http\Controllers\Api\EmployeeController;
-use App\Http\Controllers\Api\SkillController;
-use App\Http\Controllers\Api\SkillAssessmentController;
-use App\Http\Controllers\Api\SkillRecommendationController;
-use App\Http\Controllers\Api\DevelopmentPlanController;
-use App\Http\Controllers\Api\SkillGapAnalysisController;
-use App\Http\Controllers\Api\DepartmentController;
-use App\Http\Controllers\Api\DivisionController;
-use App\Http\Controllers\Api\SalaryGradeController;
-use App\Http\Controllers\Api\StepIncrementController;
-use App\Http\Controllers\Api\PlantillaPositionController;
-use App\Http\Controllers\Api\PlantillaPostingController;
-use App\Http\Controllers\Api\PlantillaApplicationInterviewController;
-use App\Http\Controllers\Api\EmployeeDepartmentAssignmentController;
-use App\Http\Controllers\Api\ManpowerMappingController;
-use App\Http\Controllers\Api\EmployeeAssignmentController;
-use App\Http\Controllers\Api\UserController;
-use App\Http\Controllers\Api\ProfileController;
-use App\Http\Controllers\Api\NotificationController;
-use App\Http\Controllers\Api\TrainingController;
-use App\Http\Controllers\Api\AuditLogController;
-use App\Http\Controllers\Api\ApplicantController;
-use App\Http\Controllers\Api\ApplicantDocumentController;
-use App\Http\Controllers\Api\InterviewController;
-use App\Http\Controllers\Api\HiringEventController;
-use App\Http\Controllers\Api\ContractController;
-use App\Http\Controllers\Api\OnboardingController;
-use App\Http\Controllers\Api\CosPositionController;
-use App\Http\Controllers\Api\ConsultantPositionController;
-use App\Http\Controllers\Api\HolidayController;
-use App\Http\Controllers\Api\ReportController;
-use App\Http\Controllers\Api\ReleaseController;
-use App\Http\Controllers\Api\DocumentCommentController;
+use App\Http\Controllers\Api\Auth\AuthController;
+use App\Http\Controllers\Api\Announcements\AnnouncementController;
+use App\Http\Controllers\Api\Profile\OrientationController;
+use App\Http\Controllers\Api\Organization\EmployeeController;
+use App\Http\Controllers\Api\Skills\SkillController;
+use App\Http\Controllers\Api\Skills\SkillAssessmentController;
+use App\Http\Controllers\Api\Skills\SkillRecommendationController;
+use App\Http\Controllers\Api\Skills\DevelopmentPlanController;
+use App\Http\Controllers\Api\Skills\SkillGapAnalysisController;
+use App\Http\Controllers\Api\Organization\DepartmentController;
+use App\Http\Controllers\Api\Organization\DivisionController;
+use App\Http\Controllers\Api\Positions\SalaryGradeController;
+use App\Http\Controllers\Api\Positions\StepIncrementController;
+use App\Http\Controllers\Api\Positions\PlantillaPositionController;
+use App\Http\Controllers\Api\Recruitment\PlantillaPosting\PlantillaPostingController;
+use App\Http\Controllers\Api\Recruitment\PlantillaPosting\PlantillaApplicationInterviewController;
+use App\Http\Controllers\Api\Organization\EmployeeDepartmentAssignmentController;
+use App\Http\Controllers\Api\Organization\ManpowerMappingController;
+use App\Http\Controllers\Api\Organization\EmployeeAssignmentController;
+use App\Http\Controllers\Api\RBAC\UserController;
+use App\Http\Controllers\Api\Profile\ProfileController;
+use App\Http\Controllers\Api\Notifications\NotificationController;
+use App\Http\Controllers\Api\Training\TrainingController;
+use App\Http\Controllers\Api\RBAC\AuditLogController;
+use App\Http\Controllers\Api\Recruitment\Hiring\ApplicantController;
+use App\Http\Controllers\Api\Recruitment\Hiring\ApplicantDocumentController;
+use App\Http\Controllers\Api\Recruitment\Hiring\InterviewController;
+use App\Http\Controllers\Api\Recruitment\Hiring\HiringEventController;
+use App\Http\Controllers\Api\Recruitment\Hiring\ContractController;
+use App\Http\Controllers\Api\Recruitment\Hiring\OnboardingController;
+use App\Http\Controllers\Api\Positions\CosPositionController;
+use App\Http\Controllers\Api\Positions\ConsultantPositionController;
+use App\Http\Controllers\Api\System\HolidayController;
+use App\Http\Controllers\Api\Reports\ReportController;
+use App\Http\Controllers\Api\Reports\ReleaseController;
+use App\Http\Controllers\Api\Recruitment\PlantillaPosting\DocumentCommentController;
 
 // ─── Public Routes ─────────────────────────────────────────────────────
 Route::post('/login',          [AuthController::class, 'login'])
@@ -145,6 +145,10 @@ Route::prefix('announcement-attachments')->middleware('throttle:announcements')-
         Route::get('/employee/{employee}/summary',     [SkillGapAnalysisController::class, 'employeeSummary']);
         Route::get('/export/{skillAssessment}',        [SkillGapAnalysisController::class, 'export']);
     });
+// ─── Lightweight Options (dropdown/filter reference data — any authenticated user) ─────
+    Route::get('/departments/options',   [DepartmentController::class, 'options']);
+    Route::get('/divisions/options',     [DivisionController::class, 'options']);
+    Route::get('/salary-grades/options', [SalaryGradeController::class, 'options']);
 // ─── Core API Resources ─────────────────────────────────────────────────────
     Route::apiResources([
         'departments'     => DepartmentController::class,

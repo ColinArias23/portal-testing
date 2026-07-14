@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Contract;
-use App\Notifications\ContractAutoRenewed;
+use App\Models\Hiring\Contract;
+use App\Notifications\Recruitment\Hiring\ContractAutoRenewed;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
