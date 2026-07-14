@@ -22,7 +22,6 @@ class EmployeeAssignmentController extends Controller
     public function index(Employee $employee): JsonResponse
     {
         $assignments = EmployeeAssignment::with([
-            'plantillaPosition.item',
             'plantillaPosition.salaryGrade',
             'stepIncrement',
         ])
@@ -61,7 +60,6 @@ class EmployeeAssignmentController extends Controller
 
         return response()->json(
             $this->format($assignment->load([
-                'plantillaPosition.item',
                 'plantillaPosition.salaryGrade',
                 'stepIncrement',
             ])),
@@ -115,14 +113,11 @@ class EmployeeAssignmentController extends Controller
             'end_date'   => $a->end_date,
 
             'plantilla_position' => $position ? [
-                'id'             => $position->id,
-                'item_number'    => $position->item_number,
-                'position_title' => $position->position_title,
-                'status'         => $position->computed_status,
-                'item'           => $position->item ? [
-                    'id'    => $position->item->id,
-                    'title' => $position->item->title,
-                ] : null,
+                'id'                 => $position->id,
+                'base_item_number'   => $position->base_item_number,
+                'position_slot_name' => $position->position_slot_name,
+                'position_title'     => $position->position_title,
+                'status'             => $position->computed_status,
                 'salary_grade' => $position->salaryGrade ? [
                     'id'             => $position->salaryGrade->id,
                     'salary_grade'   => $position->salaryGrade->salary_grade,

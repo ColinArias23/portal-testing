@@ -16,6 +16,7 @@ use App\Events\Organization\EmployeeUpdated;
 use App\Traits\Concerns\ResolvesAvatarUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -35,9 +36,9 @@ class EmployeeController extends Controller
         $this->middleware('permission:employees.manage')->only(['store', 'update', 'destroy']);
     }
 // ─── FormatEmployee ─────────────────────────────────────────────────────
-    private function formatEmployee(Employee $employee): array
+    private function formatEmployee(Employee $employee, ?Collection $allDepts = null): array
     {
-        $allDepts = Department::all(['id', 'name'])->keyBy('id');
+        $allDepts ??= Department::all(['id', 'name'])->keyBy('id');
 
         $departments = collect($employee->department_ids ?? [])
             ->map(fn($id) => $allDepts->get($id))
@@ -87,7 +88,7 @@ class EmployeeController extends Controller
             'type'  => $positionInfo['type'] ?? 'plantilla',
             'id'    => $positionInfo['id'] ?? null,
             'title' => $employmentType === 'plantilla'
-                ? ($position?->item?->title ?? $positionInfo['position_title'] ?? null)
+                ? ($positionInfo['position_title'] ?? null)
                 : ($positionInfo['title'] ?? null),
         ] : null;
 
@@ -450,18 +451,11 @@ class EmployeeController extends Controller
                         ->contains(fn($r) => str_contains(strtolower($r), $term));
             })->values();
 
-            $all->each(function ($emp) use ($allDepts) {
-                $emp->departments = collect($emp->department_ids ?? [])
-                    ->map(fn($id) => $allDepts->get($id))
-                    ->filter()->values()->toArray();
-                $emp->avatar_url = $this->resolveAvatarUrl($emp->getRawOriginal('avatar_url'));
-                $emp->annual_salary  = $this->resolveAnnualSalary($emp);
-                $emp->monthly_salary = $this->resolveMonthlySalary($emp);
-            });
-
             $total    = $all->count();
             $lastPage = (int) ceil($total / $perPage) ?: 1;
-            $items    = $all->slice(($page - 1) * $perPage, $perPage)->values();
+            $items    = $all->slice(($page - 1) * $perPage, $perPage)
+                ->values()
+                ->map(fn($emp) => $this->formatEmployee($emp, $allDepts));
 
             return response()->json([
                 'data'         => $items,
@@ -476,15 +470,9 @@ class EmployeeController extends Controller
 
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
-        $paginator->getCollection()->transform(function ($employee) use ($allDepts) {
-            $employee->departments = collect($employee->department_ids ?? [])
-                ->map(fn($id) => $allDepts->get($id))
-                ->filter()->values()->toArray();
-            $employee->avatar_url = $this->resolveAvatarUrl($employee->getRawOriginal('avatar_url'));
-            $employee->annual_salary  = $this->resolveAnnualSalary($employee);
-            $employee->monthly_salary = $this->resolveMonthlySalary($employee);
-            return $employee;
-        });
+        $paginator->getCollection()->transform(
+            fn($employee) => $this->formatEmployee($employee, $allDepts)
+        );
 
         return response()->json($paginator);
     }
