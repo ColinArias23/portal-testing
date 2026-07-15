@@ -101,7 +101,7 @@ class UserController extends Controller
         }
 
         $request->validate([
-            'permissions'   => ['required', 'array'],
+            'permissions'   => ['present', 'array'], 
             'permissions.*' => [
                 'string',
                 Rule::exists('permissions', 'name')->where('guard_name', self::GUARD),

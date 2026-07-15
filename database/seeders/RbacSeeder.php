@@ -13,7 +13,7 @@ class RbacSeeder extends Seeder
 {
     private const GUARD = 'web';
 
-    private const PERMISSIONS = [
+        private const PERMISSIONS = [
         // Dashboard
         'dashboard.view',
 
@@ -119,6 +119,9 @@ class RbacSeeder extends Seeder
 
         // Audit Logs
         'audit_logs.view',
+
+        // Bug Reports
+        'bug-reports.view',
     ];
 
     public function run(): void
