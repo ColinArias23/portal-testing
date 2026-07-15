@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api\Positions;
 use App\Http\Controllers\Controller;
 use App\Models\PlantillaPosition;
 use App\Models\StepIncrement;
-use App\Models\ActivityLog;
+use App\Models\RBAC\ActivityLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 

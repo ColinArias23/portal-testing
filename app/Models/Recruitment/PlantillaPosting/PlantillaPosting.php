@@ -20,6 +20,7 @@ class PlantillaPosting extends Model
         'salary_grade_id',
         'step_increment_id',
         'monthly_salary',
+        'annual_salary',
         'employment_status',
         'vacancies',
         'immediate_supervisor',
@@ -40,6 +41,7 @@ class PlantillaPosting extends Model
     protected $casts = [
         'required_documents' => 'array',
         'monthly_salary' => 'decimal:2',
+        'annual_salary' => 'decimal:2',
         'date_posted' => 'date',
         'closing_date' => 'date',
         'expected_appointment_date' => 'date',

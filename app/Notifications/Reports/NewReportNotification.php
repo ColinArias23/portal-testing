@@ -41,12 +41,12 @@ class NewReportNotification extends Notification implements ShouldQueue
 
         return (new MailMessage)
             ->subject("[{$typeLabel}] New report: {$this->report->subject}")
-            ->greeting('Hello ' . $notifiable->name . ',')
+            ->greeting('Hello ' . ($notifiable->username ?? 'there') . ',')
             ->line('A new report has been submitted and requires your attention.')
-            ->line("**Subject:** {$this->report->subject}")
-            ->line("**Type:** {$typeLabel}")
-            ->line("**Category:** {$this->report->category}")
-            ->line("**Severity:** {$severityLabel}")
+            ->line("Subject: {$this->report->subject}")
+            ->line("Type: {$typeLabel}")
+            ->line("Category: {$this->report->category}")
+            ->line("Severity: {$severityLabel}")
             ->action('View Report', url("/admin/reports/{$this->report->id}"))
             ->line('Thank you for keeping the platform healthy.');
     }

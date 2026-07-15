@@ -7,6 +7,7 @@ use App\Models\PlantillaPosition;
 use App\Models\PlantillaPosting;
 use App\Models\PlantillaPostingApplication;
 use App\Models\PlantillaPostingApplicationDocument;
+use App\Models\StepIncrement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -107,26 +108,73 @@ class PlantillaPostingController extends Controller
             $query->where('status', $status);
         }
     }
-// ─── VacantItems ─────────────────────────────────────────────────────
+// ─── VacantItems ───────────────────────────────────────────────────────
     public function vacantItems()
     {
-        $vacant = PlantillaPosition::where('status', 'VACANT')
-            ->get()
-            ->groupBy('base_item_number');
+        $baseItemNumbers = PlantillaPosition::selectRaw('DISTINCT base_item_number')
+            ->vacant()
+            ->pluck('base_item_number');
 
-        $items = $vacant->map(function ($positions, $baseItemNumber) {
-            $first = $positions->first();
+        $items = $baseItemNumbers->map(function ($baseItemNumber) {
+            $position = PlantillaPosition::where('base_item_number', $baseItemNumber)
+                ->with([
+                    'displayDepartment:id,name,code,head_employee_id',
+                    'displayDepartment.head:id,first_name,last_name,prefix,suffix',
+                    'displayDivision:id,name,code,head_employee_id',
+                    'displayDivision.head:id,first_name,last_name,prefix,suffix',
+                    'salaryGrade',
+                    'stepIncrement',
+                ])
+                ->first();
+
+            if (!$position) {
+                return null;
+            }
+
+            $vacantCount = PlantillaPosition::where('base_item_number', $baseItemNumber)
+                ->vacant()
+                ->count();
+
+            $steps = $position->salary_grade_id
+                ? StepIncrement::where('salary_grade_id', $position->salary_grade_id)
+                    ->orderBy('step')
+                    ->get(['id', 'step', 'monthly_salary', 'annual_salary'])
+                : collect();
+
+            $defaultStep = $position->stepIncrement ?? $steps->first();
+
+            $supervisor = $position->displayDepartment?->head
+                ?? $position->displayDivision?->head;
 
             return [
-                'base_item_number' => $baseItemNumber,
-                'title' => $first->position_title ?: $first->title,
-                'vacant_count' => $positions->count(),
-                'salary_grade_id' => $first->salary_grade_id,
-                'step_increment_id' => $first->step_increment_id,
-                'display_department_id' => $first->display_department_id,
-                'display_division_id' => null,
+                'base_item_number'      => $position->base_item_number,
+                'title'                 => $position->title,
+                'vacant_count'          => $vacantCount,
+
+                'display_department_id' => $position->display_department_id,
+                'display_department'    => $position->displayDepartment
+                    ? $position->displayDepartment->only(['id', 'name', 'code'])
+                    : null,
+                'display_division_id'   => $position->display_division_id,
+                'display_division'      => $position->displayDivision
+                    ? $position->displayDivision->only(['id', 'name', 'code'])
+                    : null,
+
+                'salary_grade_id'       => $position->salary_grade_id,
+                'salary_grade'          => $position->salaryGrade ? [
+                    'id'           => $position->salaryGrade->id,
+                    'salary_grade' => $position->salaryGrade->salary_grade,
+                ] : null,
+
+                'step_increment_id'     => $defaultStep?->id,
+                'step_increments'       => $steps,
+
+                'monthly_salary'        => $defaultStep?->monthly_salary,
+                'annual_salary'         => $defaultStep?->annual_salary,
+
+                'immediate_supervisor'  => $supervisor?->full_name,
             ];
-        })->values();
+        })->filter()->values();
 
         return response()->json($items);
     }

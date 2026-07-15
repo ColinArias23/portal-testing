@@ -34,6 +34,7 @@ class EmployeeController extends Controller
         $this->middleware('auth:sanctum');
         $this->middleware('permission:employees.view')->only(['index', 'show', 'nonRoot', 'genderCount', 'avatar']);
         $this->middleware('permission:employees.manage')->only(['store', 'update', 'destroy']);
+        $this->middleware('permission:team.view')->only(['team']);
     }
 // ─── FormatEmployee ─────────────────────────────────────────────────────
     private function formatEmployee(Employee $employee, ?Collection $allDepts = null): array
@@ -494,6 +495,23 @@ class EmployeeController extends Controller
         ]);
 
         return response()->json($this->formatEmployee($employee));
+    }
+// ─── Team ─────────────────────────────────────────────────────
+    public function team(): JsonResponse
+    {
+        $allDepts = Department::all(['id', 'name'])->keyBy('id');
+
+        $employees = Employee::with([
+            'info', 'parents', 'division', 'user',
+            'primaryAssignment.plantillaPosition.salaryGrade',
+            'primaryAssignment.stepIncrement',
+            'cosPosition', 'consultantPosition',
+            'latestAssessment', 'activeDevelopmentPlans.skill', 'salaryHistories',
+        ])->orderBy('id')->get();
+
+        return response()->json(
+            $employees->map(fn($e) => $this->formatEmployee($e, $allDepts))->values()
+        );
     }
 // ─── NonRoot ─────────────────────────────────────────────────────
     public function nonRoot(): JsonResponse

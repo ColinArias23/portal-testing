@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Jobs;
+namespace App\Jobs\Reports;
 
 use App\Events\Reports\ReportSubmitted;
 use App\Models\Report;
@@ -46,7 +46,7 @@ class ProcessNewReport implements ShouldQueue
 
     private function notifyAdmins(Report $report): void
     {
-        $admins = User::where('role', 'admin')->get();
+        $admins = User::role('SuperAdmin')->get();
 
         if ($admins->isEmpty()) {
             Log::warning('ProcessNewReport: No admin users found to notify.', [

@@ -20,8 +20,6 @@ class ReportController extends Controller
     public function index(Request $request): JsonResponse
     {
         $this->authorize('viewAny', Report::class);
- 
-        $allowed = ['type', 'status', 'category', 'severity'];
 
         $reports = Report::with('user:id,username')
             ->when($request->filled('type'),     fn ($q) => $q->where('type',     $request->type))
@@ -29,7 +27,7 @@ class ReportController extends Controller
             ->when($request->filled('category'), fn ($q) => $q->where('category', $request->category))
             ->when($request->filled('severity'), fn ($q) => $q->where('severity', $request->severity))
             ->orderBy('created_at', 'desc')
-            ->paginate(25);
+            ->paginate(min((int) $request->get('per_page', 25), 100));
 
         return response()->json($reports);
     }
@@ -40,7 +38,7 @@ class ReportController extends Controller
 
         $report->load('user:id,username');
 
-        return response()->json(['data' => $report]);
+        return response()->json($report);
     }
 // ─── Store ─────────────────────────────────────────────────────
     public function store(StoreReportRequest $request): JsonResponse
@@ -53,18 +51,9 @@ class ReportController extends Controller
 
         dispatch(new ProcessNewReport($report));
 
-        return response()->json([
-            'message' => 'Report submitted successfully.',
-            'data'    => [
-                'id'         => $report->id,
-                'subject'    => $report->subject,
-                'type'       => $report->type,
-                'category'   => $report->category,
-                'severity'   => $report->severity,
-                'status'     => $report->status,
-                'created_at' => $report->created_at->toISOString(),
-            ],
-        ], 201);
+        $report->load('user:id,username');
+
+        return response()->json($report, 201);
     }
 // ─── Update ─────────────────────────────────────────────────────
     public function update(UpdateReportRequest $request, Report $report): JsonResponse
@@ -73,10 +62,9 @@ class ReportController extends Controller
 
         $report->update($request->validated());
 
-        return response()->json([
-            'message' => 'Report updated successfully.',
-            'data'    => $report->fresh(),
-        ]);
+        $report->load('user:id,username');
+
+        return response()->json($report->fresh('user'));
     }
 // ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(Report $report): JsonResponse
@@ -85,6 +73,6 @@ class ReportController extends Controller
 
         $report->delete();
 
-        return response()->json(['message' => 'Report deleted successfully.']);
+        return response()->json(['message' => 'Report deleted.']);
     }
 }
