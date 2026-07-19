@@ -95,10 +95,11 @@ Route::prefix('announcement-attachments')->middleware('throttle:announcements')-
     Route::delete('/{attachment}',        [AnnouncementController::class, 'destroyAttachment']);
 });
 // ─── Employees ─────────────────────────────────────────────────────
-    Route::get('/employees/non-root',          [EmployeeController::class, 'nonRoot']);
-    Route::get('/employees/gender-count',      [EmployeeController::class, 'genderCount']);
-    Route::get('/employees/{employee}/avatar', [EmployeeController::class, 'avatar']);
-    Route::get('/team',                        [EmployeeController::class, 'team']);
+    Route::get('/employees/non-root',                                     [EmployeeController::class, 'nonRoot']);
+    Route::get('/employees/gender-count',                                 [EmployeeController::class, 'genderCount']);
+    Route::get('/employees/{employee}/avatar',                            [EmployeeController::class, 'avatar']);
+    Route::get('/team',                                                   [EmployeeController::class, 'team']);
+    Route::get('/employees/{employee}/pending-plantilla-provision',       [EmployeeController::class, 'pendingPlantillaProvision']);
 // ─── Employee Department Assignments ─────────────────────────────────────────────────────
     Route::apiResource(
         'employees.department-assignments',

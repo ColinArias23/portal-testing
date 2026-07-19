@@ -12,8 +12,10 @@ class PlantillaPosting extends Model
 
     protected $fillable = [
         'base_item_number',
+        'position_slot_name',
         'title',
         'description',
+        'job_description',
         'display_department_id',
         'display_division_id',
         'section',
@@ -29,7 +31,6 @@ class PlantillaPosting extends Model
         'qualification_training',
         'qualification_eligibility',
         'qualification_competency',
-        'job_description',
         'required_documents',
         'date_posted',
         'closing_date',
@@ -53,6 +54,12 @@ class PlantillaPosting extends Model
         'remaining_vacancies',
         'applicants_count',
     ];
+
+    public function plantillaPositions()
+    {
+        return $this->belongsToMany(PlantillaPosition::class, 'plantilla_posting_slots')
+            ->withTimestamps();
+    }
 
     public function department()
     {
@@ -83,13 +90,13 @@ class PlantillaPosting extends Model
     {
         return $this->hasMany(PlantillaPostingApplication::class);
     }
-     
+
     public function scopeAdminOpen($query)
     {
         return $query->where('status', '!=', 'Closed')
             ->whereDate('closing_date', '>=', now()->toDateString());
     }
-    
+
     public function getVacantSlotsAttribute(): int
     {
         return PlantillaPosition::where('base_item_number', $this->base_item_number)

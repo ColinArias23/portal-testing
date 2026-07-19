@@ -20,12 +20,11 @@ class UserController extends Controller
     private const GUARD = 'web';
 
     public function __construct()
-{
-    $this->middleware('auth:sanctum');
-
-    $this->middleware('permission:users.manage')->only(['pendingCount', 'pendingUsers', 'approvedUsers', 'permissions', 'activate', 'bulkActivate',]);
-    $this->middleware('permission:users.manage.roles')->only(['updatePermissions', 'updateRole',]);
-}
+    {
+        $this->middleware('auth:sanctum');
+        $this->middleware('permission:users.manage,sanctum')->only(['pendingCount', 'pendingUsers', 'approvedUsers', 'permissions', 'activate', 'bulkActivate']);
+        $this->middleware('permission:users.manage.roles,sanctum')->only(['updatePermissions', 'updateRole']);
+    }
 // ─── PendingCount ─────────────────────────────────────────────────────
     public function pendingCount()
     {
@@ -82,6 +81,20 @@ class UserController extends Controller
 // ─── UpdatePermissions ─────────────────────────────────────────────────────
     public function updatePermissions(Request $request, User $user)
     {
+
+        // TEMPORARY DEBUG — REMOVE AFTER DIAGNOSIS
+        \Log::info('updatePermissions debug', [
+            'authenticated_user_id' => Auth::id(),
+            'authenticated_username' => Auth::user()?->username,
+            'auth_roles' => Auth::user()?->getRoleNames()->toArray(),
+            'auth_has_users_manage_roles' => Auth::user()?->can('users.manage.roles'),
+            'auth_has_role_superadmin' => Auth::user()?->hasRole('SuperAdmin'),
+            'target_user_id' => $user->id,
+            'target_approval_status' => $user->approval_status,
+            'target_has_role_superadmin' => $user->hasRole('SuperAdmin'),
+        ]);
+        // END TEMPORARY DEBUG
+
         if ($user->approval_status !== 'APPROVED') {
             return response()->json([
                 'message' => 'Cannot update permissions for unapproved users.',

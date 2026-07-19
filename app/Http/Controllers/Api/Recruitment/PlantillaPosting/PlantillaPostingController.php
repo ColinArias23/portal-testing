@@ -89,7 +89,8 @@ class PlantillaPostingController extends Controller
         if ($search = $request->get('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
-                    ->orWhere('base_item_number', 'like', "%{$search}%");
+                    ->orWhere('base_item_number', 'like', "%{$search}%")
+                    ->orWhere('position_slot_name', 'like', "%{$search}%");
             });
         }
         if ($departmentId = $request->get('department_id')) {
@@ -109,93 +110,118 @@ class PlantillaPostingController extends Controller
         }
     }
 // ─── VacantItems ───────────────────────────────────────────────────────
-    public function vacantItems()
-    {
-        $baseItemNumbers = PlantillaPosition::selectRaw('DISTINCT base_item_number')
+public function vacantItems()
+{
+    $baseItemNumbers = PlantillaPosition::selectRaw('DISTINCT base_item_number')
+        ->vacant()
+        ->pluck('base_item_number');
+
+    $items = $baseItemNumbers->map(function ($baseItemNumber) {
+        $position = PlantillaPosition::where('base_item_number', $baseItemNumber)
+            ->with([
+                'displayDepartment:id,name,code,head_employee_id',
+                'displayDepartment.head:id,first_name,last_name,prefix,suffix',
+                'displayDivision:id,name,code,head_employee_id',
+                'displayDivision.head:id,first_name,last_name,prefix,suffix',
+                'salaryGrade',
+                'stepIncrement',
+            ])
+            ->first();
+
+        if (!$position) {
+            return null;
+        }
+
+        $vacantSlots = PlantillaPosition::where('base_item_number', $baseItemNumber)
             ->vacant()
-            ->pluck('base_item_number');
+            ->with('stepIncrement:id,monthly_salary,annual_salary')
+            ->orderBy('position_slot_name')
+            ->get(['id', 'base_item_number', 'position_slot_name', 'status', 'salary_grade_id', 'step_increment_id'])
+            ->map(function (PlantillaPosition $slot) {
+                return [
+                    'id'                 => $slot->id,
+                    'position_slot_name' => $slot->position_slot_name,
+                    'status'             => $slot->status,
+                    'salary_grade_id'    => $slot->salary_grade_id,
+                    'step_increment_id'  => $slot->step_increment_id,
+                    'monthly_salary'     => $slot->stepIncrement?->monthly_salary,
+                    'annual_salary'      => $slot->stepIncrement?->annual_salary,
+                ];
+            });
 
-        $items = $baseItemNumbers->map(function ($baseItemNumber) {
-            $position = PlantillaPosition::where('base_item_number', $baseItemNumber)
-                ->with([
-                    'displayDepartment:id,name,code,head_employee_id',
-                    'displayDepartment.head:id,first_name,last_name,prefix,suffix',
-                    'displayDivision:id,name,code,head_employee_id',
-                    'displayDivision.head:id,first_name,last_name,prefix,suffix',
-                    'salaryGrade',
-                    'stepIncrement',
-                ])
-                ->first();
+        $steps = $position->salary_grade_id
+            ? StepIncrement::where('salary_grade_id', $position->salary_grade_id)
+                ->orderBy('step')
+                ->get(['id', 'step', 'monthly_salary', 'annual_salary'])
+            : collect();
 
-            if (!$position) {
-                return null;
-            }
+        $defaultStep = $position->stepIncrement ?? $steps->first();
 
-            $vacantCount = PlantillaPosition::where('base_item_number', $baseItemNumber)
-                ->vacant()
-                ->count();
+        $supervisor = $position->displayDepartment?->head
+            ?? $position->displayDivision?->head;
 
-            $steps = $position->salary_grade_id
-                ? StepIncrement::where('salary_grade_id', $position->salary_grade_id)
-                    ->orderBy('step')
-                    ->get(['id', 'step', 'monthly_salary', 'annual_salary'])
-                : collect();
+        return [
+            'base_item_number'      => $position->base_item_number,
+            'title'                 => $position->title,
+            'vacant_count'          => $vacantSlots->count(),
 
-            $defaultStep = $position->stepIncrement ?? $steps->first();
+            'display_department_id' => $position->display_department_id,
+            'display_department'    => $position->displayDepartment
+                ? $position->displayDepartment->only(['id', 'name', 'code'])
+                : null,
+            'display_division_id'   => $position->display_division_id,
+            'display_division'      => $position->displayDivision
+                ? $position->displayDivision->only(['id', 'name', 'code'])
+                : null,
 
-            $supervisor = $position->displayDepartment?->head
-                ?? $position->displayDivision?->head;
+            'salary_grade_id'       => $position->salary_grade_id,
+            'salary_grade'          => $position->salaryGrade ? [
+                'id'           => $position->salaryGrade->id,
+                'salary_grade' => $position->salaryGrade->salary_grade,
+            ] : null,
 
-            return [
-                'base_item_number'      => $position->base_item_number,
-                'title'                 => $position->title,
-                'vacant_count'          => $vacantCount,
+            'step_increment_id'     => $defaultStep?->id,
+            'step_increments'       => $steps,
 
-                'display_department_id' => $position->display_department_id,
-                'display_department'    => $position->displayDepartment
-                    ? $position->displayDepartment->only(['id', 'name', 'code'])
-                    : null,
-                'display_division_id'   => $position->display_division_id,
-                'display_division'      => $position->displayDivision
-                    ? $position->displayDivision->only(['id', 'name', 'code'])
-                    : null,
+            'monthly_salary'        => $defaultStep?->monthly_salary,
+            'annual_salary'         => $defaultStep?->annual_salary,
 
-                'salary_grade_id'       => $position->salary_grade_id,
-                'salary_grade'          => $position->salaryGrade ? [
-                    'id'           => $position->salaryGrade->id,
-                    'salary_grade' => $position->salaryGrade->salary_grade,
-                ] : null,
+            'immediate_supervisor'  => $supervisor?->full_name,
 
-                'step_increment_id'     => $defaultStep?->id,
-                'step_increments'       => $steps,
+            'slots'                 => $vacantSlots,
+        ];
+    })->filter()->values();
 
-                'monthly_salary'        => $defaultStep?->monthly_salary,
-                'annual_salary'         => $defaultStep?->annual_salary,
-
-                'immediate_supervisor'  => $supervisor?->full_name,
-            ];
-        })->filter()->values();
-
-        return response()->json($items);
-    }
+    return response()->json($items);
+}
 // ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request)
     {
         $data = $this->validatePosting($request);
 
-        $vacantSlots = PlantillaPosition::where('base_item_number', $data['base_item_number'])
-            ->where('status', 'VACANT')
-            ->count();
+        $slotIds = $data['plantilla_position_ids'];
+        unset($data['plantilla_position_ids']);
 
-        if ($vacantSlots < 1) {
+        $slots = PlantillaPosition::where('base_item_number', $data['base_item_number'])
+            ->whereIn('id', $slotIds)
+            ->orderBy('position_slot_name')
+            ->get();
+
+        if ($slots->count() !== count($slotIds)) {
             throw ValidationException::withMessages([
-                'base_item_number' => 'Walang vacant slot ang item na ito ngayon.',
+                'plantilla_position_ids' => 'One or more selected item numbers could not be matched to this position.',
             ]);
         }
 
-        if ($data['vacancies'] > $vacantSlots) {
+        if ($slots->contains(fn (PlantillaPosition $s) => ! $s->isVacant())) {
             throw ValidationException::withMessages([
-                'vacancies' => "Vacant slots lang ({$vacantSlots}) ang available para sa item na ito.",
+                'plantilla_position_ids' => 'One or more selected item numbers is no longer vacant.',
+            ]);
+        }
+
+        if (count($slotIds) !== (int) $data['vacancies']) {
+            throw ValidationException::withMessages([
+                'vacancies' => 'Vacancies must equal the number of selected item numbers.',
             ]);
         }
 
@@ -209,11 +235,20 @@ class PlantillaPostingController extends Controller
             ]);
         }
 
+        $data['position_slot_name'] = $slots->pluck('position_slot_name')->implode(', ');
         $data['created_by'] = $request->user()?->id;
 
-        $posting = PlantillaPosting::create($data);
+        $posting = DB::transaction(function () use ($data, $slots) {
+            $posting = PlantillaPosting::create($data);
+            $posting->plantillaPositions()->sync($slots->pluck('id'));
 
-        return response()->json($posting->fresh(['department', 'division', 'salaryGrade']), 201);
+            return $posting;
+        });
+
+        return response()->json(
+            $posting->fresh(['department', 'division', 'salaryGrade']),
+            201
+        );
     }
 // ─── Show ─────────────────────────────────────────────────────
     public function show($id)
@@ -230,6 +265,13 @@ class PlantillaPostingController extends Controller
         $posting = PlantillaPosting::findOrFail($id);
         $data = $this->validatePosting($request, $posting->id);
 
+        // The claimed slot(s) and the saved position_slot_name are fixed
+        // at creation time — never editable, per the Edit dialog's own
+        // copy ("Fixed at the time this posting was created. Never
+        // editable."). Strip both even if a client sends them.
+        unset($data['plantilla_position_ids']);
+        unset($data['position_slot_name']);
+
         $posting->update($data);
 
         return response()->json($posting->fresh(['department', 'division', 'salaryGrade']));
@@ -242,19 +284,23 @@ class PlantillaPostingController extends Controller
 
         return response()->json(['message' => 'Posting deleted.']);
     }
-// ─── VAlidatePosting ─────────────────────────────────────────────────────
+// ─── ValidatePosting ─────────────────────────────────────────────────────
     private function validatePosting(Request $request, $ignoreId = null): array
     {
         $validated = $request->validate([
             'base_item_number' => 'required|string|max:50',
+            'plantilla_position_ids' => $ignoreId ? 'sometimes|array' : 'required|array|min:1',
+            'plantilla_position_ids.*' => 'integer|exists:plantilla_positions,id',
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'job_description' => 'nullable|string',
             'display_department_id' => 'nullable|exists:departments,id',
             'display_division_id' => 'nullable|exists:divisions,id',
             'section' => 'nullable|string|max:255',
             'salary_grade_id' => 'nullable|exists:salary_grades,id',
             'step_increment_id' => 'nullable|exists:step_increments,id',
             'monthly_salary' => 'nullable|numeric|min:0',
+            'annual_salary' => 'nullable|numeric|min:0', 
             'employment_status' => ['required', Rule::in(['Permanent'])],
             'vacancies' => 'required|integer|min:1|max:99',
             'immediate_supervisor' => 'nullable|string|max:255',
@@ -263,13 +309,13 @@ class PlantillaPostingController extends Controller
             'qualification_training' => 'nullable|string',
             'qualification_eligibility' => 'nullable|string',
             'qualification_competency' => 'nullable|string',
-            'job_description' => 'required|string',
             'required_documents' => 'required|array',
             'required_documents.*' => 'boolean',
             'date_posted' => 'required|date',
             'closing_date' => 'required|date|after_or_equal:date_posted',
             'expected_appointment_date' => 'nullable|date',
-            'status' => ['required', Rule::in(['Open', 'Closing Soon', 'Closed'])],        ]);
+            'status' => ['required', Rule::in(['Open', 'Closing Soon', 'Closed'])],
+        ]);
 
         $validated['required_documents'] = collect(self::DOC_KEYS)
             ->mapWithKeys(fn ($key) => [$key => (bool) ($validated['required_documents'][$key] ?? false)])
@@ -483,7 +529,6 @@ class PlantillaPostingController extends Controller
         if (! $canViewAll) {
             $employeeId = $user->employee_id ?? $user->employee?->id;
 
-            // No linked employee record → nothing to show, but don't 500/403.
             if (! $employeeId) {
                 return response()->json([]);
             }

@@ -15,7 +15,7 @@ class PlantillaPosition extends Model
         'updated_at',
         'deleted_at',
     ];
-    
+
     protected $fillable = [
         'base_item_number',
         'title',
@@ -78,6 +78,12 @@ class PlantillaPosition extends Model
     public function activeAssignments()
     {
         return $this->assignments()->whereNull('end_date');
+    }
+
+    public function postings()
+    {
+        return $this->belongsToMany(PlantillaPosting::class, 'plantilla_posting_slots')
+            ->withTimestamps();
     }
 
     public function isFilled(): bool

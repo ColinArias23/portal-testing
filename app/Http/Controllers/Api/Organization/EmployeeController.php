@@ -11,6 +11,7 @@ use App\Models\EmployeeInfo;
 use App\Models\EmployeeAssignment;
 use App\Models\EmployeeSalaryHistory;
 use App\Models\PlantillaPosition;
+use App\Models\PlantillaPostingApplication;
 use App\Services\Recruitment\PlantillaPosting\PlantillaService;
 use App\Events\Organization\EmployeeUpdated;
 use App\Traits\Concerns\ResolvesAvatarUrl;
@@ -32,7 +33,7 @@ class EmployeeController extends Controller
     public function __construct(private PlantillaService $plantillaService)
     {
         $this->middleware('auth:sanctum');
-        $this->middleware('permission:employees.view')->only(['index', 'show', 'nonRoot', 'genderCount', 'avatar']);
+        $this->middleware('permission:employees.view')->only(['index', 'show', 'nonRoot', 'genderCount', 'avatar', 'pendingPlantillaProvision']);
         $this->middleware('permission:employees.manage')->only(['store', 'update', 'destroy']);
         $this->middleware('permission:team.view')->only(['team']);
     }
@@ -111,6 +112,10 @@ class EmployeeController extends Controller
         return [
             'id'                   => $employee->id,
             'employee_number'      => $employee->employee_number,
+            'user'                 => $employee->user ? [
+                'id'       => $employee->user->id,
+                'username' => $employee->user->username,
+            ] : null,
             'prefix'               => $employee->prefix,
             'first_name'           => $employee->first_name,
             'middle_name'          => $employee->middle_name,
@@ -285,6 +290,30 @@ class EmployeeController extends Controller
             'salary_grade'  => $employmentType === 'plantilla' ? $position?->salaryGrade?->salary_grade : null,
             'step'          => ($employmentType === 'plantilla' && $stepIncrement) ? $stepIncrement->step : null,
         ];
+    }
+// ─── FindPendingProvisionApplication ─────────────────────────────────────────
+    private function findPendingProvisionApplication(Employee $employee): ?PlantillaPostingApplication
+    {
+        return PlantillaPostingApplication::where('employee_id', $employee->id)
+            ->where('status', 'Completed')
+            ->with('posting')
+            ->latest('reviewed_at')
+            ->get()
+            ->first(function (PlantillaPostingApplication $application) use ($employee) {
+                $baseItemNumber = $application->posting?->base_item_number;
+                if (! $baseItemNumber) {
+                    return false;
+                }
+                $hasMatchingActiveAssignment = $employee->assignments()
+                    ->whereNull('end_date')
+                    ->whereHas(
+                        'plantillaPosition',
+                        fn ($q) => $q->where('base_item_number', $baseItemNumber)
+                    )
+                    ->exists();
+
+                return ! $hasMatchingActiveAssignment;
+            });
     }
 // ─── ReconcileManualSalaryInputs ─────────────────────────────────────────────
     private function reconcileManualSalaryInputs(Request $request, array $data): array
@@ -477,6 +506,42 @@ class EmployeeController extends Controller
 
         return response()->json($paginator);
     }
+// ─── PendingPlantillaProvision ────────────────────────────────────────────────
+    public function pendingPlantillaProvision(Employee $employee): JsonResponse
+    {
+        $application = $this->findPendingProvisionApplication($employee);
+
+        if (! $application) {
+            return response()->json(['pending' => false]);
+        }
+
+        $vacantPosition = PlantillaPosition::where('base_item_number', $application->posting->base_item_number)
+            ->vacant()
+            ->with(['displayDepartment:id,name,code', 'displayDivision:id,name,code', 'salaryGrade', 'stepIncrement'])
+            ->orderBy('slot_number')
+            ->first();
+
+        if (! $vacantPosition) {
+            return response()->json(['pending' => false]);
+        }
+
+        return response()->json([
+            'pending'            => true,
+            'application_id'     => $application->id,
+            'posting_title'      => $application->posting->title,
+            'plantilla_position' => [
+                'id'                 => $vacantPosition->id,
+                'base_item_number'   => $vacantPosition->base_item_number,
+                'position_slot_name' => $vacantPosition->position_slot_name,
+                'position_title'     => $vacantPosition->position_title,
+                'salary_grade_id'    => $vacantPosition->salary_grade_id,
+                'salary_grade'       => $vacantPosition->salaryGrade?->salary_grade,
+                'step_increment_id'  => $vacantPosition->step_increment_id,
+                'display_department' => $vacantPosition->displayDepartment?->only(['id', 'name', 'code']),
+                'display_division'   => $vacantPosition->displayDivision?->only(['id', 'name', 'code']),
+            ],
+        ]);
+}
 // ─── Show ─────────────────────────────────────────────────────
     public function show(Employee $employee): JsonResponse
     {
@@ -620,6 +685,8 @@ class EmployeeController extends Controller
             'role_position'   => $employee->role_position,
         ];
 
+        $pendingProvisionApplication = $this->findPendingProvisionApplication($employee);
+
         $employee = DB::transaction(function () use ($request, $employee, $data) {
             if ($request->hasFile('avatar_url')) {
                 $oldPath = $employee->getRawOriginal('avatar_url');
@@ -700,6 +767,34 @@ class EmployeeController extends Controller
             ip:        $request->ip(),
             userAgent: $request->userAgent(),
         );
+        
+        if ($pendingProvisionApplication && strtolower(trim($employee->employment_type ?? '')) === 'plantilla') {
+            $nowProvisioned = $employee->assignments()
+                ->whereNull('end_date')
+                ->whereHas(
+                    'plantillaPosition',
+                    fn ($q) => $q->where('base_item_number', $pendingProvisionApplication->posting->base_item_number)
+                )
+                ->exists();
+
+            if ($nowProvisioned) {
+                ActivityLog::record(
+                    action:       'employee.plantilla_provisioned',
+                    userId:       Auth::id(),
+                    subjectType:  Employee::class,
+                    subjectId:    $employee->id,
+                    subjectLabel: $employee->full_name,
+                    payload:      [
+                        'plantilla_posting_application_id' => $pendingProvisionApplication->id,
+                        'posting_title'                     => $pendingProvisionApplication->posting->title,
+                        'base_item_number'                  => $pendingProvisionApplication->posting->base_item_number,
+                        'plantilla_position_id'              => $data['plantilla_position_id'] ?? null,
+                    ],
+                    ip:        $request->ip(),
+                    userAgent: $request->userAgent(),
+                );
+            }
+        }
 
         $formatted = $this->formatEmployee($employee);
         broadcast(new EmployeeUpdated($formatted))->toOthers();
@@ -840,6 +935,19 @@ class EmployeeController extends Controller
     private function syncAssignment(Employee $employee, Request $request): void
     {
         if ($request->employment_type !== 'Plantilla') {
+            $existing = EmployeeAssignment::where('employee_id', $employee->id)
+                ->where('is_primary', true)
+                ->whereNull('end_date')
+                ->first();
+
+            if ($existing) {
+                $this->plantillaService->vacate(
+                    $existing,
+                    now()->toDateString(),
+                    'Employee moved to ' . $request->employment_type . ' via employee form'
+                );
+            }
+
             return;
         }
 

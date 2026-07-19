@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api\Positions;
 use App\Http\Controllers\Controller;
 use App\Models\PlantillaPosition;
 use App\Models\StepIncrement;
-use App\Models\RBAC\ActivityLog;
+use App\Models\ActivityLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -46,7 +46,7 @@ class PlantillaPositionController extends Controller
                 'FILLED'   => $query->filled(),
                 'UNFILLED' => $query->unfilled(),
                 default    => null,
-            };
+            }; 
         }
         if ($request->filled('salary_grade_id')) {
             $query->where('salary_grade_id', $request->salary_grade_id);
@@ -118,14 +118,10 @@ class PlantillaPositionController extends Controller
                 ->forceDelete();
 
             for ($i = 1; $i <= $slots; $i++) {
-                $itemNo = $i === 1
-                    ? $data['base_item_number']
-                    : "{$data['base_item_number']}-" . ($i - 1);
-
                 PlantillaPosition::create([
                     ...$data,
                     'slot_number'        => $i,
-                    'position_slot_name' => $itemNo,
+                    'position_slot_name' => $this->buildSlotName($data['base_item_number'], $i, $slots),
                     'position_title'     => $data['title'],
                     'status'             => 'VACANT',
                     'requires_approval'  => false,
@@ -173,17 +169,15 @@ class PlantillaPositionController extends Controller
         if (!$template) {
             return response()->json(['message' => 'Plantilla item not found.'], 404);
         }
+        $totalSlotsAfterAdd = $highest + $data['count'];
 
-        DB::transaction(function () use ($template, $data, $highest, $request) {
+        DB::transaction(function () use ($template, $data, $highest, $totalSlotsAfterAdd, $request) {
             PlantillaPosition::onlyTrashed()
                 ->where('base_item_number', $template->base_item_number)
                 ->forceDelete();
 
             for ($i = 1; $i <= $data['count']; $i++) {
                 $newSlotNumber = $highest + $i;
-                $slotName = $newSlotNumber === 1
-                    ? $template->base_item_number
-                    : "{$template->base_item_number}-" . ($newSlotNumber - 1);
 
                 PlantillaPosition::create([
                     'base_item_number'      => $template->base_item_number,
@@ -191,7 +185,7 @@ class PlantillaPositionController extends Controller
                     'position_title'        => $template->title,
                     'description'           => $template->description,
                     'slot_number'           => $newSlotNumber,
-                    'position_slot_name'    => $slotName,
+                    'position_slot_name'    => $this->buildSlotName($template->base_item_number, $newSlotNumber, $totalSlotsAfterAdd),
                     'display_department_id' => $template->display_department_id,
                     'display_division_id'   => $template->display_division_id,
                     'role'                  => $template->role,
@@ -479,6 +473,12 @@ class PlantillaPositionController extends Controller
             ->values();
 
         return response()->json($items);
+    }
+    private function buildSlotName(string $baseItemNumber, int $slotNumber, int $totalSlots): string
+    {
+        return $totalSlots === 1
+            ? $baseItemNumber
+            : "{$baseItemNumber}-{$slotNumber}";
     }
 // ─── Format ───────────────────────────────────────────────────
     private function format(PlantillaPosition $position): array
