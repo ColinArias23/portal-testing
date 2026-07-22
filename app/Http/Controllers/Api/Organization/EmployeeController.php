@@ -15,6 +15,7 @@ use App\Models\PlantillaPostingApplication;
 use App\Services\Recruitment\PlantillaPosting\PlantillaService;
 use App\Events\Organization\EmployeeUpdated;
 use App\Traits\Concerns\ResolvesAvatarUrl;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -29,6 +30,7 @@ class EmployeeController extends Controller
     use ResolvesAvatarUrl;
 
     private const PER_PAGE = 20;
+    private const SQLSTATE_INTEGRITY_CONSTRAINT_VIOLATION = '23000';
 
     public function __construct(private PlantillaService $plantillaService)
     {
@@ -443,14 +445,19 @@ class EmployeeController extends Controller
         $number = strtoupper(trim($number));
 
         $exists = Employee::whereRaw('UPPER(TRIM(employee_number)) = ?', [$number])
-            ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
+            ->when($ignoreId !== null, fn($q) => $q->where('id', '!=', $ignoreId))
             ->exists();
 
         if ($exists) {
-            abort(422, json_encode([
+            throw \Illuminate\Validation\ValidationException::withMessages([
                 'employee_number' => ['The employee number has already been taken.'],
-            ]));
+            ]);
         }
+    }
+// ─── IsUniqueConstraintViolation ─────────────────────────────────────────────
+    private function isUniqueConstraintViolation(QueryException $e): bool
+    {
+        return (string) $e->getCode() === self::SQLSTATE_INTEGRITY_CONSTRAINT_VIOLATION;
     }
 // ─── GenderCount ─────────────────────────────────────────────────────
     public function genderCount(): JsonResponse
@@ -601,59 +608,69 @@ class EmployeeController extends Controller
 
         return response()->json($employees);
     }
-// ─── Root ─────────────────────────────────────────────────────
+// ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate($this->rules());
         $this->assertUniqueEmployeeNumber($request->employee_number);
 
-        $employee = DB::transaction(function () use ($request, $data) {
-            if ($request->hasFile('avatar_url')) {
-                $data['avatar_url'] = $this->storeAvatar($request->file('avatar_url'));
+        try {
+            $employee = DB::transaction(function () use ($request, $data) {
+                if ($request->hasFile('avatar_url')) {
+                    $data['avatar_url'] = $this->storeAvatar($request->file('avatar_url'));
+                }
+
+                $data['department_ids']       = array_map('intval', $request->department_ids ?? []);
+                $data['role_position']        = $request->role_position        ?? [];
+                $data['title']                = $request->title                ?? [];
+                $data['position_designation'] = $request->position_designation ?? [];
+
+                $data['cos_position_id']        = $request->cos_position_id        ?? null;
+                $data['consultant_position_id'] = $request->consultant_position_id ?? null;
+
+                $data = $this->reconcileManualSalaryInputs($request, $data);
+                $data['salary_override'] = $request->boolean('salary_override');
+
+                $employee = Employee::create(
+                    collect($data)->except([
+                        'parent_ids', 'plantilla_position_id', 'step_increment_id',
+                        'gender', 'address', 'birthdate', 'contact',
+                    ])->toArray()
+                );
+
+                $employee->info()->create([
+                    'gender'    => $request->gender,
+                    'address'   => $request->address,
+                    'birthdate' => $request->birthdate,
+                    'contact'   => $request->contact,
+                ]);
+
+                $this->syncAssignment($employee, $request);
+                $this->syncParents($employee, $data['parent_ids'] ?? []);
+
+                $employee = $employee->fresh()->load([
+                    'info', 'parents', 'division',
+                    'primaryAssignment.plantillaPosition.salaryGrade',
+                    'primaryAssignment.stepIncrement',
+                    'cosPosition',
+                    'consultantPosition',
+                    'latestAssessment',
+                    'activeDevelopmentPlans.skill',
+                ]);
+
+                $this->syncSalaryHistory($employee);
+
+                return $employee->load('salaryHistories');
+            });
+        } catch (QueryException $e) {
+            if ($this->isUniqueConstraintViolation($e)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'employee_number' => ['The employee number has already been taken.'],
+                ]);
             }
 
-            $data['department_ids']       = array_map('intval', $request->department_ids ?? []);
-            $data['role_position']        = $request->role_position        ?? [];
-            $data['title']                = $request->title                ?? [];
-            $data['position_designation'] = $request->position_designation ?? [];
-
-            $data['cos_position_id']        = $request->cos_position_id        ?? null;
-            $data['consultant_position_id'] = $request->consultant_position_id ?? null;
-
-            $data = $this->reconcileManualSalaryInputs($request, $data);
-            $data['salary_override'] = $request->boolean('salary_override');
-
-            $employee = Employee::create(
-                collect($data)->except([
-                    'parent_ids', 'plantilla_position_id', 'step_increment_id',
-                    'gender', 'address', 'birthdate', 'contact',
-                ])->toArray()
-            );
-
-            $employee->info()->create([
-                'gender'    => $request->gender,
-                'address'   => $request->address,
-                'birthdate' => $request->birthdate,
-                'contact'   => $request->contact,
-            ]);
-
-            $this->syncAssignment($employee, $request);
-            $this->syncParents($employee, $data['parent_ids'] ?? []);
-
-            $employee = $employee->fresh()->load([
-                'info', 'parents', 'division',
-                'primaryAssignment.plantillaPosition.salaryGrade',
-                'primaryAssignment.stepIncrement',
-                'cosPosition',
-                'consultantPosition',
-                'latestAssessment',
-                'activeDevelopmentPlans.skill',
-            ]);
-
-            $this->syncSalaryHistory($employee);
-
-            return $employee->load('salaryHistories');
-        });
+            throw $e;
+        }
 
         ActivityLog::record(
             action:       'employee.created',
@@ -687,66 +704,76 @@ class EmployeeController extends Controller
 
         $pendingProvisionApplication = $this->findPendingProvisionApplication($employee);
 
-        $employee = DB::transaction(function () use ($request, $employee, $data) {
-            if ($request->hasFile('avatar_url')) {
-                $oldPath = $employee->getRawOriginal('avatar_url');
-                if ($oldPath && file_exists(storage_path('app/public/' . $oldPath))) {
-                    Storage::disk('public')->delete($oldPath);
+        try {
+            $employee = DB::transaction(function () use ($request, $employee, $data) {
+                if ($request->hasFile('avatar_url')) {
+                    $oldPath = $employee->getRawOriginal('avatar_url');
+                    if ($oldPath && file_exists(storage_path('app/public/' . $oldPath))) {
+                        Storage::disk('public')->delete($oldPath);
+                    }
+                    $data['avatar_url'] = $this->storeAvatar($request->file('avatar_url'));
                 }
-                $data['avatar_url'] = $this->storeAvatar($request->file('avatar_url'));
-            }
 
-            $data['department_ids']       = array_map('intval', $request->department_ids ?? []);
-            $data['role_position']        = $request->role_position        ?? [];
-            $data['title']                = $request->title                ?? [];
-            $data['position_designation'] = $request->position_designation ?? [];
+                $data['department_ids']       = array_map('intval', $request->department_ids ?? []);
+                $data['role_position']        = $request->role_position        ?? [];
+                $data['title']                = $request->title                ?? [];
+                $data['position_designation'] = $request->position_designation ?? [];
 
-            $data['cos_position_id']        = $request->cos_position_id        ?? null;
-            $data['consultant_position_id'] = $request->consultant_position_id ?? null;
+                $data['cos_position_id']        = $request->cos_position_id        ?? null;
+                $data['consultant_position_id'] = $request->consultant_position_id ?? null;
 
-            $data = $this->reconcileManualSalaryInputs($request, $data);
-            $data['salary_override'] = $request->boolean('salary_override');
+                $data = $this->reconcileManualSalaryInputs($request, $data);
+                $data['salary_override'] = $request->boolean('salary_override');
 
-            $employee->update(
-                collect($data)->except([
-                    'parent_ids', 'plantilla_position_id', 'step_increment_id',
-                    'gender', 'address', 'birthdate', 'contact',
-                ])->toArray()
-            );
-
-            $employee->info()->updateOrCreate(
-                ['employee_id' => $employee->id],
-                [
-                    'gender'    => $request->gender,
-                    'address'   => $request->address,
-                    'birthdate' => $request->birthdate,
-                    'contact'   => $request->contact,
-                ]
-            );
-
-            $this->syncAssignment($employee, $request);
-
-            if ($request->input('_sync_parents') === '1') {
-                $parentIds = array_filter(
-                    array_map('intval', (array) ($request->input('parent_ids') ?? []))
+                $employee->update(
+                    collect($data)->except([
+                        'parent_ids', 'plantilla_position_id', 'step_increment_id',
+                        'gender', 'address', 'birthdate', 'contact',
+                    ])->toArray()
                 );
-                $this->syncParents($employee, $parentIds);
+
+                $employee->info()->updateOrCreate(
+                    ['employee_id' => $employee->id],
+                    [
+                        'gender'    => $request->gender,
+                        'address'   => $request->address,
+                        'birthdate' => $request->birthdate,
+                        'contact'   => $request->contact,
+                    ]
+                );
+
+                $this->syncAssignment($employee, $request);
+
+                if ($request->input('_sync_parents') === '1') {
+                    $parentIds = array_filter(
+                        array_map('intval', (array) ($request->input('parent_ids') ?? []))
+                    );
+                    $this->syncParents($employee, $parentIds);
+                }
+
+                $employee = $employee->fresh()->load([
+                    'info', 'parents', 'division',
+                    'primaryAssignment.plantillaPosition.salaryGrade',
+                    'primaryAssignment.stepIncrement',
+                    'cosPosition',
+                    'consultantPosition',
+                    'latestAssessment',
+                    'activeDevelopmentPlans.skill',
+                ]);
+
+                $this->syncSalaryHistory($employee);
+
+                return $employee->load('salaryHistories');
+            });
+        } catch (QueryException $e) {
+            if ($this->isUniqueConstraintViolation($e)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'employee_number' => ['The employee number has already been taken.'],
+                ]);
             }
 
-            $employee = $employee->fresh()->load([
-                'info', 'parents', 'division',
-                'primaryAssignment.plantillaPosition.salaryGrade',
-                'primaryAssignment.stepIncrement',
-                'cosPosition',
-                'consultantPosition',
-                'latestAssessment',
-                'activeDevelopmentPlans.skill',
-            ]);
-
-            $this->syncSalaryHistory($employee);
-
-            return $employee->load('salaryHistories');
-        });
+            throw $e;
+        }
 
         ActivityLog::record(
             action:       'employee.updated',
@@ -767,7 +794,7 @@ class EmployeeController extends Controller
             ip:        $request->ip(),
             userAgent: $request->userAgent(),
         );
-        
+
         if ($pendingProvisionApplication && strtolower(trim($employee->employment_type ?? '')) === 'plantilla') {
             $nowProvisioned = $employee->assignments()
                 ->whereNull('end_date')

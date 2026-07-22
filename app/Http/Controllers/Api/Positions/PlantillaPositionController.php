@@ -26,7 +26,7 @@ class PlantillaPositionController extends Controller
                 'displayDivision:id,name,code',
                 'salaryGrade',
                 'stepIncrement',
-                'activeAssignments.employee:id,first_name,last_name,prefix,suffix',
+                'activeAssignments.employee:id,prefix,first_name,middle_name,last_name,suffix,title',
             ])
             ->orderBy('base_item_number')
             ->orderBy('slot_number');
@@ -535,6 +535,15 @@ class PlantillaPositionController extends Controller
                 'id'            => $a->id,
                 'employee_id'   => $a->employee_id,
                 'employee_name' => $a->employee?->full_name,
+                'employee'      => $a->employee ? [
+                    'id'          => $a->employee->id,
+                    'prefix'      => $a->employee->prefix,
+                    'first_name'  => $a->employee->first_name,
+                    'middle_name' => $a->employee->middle_name,
+                    'last_name'   => $a->employee->last_name,
+                    'suffix'      => $a->employee->suffix,
+                    'title'       => $a->employee->title,
+                ] : null,
                 'start_date'    => $a->start_date,
                 'end_date'      => $a->end_date,
             ])->toArray(),
