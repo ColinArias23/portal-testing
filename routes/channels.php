@@ -24,9 +24,21 @@ Broadcast::channel('notifications', function ($user) {
 });
 
 Broadcast::channel('admin.notifications', function ($user) {
-      return $user->can('users.manage') || $user->hasRole('SuperAdmin');
-  });
+    return $user->can('users.manage') || $user->hasRole('SuperAdmin');
+});
 
 Broadcast::channel('admin.reports', function (User $user): bool {
     return $user->hasRole('SuperAdmin');
+});
+
+Broadcast::channel('employees', function (User $user): bool {
+    return $user->can('employees.view');
+});
+
+Broadcast::channel('trainings', function (User $user): bool {
+    return $user->can('trainings.view');
+});
+
+Broadcast::channel('pending-users', function (User $user): bool {
+    return $user->can('users.manage') || $user->hasRole('SuperAdmin');
 });

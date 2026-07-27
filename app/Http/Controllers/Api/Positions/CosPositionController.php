@@ -4,31 +4,27 @@ namespace App\Http\Controllers\Api\Positions;
 
 use App\Http\Controllers\Controller;
 use App\Models\CosPosition;
+use App\Services\Positions\CosPositionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CosPositionController extends Controller
 {
-    public function __construct()
-    {
+    public function __construct(
+        private readonly CosPositionService $positions,
+    ) {
         $this->middleware('auth:sanctum');
         $this->middleware('permission:employees.view')->only(['index', 'show']);
         $this->middleware('permission:employees.manage')->only(['store', 'update', 'destroy']);
     }
+
     // ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
-        $query = CosPosition::query()->orderBy('title');
-
-        if ($request->filled('search')) {
-            $query->search($request->input('search'));
-        }
-
-        $perPage = (int) $request->input('per_page', 15);
-
-        return response()->json($query->paginate($perPage));
+        return response()->json($this->positions->index($request));
     }
-// ─── Store ─────────────────────────────────────────────────────
+
+    // ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -36,19 +32,19 @@ class CosPositionController extends Controller
             'description' => ['nullable', 'string'],
         ]);
 
-        $position = CosPosition::create($validated);
-
         return response()->json([
             'message' => 'COS position created successfully.',
-            'data'    => $position,
+            'data'    => $this->positions->store($validated),
         ], 201);
     }
-// ─── Show ─────────────────────────────────────────────────────
+
+    // ─── Show ─────────────────────────────────────────────────────
     public function show(CosPosition $cosPosition): JsonResponse
     {
         return response()->json(['data' => $cosPosition]);
     }
-// ─── Update ─────────────────────────────────────────────────────
+
+    // ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, CosPosition $cosPosition): JsonResponse
     {
         $validated = $request->validate([
@@ -56,20 +52,17 @@ class CosPositionController extends Controller
             'description' => ['nullable', 'string'],
         ]);
 
-        $cosPosition->update($validated);
-
         return response()->json([
             'message' => 'COS position updated successfully.',
-            'data'    => $cosPosition->fresh(),
+            'data'    => $this->positions->update($cosPosition, $validated),
         ]);
     }
-// ─── Destroy ─────────────────────────────────────────────────────
+
+    // ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(CosPosition $cosPosition): JsonResponse
     {
-        $cosPosition->delete();
+        $this->positions->destroy($cosPosition);
 
-        return response()->json([
-            'message' => 'COS position deleted successfully.',
-        ]);
+        return response()->json(['message' => 'COS position deleted successfully.']);
     }
 }

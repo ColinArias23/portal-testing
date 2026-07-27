@@ -1,39 +1,31 @@
 <?php
- 
+
 namespace App\Http\Controllers\Api\Skills;
- 
+
 use App\Http\Controllers\Controller;
 use App\Models\DevelopmentPlan;
 use App\Models\Employee;
+use App\Services\Skills\DevelopmentPlanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
- 
+
 class DevelopmentPlanController extends Controller
 {
-    public function __construct()
-    {
+    public function __construct(
+        private readonly DevelopmentPlanService $plans,
+    ) {
         $this->middleware('auth:sanctum');
         $this->middleware('permission:trainings.view')->only(['index', 'show', 'byEmployee']);
         $this->middleware('permission:trainings.manage')->only(['store', 'update', 'updateProgress', 'complete', 'destroy']);
     }
-// ─── Index ─────────────────────────────────────────────────────
+
+    // ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
-        $query = DevelopmentPlan::with(['employee', 'skill', 'assessment']);
- 
-        if ($request->filled('employee_id')) {
-            $query->where('employee_id', $request->input('employee_id'));
-        }
- 
-        if ($request->filled('status')) {
-            $query->where('status', $request->input('status'));
-        }
- 
-        $perPage = (int) $request->input('per_page', 15);
- 
-        return response()->json($query->latest()->paginate($perPage));
+        return response()->json($this->plans->index($request));
     }
- // ─── Store ─────────────────────────────────────────────────────
+
+    // ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -47,34 +39,26 @@ class DevelopmentPlanController extends Controller
             'target_date'         => ['required', 'date', 'after:start_date'],
             'status'              => ['nullable', 'in:planned,in_progress,completed,paused'],
         ]);
- 
-        $plan = DevelopmentPlan::create($validated);
- 
+
         return response()->json([
             'message' => 'Development plan created.',
-            'data'    => $plan,
+            'data'    => $this->plans->store($validated),
         ], 201);
     }
- // ─── Show ─────────────────────────────────────────────────────
+
+    // ─── Show ─────────────────────────────────────────────────────
     public function show(DevelopmentPlan $plan): JsonResponse
     {
-        return response()->json([
-            'data' => $plan->load(['employee', 'skill', 'assessment']),
-        ]);
+        return response()->json(['data' => $this->plans->show($plan)]);
     }
- // ─── ByEmployee ─────────────────────────────────────────────────────
+
+    // ─── ByEmployee ─────────────────────────────────────────────────────
     public function byEmployee(Employee $employee): JsonResponse
     {
-        $plans = DevelopmentPlan::where('employee_id', $employee->id)
-            ->with(['skill', 'assessment'])
-            ->latest()
-            ->get();
- 
-        return response()->json([
-            'data' => $plans,
-        ]);
+        return response()->json(['data' => $this->plans->byEmployee($employee)]);
     }
- // ─── Update ─────────────────────────────────────────────────────
+
+    // ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, DevelopmentPlan $plan): JsonResponse
     {
         $validated = $request->validate([
@@ -86,51 +70,45 @@ class DevelopmentPlanController extends Controller
             'status'              => ['sometimes', 'in:planned,in_progress,completed,paused'],
             'progress_percentage' => ['nullable', 'integer', 'min:0', 'max:100'],
         ]);
- 
-        $plan->update($validated);
- 
+
         return response()->json([
             'message' => 'Development plan updated.',
-            'data'    => $plan->fresh(),
+            'data'    => $this->plans->update($plan, $validated),
         ]);
     }
- // ─── UpdateProgress ─────────────────────────────────────────────────────
+
+    // ─── UpdateProgress ─────────────────────────────────────────────────────
     public function updateProgress(Request $request, DevelopmentPlan $plan): JsonResponse
     {
         $validated = $request->validate([
             'progress_percentage' => ['required', 'integer', 'min:0', 'max:100'],
             'notes'               => ['nullable', 'string'],
         ]);
- 
-        $plan->updateProgress($validated['progress_percentage']);
-        
-        if ($request->filled('notes')) {
-            $plan->notes = $validated['notes'];
-            $plan->save();
-        }
- 
+
         return response()->json([
             'message' => 'Progress updated.',
-            'data'    => $plan->fresh(),
+            'data'    => $this->plans->updateProgress(
+                $plan,
+                $validated['progress_percentage'],
+                $request->filled('notes') ? $validated['notes'] : null
+            ),
         ]);
     }
- // ─── Complete ─────────────────────────────────────────────────────
+
+    // ─── Complete ─────────────────────────────────────────────────────
     public function complete(Request $request, DevelopmentPlan $plan): JsonResponse
     {
-        $plan->markAsCompleted();
- 
         return response()->json([
             'message' => 'Development plan completed.',
-            'data'    => $plan->fresh(),
+            'data'    => $this->plans->complete($plan),
         ]);
     }
- // ─── Destroy ─────────────────────────────────────────────────────
+
+    // ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(DevelopmentPlan $plan): JsonResponse
     {
-        $plan->delete();
- 
-        return response()->json([
-            'message' => 'Development plan deleted.',
-        ]);
+        $this->plans->destroy($plan);
+
+        return response()->json(['message' => 'Development plan deleted.']);
     }
 }

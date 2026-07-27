@@ -5,34 +5,27 @@ namespace App\Http\Controllers\Api\Organization;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\EmployeeAssignment;
-use App\Models\PlantillaPosition;
-use App\Services\Recruitment\PlantillaPosting\PlantillaService;
+use App\Services\Organization\EmployeeAssignmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class EmployeeAssignmentController extends Controller
 {
-    public function __construct(private PlantillaService $service)
-    {
+    public function __construct(
+        private readonly EmployeeAssignmentService $assignments,
+    ) {
         $this->middleware('auth:sanctum');
         $this->middleware('permission:employees.view')->only(['index']);
         $this->middleware('permission:employees.manage')->only(['store', 'end', 'destroy']);
     }
-// ─── Index ─────────────────────────────────────────────────────
+
+    // ─── Index ─────────────────────────────────────────────────────
     public function index(Employee $employee): JsonResponse
     {
-        $assignments = EmployeeAssignment::with([
-            'plantillaPosition.salaryGrade',
-            'stepIncrement',
-        ])
-            ->where('employee_id', $employee->id)
-            ->orderByDesc('start_date')
-            ->get()
-            ->map(fn (EmployeeAssignment $a) => $this->format($a));
-
-        return response()->json($assignments);
+        return response()->json($this->assignments->listForEmployee($employee));
     }
-// ─── Store ─────────────────────────────────────────────────────
+
+    // ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -42,31 +35,16 @@ class EmployeeAssignmentController extends Controller
             'start_date'            => ['nullable', 'date'],
         ]);
 
-        $employee = Employee::findOrFail($data['employee_id']);
-        $position = PlantillaPosition::findOrFail($data['plantilla_position_id']);
-
         try {
-            $assignment = $this->service->assign(
-                position:        $position,
-                employee:        $employee,
-                stepIncrementId: isset($data['step_increment_id'])
-                    ? (int) $data['step_increment_id']
-                    : null,
-                startDate: $data['start_date'] ?? null,
-            );
+            $formatted = $this->assignments->create($data);
         } catch (\RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        return response()->json(
-            $this->format($assignment->load([
-                'plantillaPosition.salaryGrade',
-                'stepIncrement',
-            ])),
-            201
-        );
+        return response()->json($formatted, 201);
     }
-// ─── End ─────────────────────────────────────────────────────
+
+    // ─── End ─────────────────────────────────────────────────────
     public function end(Request $request, EmployeeAssignment $assignment): JsonResponse
     {
         $data = $request->validate([
@@ -75,18 +53,15 @@ class EmployeeAssignmentController extends Controller
         ]);
 
         try {
-            $this->service->vacate(
-                assignment: $assignment,
-                endDate:    $data['end_date']  ?? null,
-                remarks:    $data['remarks']   ?? null,
-            );
+            $this->assignments->end($assignment, $data);
         } catch (\RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
         return response()->json(['message' => 'Assignment closed. Position is now UNFILLED and awaiting approval.']);
     }
-// ─── Destroy ─────────────────────────────────────────────────────
+
+    // ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(EmployeeAssignment $assignment): JsonResponse
     {
         if ($assignment->isActive()) {
@@ -95,46 +70,8 @@ class EmployeeAssignmentController extends Controller
             ], 422);
         }
 
-        $assignment->delete();
+        $this->assignments->delete($assignment);
 
         return response()->json(['message' => 'Assignment deleted.']);
-    }
-// ─── Format ─────────────────────────────────────────────────────
-    private function format(EmployeeAssignment $a): array
-    {
-        $position = $a->plantillaPosition;
-        $step     = $a->effectiveStepIncrement();
-
-        return [
-            'id'         => $a->id,
-            'is_primary' => $a->is_primary,
-            'is_active'  => $a->isActive(),
-            'start_date' => $a->start_date,
-            'end_date'   => $a->end_date,
-
-            'plantilla_position' => $position ? [
-                'id'                 => $position->id,
-                'base_item_number'   => $position->base_item_number,
-                'position_slot_name' => $position->position_slot_name,
-                'position_title'     => $position->position_title,
-                'status'             => $position->computed_status,
-                'salary_grade' => $position->salaryGrade ? [
-                    'id'             => $position->salaryGrade->id,
-                    'salary_grade'   => $position->salaryGrade->salary_grade,
-                    'monthly_salary' => $position->salaryGrade->monthly_salary,
-                    'annual_salary'  => $position->salaryGrade->annual_salary,
-                ] : null,
-            ] : null,
-
-            'step_increment' => $step ? [
-                'id'             => $step->id,
-                'step'           => $step->step,
-                'monthly_salary' => $step->monthly_salary,
-                'annual_salary'  => $step->annual_salary,
-            ] : null,
-
-            'created_at' => $a->created_at,
-            'updated_at' => $a->updated_at,
-        ];
     }
 }

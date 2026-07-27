@@ -2,7 +2,7 @@
 
 namespace App\Events\RBAC;
 
-use Illuminate\Broadcasting\Channel;
+use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 
 class UserRegistered implements ShouldBroadcast
@@ -11,9 +11,9 @@ class UserRegistered implements ShouldBroadcast
         public int $userId,
     ) {}
 
-    public function broadcastOn(): Channel
+    public function broadcastOn(): PrivateChannel
     {
-        return new Channel('pending-users');
+        return new PrivateChannel('pending-users');
     }
 
     public function broadcastAs(): string

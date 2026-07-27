@@ -4,31 +4,32 @@ namespace App\Http\Controllers\Api\Organization;
 
 use App\Http\Controllers\Controller;
 use App\Models\Division;
-use App\Models\Department;
-use App\Models\Employee;
+use App\Services\Organization\DivisionService;
 use Illuminate\Http\Request;
 
 class DivisionController extends Controller
 {
-    public function __construct()
-    {
+    public function __construct(
+        private readonly DivisionService $divisions,
+    ) {
         $this->middleware('auth:sanctum');
         $this->middleware('permission:departments.view')->only(['index', 'show']);
         $this->middleware('permission:departments.manage')->only(['store', 'update', 'destroy']);
     }
-// ─── Index ─────────────────────────────────────────────────────
+
+    // ─── Index ─────────────────────────────────────────────────────
     public function index()
     {
-        return Division::with(['departments', 'head', 'parent', 'children'])
-            ->orderBy('name')
-            ->get();
+        return $this->divisions->index();
     }
-// ─── Options (lightweight, for dropdowns — any authenticated user) ─────
+
+    // ─── Options (lightweight, for dropdowns — any authenticated user) ─────
     public function options()
     {
-        return Division::orderBy('name')->get(['id', 'name']);
+        return $this->divisions->options();
     }
-// ─── Store ─────────────────────────────────────────────────────
+
+    // ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -40,14 +41,16 @@ class DivisionController extends Controller
             'type'             => ['sometimes', 'in:OFFICE,DIVISION,DIRECTORATE'],
         ]);
 
-        return Division::create($data)->load(['departments', 'head', 'parent', 'children']);
+        return $this->divisions->create($data);
     }
-// ─── Show ─────────────────────────────────────────────────────
+
+    // ─── Show ─────────────────────────────────────────────────────
     public function show(Division $division)
     {
-        return $division->load(['departments', 'head', 'parent', 'children']);
+        return $this->divisions->show($division);
     }
-// ─── Update ─────────────────────────────────────────────────────
+
+    // ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, Division $division)
     {
         $data = $request->validate([
@@ -67,23 +70,13 @@ class DivisionController extends Controller
             ],
         ]);
 
-        $division->update($data);
-
-        return $division->fresh(['departments', 'head', 'parent', 'children']);
+        return $this->divisions->update($division, $data);
     }
-// ─── Destroy ─────────────────────────────────────────────────────
+
+    // ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(Division $division)
     {
-        Division::where('parent_id', $division->id)
-            ->update(['parent_id' => $division->parent_id]);
-
-        Department::where('division_id', $division->id)
-            ->update(['division_id' => null]);
-
-        Employee::where('division_id', $division->id)
-            ->update(['division_id' => null]);
-
-        $division->delete();
+        $this->divisions->delete($division);
 
         return response()->json(['message' => 'Division deleted']);
     }

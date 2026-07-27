@@ -9,113 +9,73 @@ use App\Http\Requests\Reports\StoreReleaseRequest;
 use App\Http\Resources\Reports\ReleaseResource;
 use App\Http\Resources\Reports\UnassignedReportResource;
 use App\Models\Release;
-use App\Models\Report;
+use App\Services\Reports\ReleaseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Throwable;
 
 class ReleaseController extends Controller
 {
-    private const REPORT_SUMMARY_COLUMNS = ['id', 'subject', 'type', 'category', 'severity'];
-
-    public function __construct()
-    {
+    public function __construct(
+        private readonly ReleaseService $releases,
+    ) {
         $this->middleware('auth:sanctum')->only(['store', 'destroy']);
         $this->middleware('role:SuperAdmin')->only(['store', 'destroy']);
         $this->middleware('auth:sanctum')->only(['unassignedResolved']);
         $this->middleware('role:SuperAdmin')->only(['unassignedResolved']);
     }
-// ─── Index ─────────────────────────────────────────────────────
+
+    // ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
-        $perPage = (int) $request->integer('per_page', 15);
-        $perPage = max(1, min($perPage, 100)); 
+        $perPage = max(1, min((int) $request->integer('per_page', 15), 100));
 
-        $releases = Release::query()
-            ->with(['reports:' . implode(',', self::REPORT_SUMMARY_COLUMNS)])
-            ->where('status', 'published')
-            ->orderBy('date', 'desc')
-            ->paginate($perPage);
+        $releases = $this->releases->index($perPage);
 
         return response()->json([
             'data' => ReleaseResource::collection($releases->items()),
             'meta' => [
                 'current_page' => $releases->currentPage(),
-                'last_page' => $releases->lastPage(),
-                'per_page' => $releases->perPage(),
-                'total' => $releases->total(),
+                'last_page'    => $releases->lastPage(),
+                'per_page'     => $releases->perPage(),
+                'total'        => $releases->total(),
             ],
         ]);
     }
-// ─── Show ─────────────────────────────────────────────────────
+
+    // ─── Show ─────────────────────────────────────────────────────
     public function show(Release $release): JsonResponse
     {
-        if (! $release->isPublished()) {
-            abort(404);
-        }
-
-        $release->load(['reports:' . implode(',', self::REPORT_SUMMARY_COLUMNS)]);
-
-        return response()->json(['data' => new ReleaseResource($release)]);
+        return response()->json(['data' => new ReleaseResource($this->releases->show($release))]);
     }
 
+    // ─── Store ─────────────────────────────────────────────────────
     public function store(StoreReleaseRequest $request): JsonResponse
     {
-        try {
-            $release = DB::transaction(function () use ($request) {
-                $release = Release::create([
-                    'version' => $request->validated('version'),
-                    'title' => $request->validated('title') ?? "Version {$request->validated('version')}",
-                    'date' => $request->validated('date') ?? today()->toDateString(),
-                    'status' => 'published',
-                ]);
+        $result = $this->releases->store($request->validated());
 
-                $release->reports()->attach($request->validated('report_ids'));
-
-                return $release;
-            });
-        } catch (Throwable $e) {
-            Log::error('Failed to create release', [
-                'error' => $e->getMessage(),
-                'version' => $request->validated('version'),
-            ]);
-
-            return response()->json([
-                'message' => 'Unable to publish release. Please try again.',
-            ], 503);
+        if (! $result['success']) {
+            return response()->json(['message' => $result['message']], $result['status']);
         }
-
-        $release->load(['reports:' . implode(',', self::REPORT_SUMMARY_COLUMNS)]);
 
         return response()->json([
             'message' => 'Release published successfully.',
-            'data' => new ReleaseResource($release),
+            'data'    => new ReleaseResource($result['release']),
         ], 201);
     }
-// ─── Destroy ─────────────────────────────────────────────────────
+
+    // ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(Release $release): JsonResponse
     {
-        DB::transaction(function () use ($release) {
-            $release->reports()->detach();
-            $release->delete();
-        });
+        $this->releases->destroy($release);
 
         return response()->json(['message' => 'Release deleted successfully.']);
     }
-// ─── UnaasignedResolved ─────────────────────────────────────────────────────
+
+    // ─── UnassignedResolved ─────────────────────────────────────────────────────
     public function unassignedResolved(): JsonResponse
     {
-        $reports = Report::query()
-            ->with('user:id,username')
-            ->where('status', 'resolved')
-            ->whereDoesntHave('releases')
-            ->orderBy('resolved_at', 'desc')
-            ->get();
-
         return response()->json([
-            'data' => UnassignedReportResource::collection($reports),
+            'data' => UnassignedReportResource::collection($this->releases->unassignedResolved()),
         ]);
     }
 }

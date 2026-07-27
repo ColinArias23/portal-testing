@@ -4,31 +4,27 @@ namespace App\Http\Controllers\Api\Positions;
 
 use App\Http\Controllers\Controller;
 use App\Models\ConsultantPosition;
+use App\Services\Positions\ConsultantPositionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ConsultantPositionController extends Controller
 {
-    public function __construct()
-    {
+    public function __construct(
+        private readonly ConsultantPositionService $positions,
+    ) {
         $this->middleware('auth:sanctum');
         $this->middleware('permission:employees.view')->only(['index', 'show']);
         $this->middleware('permission:employees.manage')->only(['store', 'update', 'destroy']);
     }
-// ─── Index ─────────────────────────────────────────────────────
+
+    // ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
-        $query = ConsultantPosition::query()->orderBy('title');
-
-        if ($request->filled('search')) {
-            $query->search($request->input('search'));
-        }
-
-        $perPage = (int) $request->input('per_page', 15);
-
-        return response()->json($query->paginate($perPage));
+        return response()->json($this->positions->index($request));
     }
-// ─── Store ─────────────────────────────────────────────────────
+
+    // ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -36,19 +32,19 @@ class ConsultantPositionController extends Controller
             'description' => ['nullable', 'string'],
         ]);
 
-        $position = ConsultantPosition::create($validated);
-
         return response()->json([
             'message' => 'Consultant position created successfully.',
-            'data'    => $position,
+            'data'    => $this->positions->store($validated),
         ], 201);
     }
-// ─── Show ─────────────────────────────────────────────────────
+
+    // ─── Show ─────────────────────────────────────────────────────
     public function show(ConsultantPosition $consultantPosition): JsonResponse
     {
         return response()->json(['data' => $consultantPosition]);
     }
-// ─── Update ─────────────────────────────────────────────────────
+
+    // ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, ConsultantPosition $consultantPosition): JsonResponse
     {
         $validated = $request->validate([
@@ -56,20 +52,17 @@ class ConsultantPositionController extends Controller
             'description' => ['nullable', 'string'],
         ]);
 
-        $consultantPosition->update($validated);
-
         return response()->json([
             'message' => 'Consultant position updated successfully.',
-            'data'    => $consultantPosition->fresh(),
+            'data'    => $this->positions->update($consultantPosition, $validated),
         ]);
     }
-// ─── Destroy ─────────────────────────────────────────────────────
+
+    // ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(ConsultantPosition $consultantPosition): JsonResponse
     {
-        $consultantPosition->delete();
+        $this->positions->destroy($consultantPosition);
 
-        return response()->json([
-            'message' => 'Consultant position deleted successfully.',
-        ]);
+        return response()->json(['message' => 'Consultant position deleted successfully.']);
     }
 }

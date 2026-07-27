@@ -4,33 +4,33 @@ namespace App\Http\Controllers\Api\Positions;
 
 use App\Http\Controllers\Controller;
 use App\Models\SalaryGrade;
+use App\Services\Positions\SalaryGradeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class SalaryGradeController extends Controller
 {
-    public function __construct()
-    {
+    public function __construct(
+        private readonly SalaryGradeService $grades,
+    ) {
         $this->middleware('auth:sanctum');
         $this->middleware('permission:compensation.view')->only(['index', 'show']);
         $this->middleware('permission:compensation.manage')->only(['store', 'update', 'destroy']);
     }
-// ─── Index ─────────────────────────────────────────────────────
+
+    // ─── Index ─────────────────────────────────────────────────────
     public function index(): JsonResponse
     {
-        return response()->json(
-            SalaryGrade::orderBy('salary_grade')
-                ->get(['id', 'salary_grade', 'monthly_salary', 'annual_salary'])
-        );
+        return response()->json($this->grades->index());
     }
-// ─── Options (lightweight, for dropdowns — any authenticated user) ─────
+
+    // ─── Options (lightweight, for dropdowns — any authenticated user) ─────
     public function options(): JsonResponse
     {
-        return response()->json(
-            SalaryGrade::orderBy('salary_grade')->get(['id', 'salary_grade'])
-        );
+        return response()->json($this->grades->options());
     }
-// ─── Store ─────────────────────────────────────────────────────
+
+    // ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -39,14 +39,16 @@ class SalaryGradeController extends Controller
             'annual_salary'  => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        return response()->json(SalaryGrade::create($data), 201);
+        return response()->json($this->grades->store($data), 201);
     }
-// ─── Show ─────────────────────────────────────────────────────
+
+    // ─── Show ─────────────────────────────────────────────────────
     public function show(SalaryGrade $salaryGrade): JsonResponse
     {
-        return response()->json($salaryGrade->load('stepIncrements'));
+        return response()->json($this->grades->show($salaryGrade));
     }
-// ─── Update ─────────────────────────────────────────────────────
+
+    // ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, SalaryGrade $salaryGrade): JsonResponse
     {
         $data = $request->validate([
@@ -55,22 +57,14 @@ class SalaryGradeController extends Controller
             'annual_salary'  => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $salaryGrade->update($data);
-
-        return response()->json($salaryGrade->fresh());
+        return response()->json($this->grades->update($salaryGrade, $data));
     }
-// ─── Destroy ─────────────────────────────────────────────────────
+
+    // ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(SalaryGrade $salaryGrade): JsonResponse
     {
-        if ($salaryGrade->plantillaItems()->exists()) {
-            return response()->json(
-                ['message' => 'Cannot delete a salary grade that is in use by plantilla items.'],
-                422
-            );
-        }
+        $result = $this->grades->destroy($salaryGrade);
 
-        $salaryGrade->delete();
-
-        return response()->json(['message' => 'Salary grade deleted.']);
+        return response()->json($result['body'], $result['status']);
     }
 }

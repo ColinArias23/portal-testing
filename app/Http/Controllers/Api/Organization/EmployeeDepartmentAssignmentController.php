@@ -4,202 +4,74 @@ namespace App\Http\Controllers\Api\Organization;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
-use App\Models\Department;
 use App\Models\EmployeeDepartmentAssignment;
-use App\Models\ActivityLog;
-use Illuminate\Http\Request;
+use App\Services\Organization\EmployeeDepartmentAssignmentService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class EmployeeDepartmentAssignmentController extends Controller
 {
-// ─── Index ─────────────────────────────────────────────────────
+    public function __construct(
+        private readonly EmployeeDepartmentAssignmentService $assignments,
+    ) {
+        $this->middleware('auth:sanctum');
+        $this->middleware('permission:employees.view')->only(['index']);
+        $this->middleware('permission:employees.manage')->only(['store', 'update', 'destroy']);
+    }
+
+    // ─── Index ─────────────────────────────────────────────────────
     public function index(Employee $employee): JsonResponse
     {
-        $assignments = $employee->departmentAssignments()
-            ->with(['department.division', 'departmentHead'])
-            ->orderByDesc('is_primary')
-            ->orderByDesc('updated_at')
-            ->get()
-            ->map(fn ($a) => $this->format($a));
-
-        return response()->json($assignments);
+        return response()->json($this->assignments->listForEmployee($employee));
     }
-// ─── Store ─────────────────────────────────────────────────────
+
+    // ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request, Employee $employee): JsonResponse
     {
         $data = $request->validate([
-            'department_id'       => ['required', 'exists:departments,id'],
-            'is_primary'          => ['sometimes', 'boolean'],
-            'department_head_id'  => ['nullable', 'exists:employees,id'],
-            'start_date'          => ['nullable', 'date'],
-            'end_date'            => ['nullable', 'date', 'after_or_equal:start_date'],
+            'department_id'      => ['required', 'exists:departments,id'],
+            'is_primary'         => ['sometimes', 'boolean'],
+            'department_head_id' => ['nullable', 'exists:employees,id'],
+            'start_date'         => ['nullable', 'date'],
+            'end_date'           => ['nullable', 'date', 'after_or_equal:start_date'],
         ]);
 
-        $existing = EmployeeDepartmentAssignment::where('employee_id', $employee->id)
-            ->where('department_id', $data['department_id'])
-            ->whereNull('end_date')
-            ->first();
+        $result = $this->assignments->create($employee, $data, $request);
 
-        if ($existing) {
-            return response()->json([
-                'message' => 'Employee is already assigned to this department.',
-                'assignment' => $this->format($existing),
-            ], 422);
-        }
-
-        if ($data['is_primary'] ?? false) {
-            EmployeeDepartmentAssignment::where('employee_id', $employee->id)
-                ->where('is_primary', true)
-                ->whereNull('end_date')
-                ->update(['is_primary' => false]);
-        }
-
-        $assignment = EmployeeDepartmentAssignment::create([
-            'employee_id'        => $employee->id,
-            'department_id'      => $data['department_id'],
-            'is_primary'         => $data['is_primary'] ?? true,
-            'department_head_id' => $data['department_head_id'] ?? null,
-            'start_date'         => $data['start_date'] ?? now()->toDateString(),
-            'end_date'           => $data['end_date'] ?? null,
-        ]);
-
-        ActivityLog::record(
-            action:       'employee_department_assignment.created',
-            userId:       $request->user()?->id,
-            subjectType:  EmployeeDepartmentAssignment::class,
-            subjectId:    $assignment->id,
-            subjectLabel: "{$employee->full_name} → {$assignment->department->name}",
-            payload:      [
-                'employee_id'   => $employee->id,
-                'department_id' => $data['department_id'],
-                'is_primary'    => $assignment->is_primary,
-            ],
-            ip:           $request->ip(),
-            userAgent:    $request->userAgent(),
-        );
-
-        return response()->json(
-            $this->format($assignment->load(['department.division', 'departmentHead'])),
-            201
-        );
+        return response()->json($result['body'], $result['status']);
     }
-// ─── Update ─────────────────────────────────────────────────────
-    public function update(Request $request, Employee $employee, EmployeeDepartmentAssignment $assignment
-    ): JsonResponse {
-        if ($assignment->employee_id !== $employee->id) {
-            return response()->json([
-                'message' => 'Assignment does not belong to this employee.',
-            ], 403);
+
+    // ─── Update ─────────────────────────────────────────────────────
+    public function update(Request $request, Employee $employee, EmployeeDepartmentAssignment $assignment): JsonResponse
+    {
+        if (! $this->assignments->assertBelongsToEmployee($assignment, $employee)) {
+            return response()->json(['message' => 'Assignment does not belong to this employee.'], 403);
         }
 
         $data = $request->validate([
-            'is_primary'          => ['sometimes', 'boolean'],
-            'department_head_id'  => ['nullable', 'exists:employees,id'],
-            'end_date'            => ['nullable', 'date'],
+            'is_primary'         => ['sometimes', 'boolean'],
+            'department_head_id' => ['nullable', 'exists:employees,id'],
+            'end_date'           => ['nullable', 'date'],
         ]);
 
-        $before = [
-            'is_primary'         => $assignment->is_primary,
-            'department_head_id' => $assignment->department_head_id,
-            'end_date'           => $assignment->end_date,
-        ];
+        $formatted = $this->assignments->update($employee, $assignment, $data, $request);
 
-        if (($data['is_primary'] ?? false) && !$assignment->is_primary) {
-            EmployeeDepartmentAssignment::where('employee_id', $employee->id)
-                ->where('is_primary', true)
-                ->whereNull('end_date')
-                ->update(['is_primary' => false]);
-        }
-
-        $assignment->update($data);
-
-        ActivityLog::record(
-            action:       'employee_department_assignment.updated',
-            userId:       $request->user()?->id,
-            subjectType:  EmployeeDepartmentAssignment::class,
-            subjectId:    $assignment->id,
-            subjectLabel: "{$employee->full_name} → {$assignment->department->name}",
-            payload:      [
-                'before' => $before,
-                'after'  => [
-                    'is_primary'         => $assignment->is_primary,
-                    'department_head_id' => $assignment->department_head_id,
-                    'end_date'           => $assignment->end_date,
-                ],
-            ],
-            ip:           $request->ip(),
-            userAgent:    $request->userAgent(),
-        );
-
-        return response()->json(
-            $this->format($assignment->fresh(['department.division', 'departmentHead']))
-        );
+        return response()->json($formatted);
     }
-// ─── Destroy ─────────────────────────────────────────────────────
-    public function destroy(Request $request, Employee $employee, EmployeeDepartmentAssignment $assignment
-    ): JsonResponse {
-        if ($assignment->employee_id !== $employee->id) {
-            return response()->json([
-                'message' => 'Assignment does not belong to this employee.',
-            ], 403);
+
+    // ─── Destroy ─────────────────────────────────────────────────────
+    public function destroy(Request $request, Employee $employee, EmployeeDepartmentAssignment $assignment): JsonResponse
+    {
+        if (! $this->assignments->assertBelongsToEmployee($assignment, $employee)) {
+            return response()->json(['message' => 'Assignment does not belong to this employee.'], 403);
         }
 
         if ($assignment->end_date) {
-            return response()->json([
-                'message' => 'This assignment has already been ended.',
-            ], 422);
+            return response()->json(['message' => 'This assignment has already been ended.'], 422);
         }
 
-        $assignment->update(['end_date' => now()->toDateString()]);
-
-        ActivityLog::record(
-            action:       'employee_department_assignment.ended',
-            userId:       $request->user()?->id,
-            subjectType:  EmployeeDepartmentAssignment::class,
-            subjectId:    $assignment->id,
-            subjectLabel: "{$employee->full_name} → {$assignment->department->name}",
-            ip:           $request->ip(),
-            userAgent:    $request->userAgent(),
-        );
+        $this->assignments->end($employee, $assignment, $request);
 
         return response()->json(['message' => 'Department assignment ended.']);
-    }
-// ─── Format ─────────────────────────────────────────────────────
-    private function format(EmployeeDepartmentAssignment $assignment): array
-    {
-        return [
-            'id'                   => $assignment->id,
-            'employee_id'          => $assignment->employee_id,
-            'department_id'        => $assignment->department_id,
-            'is_primary'           => $assignment->is_primary,
-            'is_active'            => $assignment->is_active,
-            'start_date'           => $assignment->start_date,
-            'end_date'             => $assignment->end_date,
-
-            'department'           => [
-                'id'       => $assignment->department->id,
-                'code'     => $assignment->department->code,
-                'name'     => $assignment->department->name,
-                'division' => $assignment->department->division ? [
-                    'id'   => $assignment->department->division->id,
-                    'name' => $assignment->department->division->name,
-                ] : null,
-            ],
-
-            'department_head'      => $assignment->departmentHead ? [
-                'id'        => $assignment->departmentHead->id,
-                'full_name' => $assignment->departmentHead->full_name,
-                'title'     => $assignment->departmentHead->title,
-            ] : null,
-
-            'effective_head'       => $assignment->effective_head ? [
-                'id'        => $assignment->effective_head->id,
-                'full_name' => $assignment->effective_head->full_name,
-                'title'     => $assignment->effective_head->title,
-            ] : null,
-
-            'created_at'           => $assignment->created_at,
-            'updated_at'           => $assignment->updated_at,
-        ];
     }
 }

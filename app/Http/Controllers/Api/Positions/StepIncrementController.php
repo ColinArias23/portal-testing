@@ -4,33 +4,29 @@ namespace App\Http\Controllers\Api\Positions;
 
 use App\Http\Controllers\Controller;
 use App\Models\StepIncrement;
+use App\Services\Positions\StepIncrementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class StepIncrementController extends Controller
 {
-    public function __construct()
-    {
+    public function __construct(
+        private readonly StepIncrementService $steps,
+    ) {
         $this->middleware('auth:sanctum');
         $this->middleware('permission:compensation.view')->only(['index', 'show']);
         $this->middleware('permission:compensation.manage')->only(['store', 'update', 'destroy']);
     }
-// ─── Index ─────────────────────────────────────────────────────
+
+    // ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
-        $query = StepIncrement::query()->with('salaryGrade');
+        $salaryGradeId = $request->filled('salary_grade_id') ? $request->integer('salary_grade_id') : null;
 
-        if ($request->filled('salary_grade_id')) {
-            $query->where('salary_grade_id', $request->integer('salary_grade_id'));
-        }
-
-        return response()->json(
-            $query->orderBy('salary_grade_id')
-                  ->orderBy('step')
-                  ->get(['id', 'salary_grade_id', 'step', 'monthly_salary', 'annual_salary'])
-        );
+        return response()->json($this->steps->index($salaryGradeId));
     }
-// ─── Store ─────────────────────────────────────────────────────
+
+    // ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -40,28 +36,18 @@ class StepIncrementController extends Controller
             'annual_salary'   => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $exists = StepIncrement::where('salary_grade_id', $data['salary_grade_id'])
-            ->where('step', $data['step'])
-            ->exists();
+        $result = $this->steps->store($data);
 
-        if ($exists) {
-            return response()->json(
-                ['message' => 'Step already exists for this salary grade.'],
-                422
-            );
-        }
-
-        return response()->json(
-            StepIncrement::create($data)->load('salaryGrade'),
-            201
-        );
+        return response()->json($result['body'], $result['status']);
     }
-// ─── Show ─────────────────────────────────────────────────────
+
+    // ─── Show ─────────────────────────────────────────────────────
     public function show(StepIncrement $stepIncrement): JsonResponse
     {
-        return response()->json($stepIncrement->load('salaryGrade'));
+        return response()->json($this->steps->show($stepIncrement));
     }
-// ─── Update ─────────────────────────────────────────────────────
+
+    // ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, StepIncrement $stepIncrement): JsonResponse
     {
         $data = $request->validate([
@@ -71,29 +57,15 @@ class StepIncrementController extends Controller
             'annual_salary'   => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $salaryGradeId = $data['salary_grade_id'] ?? $stepIncrement->salary_grade_id;
-        $step          = $data['step']            ?? $stepIncrement->step;
+        $result = $this->steps->update($stepIncrement, $data);
 
-        $duplicate = StepIncrement::where('salary_grade_id', $salaryGradeId)
-            ->where('step', $step)
-            ->where('id', '!=', $stepIncrement->id)
-            ->exists();
-
-        if ($duplicate) {
-            return response()->json(
-                ['message' => 'Step already exists for this salary grade.'],
-                422
-            );
-        }
-
-        $stepIncrement->update($data);
-
-        return response()->json($stepIncrement->fresh('salaryGrade'));
+        return response()->json($result['body'], $result['status']);
     }
-// ─── Destroy ─────────────────────────────────────────────────────
+
+    // ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(StepIncrement $stepIncrement): JsonResponse
     {
-        $stepIncrement->delete();
+        $this->steps->destroy($stepIncrement);
 
         return response()->json(['message' => 'Step increment deleted.']);
     }
