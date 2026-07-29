@@ -180,17 +180,12 @@ class RbacSeeder extends Seeder
     }
 
     private function stripRolePermissions(array $roles): void
-    {
-        $defaultPermissions = [
-            'dashboard.view',
-            'announcements.view',
-        ];
-
+    {   
         foreach ($roles as $name => $role) {
             if ($name === 'SuperAdmin') {
                 $role->syncPermissions(self::PERMISSIONS);
             } else {
-                $role->syncPermissions($defaultPermissions);
+                $role->syncPermissions([]);
             }
         }
 }

@@ -45,8 +45,6 @@ Route::post('/login',          [AuthController::class, 'login'])
       ->middleware('throttle:5,1');
 Route::post('/register',       [AuthController::class, 'register']);
 Route::post('/check-username', [AuthController::class, 'checkUsername']);
-Route::get('/releases',           [ReleaseController::class, 'index']);
-Route::get('/releases/{release}', [ReleaseController::class, 'show']);
 // ─── Broadcasting Auth ─────────────────────────────────────────────────────
 Route::post('/broadcasting/auth', function (\Illuminate\Http\Request $request) {
     return Broadcast::auth($request);
@@ -333,6 +331,8 @@ Route::prefix('announcement-attachments')->middleware('throttle:announcements')-
     });
 // ─── Releases ─────────────────────────────────────────────────────
     Route::prefix('releases')->group(function () {
+        Route::get('/',             [ReleaseController::class, 'index']);
+        Route::get('/{release}',    [ReleaseController::class, 'show']);
         Route::post('/',           [ReleaseController::class, 'store']);
         Route::delete('/{release}', [ReleaseController::class, 'destroy']);
     });

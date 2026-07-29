@@ -18,10 +18,13 @@ class ReleaseController extends Controller
     public function __construct(
         private readonly ReleaseService $releases,
     ) {
-        $this->middleware('auth:sanctum')->only(['store', 'destroy']);
-        $this->middleware('role:SuperAdmin')->only(['store', 'destroy']);
-        $this->middleware('auth:sanctum')->only(['unassignedResolved']);
-        $this->middleware('role:SuperAdmin')->only(['unassignedResolved']);
+        $this->middleware('auth:sanctum');
+
+        $this->middleware('role:SuperAdmin')->only([
+            'store',
+            'destroy',
+            'unassignedResolved',
+        ]);
     }
 
     // ─── Index ─────────────────────────────────────────────────────

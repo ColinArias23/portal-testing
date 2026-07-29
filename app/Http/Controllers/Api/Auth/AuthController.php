@@ -29,7 +29,15 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $data = $request->validate([
-            'username' => ['required', 'string'],
+            'username' => [
+                'required',
+                'string',
+                function ($attribute, $value, $fail) {
+                    if ($value !== mb_strtoupper($value)) {
+                        $fail('Your username must be entered in uppercase letters.');
+                    }
+                },
+            ],
             'password' => ['required', 'string'],
         ]);
 

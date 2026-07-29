@@ -13,7 +13,7 @@ use Illuminate\Validation\ValidationException;
 
 class PlantillaPostingService
 {
-    private const DOC_KEYS = ['resume', 'pds', 'transcript', 'diploma', 'eligibility', 'certificates', 'others'];
+    private const DOC_KEYS = ['letter_of_intent', 'pds', 'work_experience', 'performance_rating', 'eligibility', 'transcript', 'diploma'];
 
     public function __construct(
         private readonly PlantillaPostingRepository $postings,
@@ -208,9 +208,9 @@ class PlantillaPostingService
             ]);
         }
 
-        if ($this->postings->hasActiveOpenPosting($data['base_item_number'])) {
+        if ($this->postings->slotsAlreadyPosted($slotIds)) {
             throw ValidationException::withMessages([
-                'base_item_number' => 'May aktibong posting pa ang item na ito. I-close muna bago gumawa ng bago.',
+                'plantilla_position_ids' => 'May aktibong posting na ang napiling item number. I-close muna ang kasalukuyang posting bago gumawa ng bago para dito.',
             ]);
         }
 
@@ -237,10 +237,6 @@ class PlantillaPostingService
         $posting = $this->postings->find($id);
         $data    = $this->validatePosting($request, $posting->id);
 
-        // The claimed slot(s) and the saved position_slot_name are fixed
-        // at creation time — never editable, per the Edit dialog's own
-        // copy ("Fixed at the time this posting was created. Never
-        // editable."). Strip both even if a client sends them.
         unset($data['plantilla_position_ids']);
         unset($data['position_slot_name']);
 

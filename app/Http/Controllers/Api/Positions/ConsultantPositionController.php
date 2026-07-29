@@ -14,7 +14,7 @@ class ConsultantPositionController extends Controller
         private readonly ConsultantPositionService $positions,
     ) {
         $this->middleware('auth:sanctum');
-        $this->middleware('permission:employees.view')->only(['index', 'show']);
+        $this->middleware('permission:positions.view')->only(['index', 'show']);
         $this->middleware('permission:employees.manage')->only(['store', 'update', 'destroy']);
     }
 

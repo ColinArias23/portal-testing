@@ -3,6 +3,8 @@
 namespace App\Repositories\RBAC;
 
 use App\Models\ActivityLog;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
@@ -12,6 +14,7 @@ class AuditLogRepository
     {
         $query = ActivityLog::with('user:id,username')->orderByDesc('performed_at');
 
+        $this->excludeSuperAdmin($query);
         $this->applyFilters($query, $filters);
 
         return $query->paginate($perPage);
@@ -19,7 +22,10 @@ class AuditLogRepository
 
     public function distinctActions(): Collection
     {
-        return ActivityLog::distinct()->pluck('action')->sort()->values();
+        $query = ActivityLog::query();
+        $this->excludeSuperAdmin($query);
+
+        return $query->distinct()->pluck('action')->sort()->values();
     }
 
     public function totalCount(array $dateFilters): int
@@ -48,9 +54,19 @@ class AuditLogRepository
     private function baseQuery(array $dateFilters)
     {
         $query = ActivityLog::query();
+        $this->excludeSuperAdmin($query);
         $this->applyDateFilters($query, $dateFilters);
 
         return $query;
+    }
+
+    private function excludeSuperAdmin(Builder $query): void
+    {
+        $superAdminIds = User::role('SuperAdmin')->pluck('id');
+
+        if ($superAdminIds->isNotEmpty()) {
+            $query->whereNotIn('user_id', $superAdminIds);
+        }
     }
 
     private function applyFilters($query, array $filters): void

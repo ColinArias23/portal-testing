@@ -13,7 +13,7 @@ class ManpowerMappingController extends Controller
         private readonly ManpowerMappingService $manpower,
     ) {
         $this->middleware('auth:sanctum');
-        $this->middleware('permission:employees.view')->only(['departments', 'departmentDetail', 'summary', 'plantillaCount', 'cosCount', 'consultantCount', 'vacantCount', 'tree', 'report', 'overstaffed', 'divisionAnalytics',]);
+        $this->middleware('permission:manpower.view')->only(['departments', 'departmentDetail', 'summary', 'plantillaCount', 'cosCount', 'consultantCount', 'vacantCount', 'tree', 'report', 'overstaffed', 'divisionAnalytics',]);
     }
 
     // ─── Department ─────────────────────────────────────────────────────

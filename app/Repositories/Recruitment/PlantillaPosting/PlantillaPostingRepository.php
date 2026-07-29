@@ -38,8 +38,11 @@ class PlantillaPostingRepository
 
     public function distinctVacantBaseItemNumbers(): Collection
     {
+        $activeSlotIds = $this->activePostingSlotIds();
+
         return PlantillaPosition::selectRaw('DISTINCT base_item_number')
             ->vacant()
+            ->when($activeSlotIds->isNotEmpty(), fn ($q) => $q->whereNotIn('id', $activeSlotIds))
             ->pluck('base_item_number');
     }
 
@@ -48,6 +51,8 @@ class PlantillaPostingRepository
         if ($baseItemNumbers->isEmpty()) {
             return ['representatives' => collect(), 'vacantSlotsByItem' => collect(), 'stepsByGrade' => collect()];
         }
+
+        $activeSlotIds = $this->activePostingSlotIds();
 
         $allForItems = PlantillaPosition::whereIn('base_item_number', $baseItemNumbers)
             ->with([
@@ -64,6 +69,7 @@ class PlantillaPostingRepository
 
         $vacantSlotsByItem = PlantillaPosition::whereIn('base_item_number', $baseItemNumbers)
             ->vacant()
+            ->when($activeSlotIds->isNotEmpty(), fn ($q) => $q->whereNotIn('id', $activeSlotIds))
             ->with('stepIncrement:id,monthly_salary,annual_salary')
             ->orderBy('position_slot_name')
             ->get(['id', 'base_item_number', 'position_slot_name', 'status', 'salary_grade_id', 'step_increment_id'])
@@ -93,9 +99,27 @@ class PlantillaPostingRepository
             ->get();
     }
 
-    public function hasActiveOpenPosting(string $baseItemNumber): bool
+    public function activePostingSlotIds(): Collection
     {
-        return PlantillaPosting::where('base_item_number', $baseItemNumber)->adminOpen()->exists();
+        return \Illuminate\Support\Facades\DB::table('plantilla_posting_slots')
+            ->join('plantilla_postings', 'plantilla_postings.id', '=', 'plantilla_posting_slots.plantilla_posting_id')
+            ->whereNull('plantilla_postings.deleted_at')
+            ->where('plantilla_postings.status', '!=', 'Closed')
+            ->whereDate('plantilla_postings.closing_date', '>=', now()->toDateString())
+            ->pluck('plantilla_posting_slots.plantilla_position_id')
+            ->unique()
+            ->values();
+    }
+
+    public function slotsAlreadyPosted(array $positionIds): bool
+    {
+        if (empty($positionIds)) {
+            return false;
+        }
+
+        return $this->activePostingSlotIds()
+            ->intersect($positionIds)
+            ->isNotEmpty();
     }
 
     public function create(array $data): PlantillaPosting
