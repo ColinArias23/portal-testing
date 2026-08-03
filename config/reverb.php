@@ -34,7 +34,10 @@ return [
             'path' => env('REVERB_SERVER_PATH', ''),
             'hostname' => env('REVERB_HOST'),
             'options' => [
-                'tls' => [],
+                'tls' => [
+                    'local_cert' => env('REVERB_TLS_CERT', 'C:/Users/colin/Desktop/MACLANG DEPT/cert.pem'),
+                    'local_pk' => env('REVERB_TLS_KEY', 'C:/Users/colin/Desktop/MACLANG DEPT/key.pem'),
+                ],
             ],
             'max_request_size' => env('REVERB_MAX_REQUEST_SIZE', 10_000),
             'scaling' => [
@@ -80,7 +83,7 @@ return [
                     'host' => env('REVERB_HOST', 'localhost'),
                     'port' => env('REVERB_PORT', 8080),
                     'scheme' => env('REVERB_SCHEME', 'https'),
-                    'useTLS' => false,
+                    'useTLS' => env('REVERB_SCHEME', 'https') === 'https',
                 ],
                 'allowed_origins' => ['*'],
                 'ping_interval' => env('REVERB_APP_PING_INTERVAL', 60),

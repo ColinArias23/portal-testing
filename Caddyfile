@@ -1,0 +1,9 @@
+# Place this file at:
+#   C:\Users\colin\Desktop\MACLANG DEPT\portal-testing department\Caddyfile
+#
+# Run with: caddy run  (from inside that folder, so it finds this file automatically)
+
+192.168.4.5:8000 {
+    tls "C:/Users/colin/Desktop/MACLANG DEPT/cert.pem" "C:/Users/colin/Desktop/MACLANG DEPT/key.pem"
+    reverse_proxy 127.0.0.1:8001
+}
