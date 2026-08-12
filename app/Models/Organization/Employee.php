@@ -96,6 +96,16 @@ class Employee extends Model
         return $this->hasOne(User::class);
     }
 
+    public function signatures()
+    {
+        return $this->hasMany(EmployeeSignature::class);
+    }
+
+    public function signatureLogs()
+    {
+        return $this->hasMany(EmployeeSignatureLog::class)->latest('created_at');
+    }
+
     public function division()
     {
         return $this->belongsTo(Division::class);
@@ -183,6 +193,16 @@ class Employee extends Model
     public function salaryHistories()
     {
         return $this->hasMany(EmployeeSalaryHistory::class);
+    }
+
+    public function leaveBalances()
+    {
+        return $this->hasMany(LeaveBalance::class);
+    }
+
+    public function leaveRequests()
+    {
+        return $this->hasMany(LeaveRequest::class);
     }
 
     public function getCurrentPlantillaPositionAttribute(): ?PlantillaPosition

@@ -46,7 +46,7 @@ class UserRepository
                 'position_designation', 'role_position',
                 'cos_position_id', 'consultant_position_id', 'avatar_url',
             ]),
-            'employee.info' => fn ($q) => $q->select(['id', 'employee_id']),
+            'employee.info' => fn ($q) => $q->select(['id', 'employee_id', 'mobile_no']),
             'employee.division' => fn ($q) => $q->select(['id', 'name']),
             'employee.primaryDepartmentAssignment' => fn ($q) => $q->select(
                 ['id', 'employee_id', 'department_id', 'is_primary', 'end_date']

@@ -60,6 +60,7 @@ class UserFormatterService
                 'last_name'             => $employee->last_name,
                 'employment_status'     => $employee->employment_status ?? null,
                 'employment_type'       => $employee->employment_type ?? null,
+                'contact_number'        => $employee->info?->mobile_no ?? null,
                 'position'              => $positionLabel,
                 'position_designation'  => $employee->position_designation ?? [],
                 'role_position'         => $employee->role_position ?? [],

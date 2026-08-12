@@ -1,0 +1,168 @@
+<?php
+
+namespace App\Services\Leave;
+
+use App\Enums\ApprovalStepStatus;
+use App\Enums\LeaveRequestStatus;
+use App\Events\Leave\LeaveRequestFinalized;
+use App\Events\Leave\LeaveRequestStepActioned;
+use App\Models\LeaveRequest;
+use App\Models\LeaveRequestLog;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use RuntimeException;
+
+class LeaveApprovalService
+{
+    public function __construct(private readonly LeaveBalanceService $balanceService)
+    {
+    }
+
+    public function approveStep(LeaveRequest $leaveRequest, User $actor, ?string $remarks): LeaveRequest
+    {
+        return $this->actOnStep($leaveRequest, $actor, ApprovalStepStatus::Approved, $remarks);
+    }
+
+    public function rejectStep(LeaveRequest $leaveRequest, User $actor, string $remarks): LeaveRequest
+    {
+        if (trim($remarks) === '') {
+            throw new RuntimeException('Remarks are required when rejecting a leave request.');
+        }
+
+        return $this->actOnStep($leaveRequest, $actor, ApprovalStepStatus::Rejected, $remarks);
+    }
+
+    public function bulkApprove(array $leaveRequestIds, User $actor): array
+    {
+        $approved = [];
+        $skipped = [];
+
+        foreach ($leaveRequestIds as $id) {
+            try {
+                $leaveRequest = LeaveRequest::findOrFail($id);
+                $this->approveStep($leaveRequest, $actor, null);
+                $approved[] = $id;
+            } catch (\Throwable $e) {
+                $skipped[$id] = $e->getMessage();
+            }
+        }
+
+        return ['approved' => $approved, 'skipped' => $skipped];
+    }
+
+    private function actOnStep(LeaveRequest $leaveRequest, User $actor, ApprovalStepStatus $decision, ?string $remarks): LeaveRequest
+    {
+        return DB::transaction(function () use ($leaveRequest, $actor, $decision, $remarks) {
+            $leaveRequest = LeaveRequest::query()
+                ->whereKey($leaveRequest->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($leaveRequest->status !== LeaveRequestStatus::Pending) {
+                throw new RuntimeException('This request is no longer pending and cannot be acted on.');
+            }
+
+            $step = $leaveRequest->approvalSteps()
+                ->where('step_order', $leaveRequest->current_step_order)
+                ->where('status', ApprovalStepStatus::Pending)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $step) {
+                throw new RuntimeException('No pending approval step found for this request.');
+            }
+
+            $isAssignedApprover = $step->approver_id === $actor->id;
+            $isRoleMatch = $step->approver_role && $actor->hasRole($step->approver_role);
+
+            if (! $isAssignedApprover && ! $isRoleMatch && ! $actor->hasRole('SuperAdmin')) {
+                throw new RuntimeException('You are not the assigned approver for this step.');
+            }
+
+            $step->update([
+                'status' => $decision,
+                'remarks' => $remarks,
+                'acted_at' => now(),
+                'acted_by' => $actor->id,
+            ]);
+
+            LeaveRequestLog::create([
+                'leave_request_id' => $leaveRequest->id,
+                'action' => $decision === ApprovalStepStatus::Approved ? 'step_approved' : 'step_rejected',
+                'actor_id' => $actor->id,
+                'remarks' => $remarks,
+                'metadata' => ['step_order' => $step->step_order],
+            ]);
+
+            event(new LeaveRequestStepActioned($step->fresh()));
+
+            if ($decision === ApprovalStepStatus::Rejected) {
+                return $this->finalize($leaveRequest, LeaveRequestStatus::Rejected);
+            }
+
+            return $this->advanceToNextActionableStep($leaveRequest);
+        });
+    }
+
+    private function advanceToNextActionableStep(LeaveRequest $leaveRequest): LeaveRequest
+    {
+        $remainingSteps = $leaveRequest->approvalSteps()
+            ->where('step_order', '>', $leaveRequest->current_step_order)
+            ->where('status', ApprovalStepStatus::Pending)
+            ->orderBy('step_order')
+            ->get();
+
+        $nextActionableStep = $remainingSteps->first(fn ($step) => $step->approver_id !== null);
+
+        $stepsToSkip = $nextActionableStep
+            ? $remainingSteps->where('step_order', '<', $nextActionableStep->step_order)
+            : $remainingSteps;
+
+        foreach ($stepsToSkip as $skippedStep) {
+            $skippedStep->update([
+                'status' => ApprovalStepStatus::Skipped,
+                'remarks' => 'Auto-skipped: no approver could be resolved for this optional step.',
+                'acted_at' => now(),
+            ]);
+
+            LeaveRequestLog::create([
+                'leave_request_id' => $leaveRequest->id,
+                'action' => 'step_skipped',
+                'actor_id' => null,
+                'metadata' => ['step_order' => $skippedStep->step_order],
+            ]);
+        }
+
+        if (! $nextActionableStep) {
+            return $this->finalize($leaveRequest, LeaveRequestStatus::Approved);
+        }
+
+        $leaveRequest->update(['current_step_order' => $nextActionableStep->step_order]);
+
+        return $leaveRequest->fresh(['approvalSteps.approver']);
+    }
+
+    private function finalize(LeaveRequest $leaveRequest, LeaveRequestStatus $finalStatus): LeaveRequest
+    {
+        $leaveRequest->update([
+            'status' => $finalStatus,
+            'finalized_at' => now(),
+        ]);
+
+        if ($finalStatus === LeaveRequestStatus::Approved) {
+            $this->balanceService->debitForApproval($leaveRequest);
+        }
+
+        LeaveRequestLog::create([
+            'leave_request_id' => $leaveRequest->id,
+            'action' => $finalStatus === LeaveRequestStatus::Approved ? 'finalized_approved' : 'finalized_rejected',
+            'actor_id' => auth()->id(),
+        ]);
+
+        $leaveRequest = $leaveRequest->fresh(['leaveType', 'employee', 'approvalSteps.approver']);
+
+        event(new LeaveRequestFinalized($leaveRequest));
+
+        return $leaveRequest;
+    }
+}

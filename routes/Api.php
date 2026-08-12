@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\Organization\ManpowerMappingController;
 use App\Http\Controllers\Api\Organization\EmployeeAssignmentController;
 use App\Http\Controllers\Api\RBAC\UserController;
 use App\Http\Controllers\Api\Profile\ProfileController;
+use App\Http\Controllers\Api\Account\AccountController;
 use App\Http\Controllers\Api\Notifications\NotificationController;
 use App\Http\Controllers\Api\Training\TrainingController;
 use App\Http\Controllers\Api\RBAC\AuditLogController;
@@ -39,6 +40,16 @@ use App\Http\Controllers\Api\System\HolidayController;
 use App\Http\Controllers\Api\Reports\ReportController;
 use App\Http\Controllers\Api\Reports\ReleaseController;
 use App\Http\Controllers\Api\Recruitment\PlantillaPosting\DocumentCommentController;
+use App\Http\Controllers\Api\AiChat\AiChatController;
+
+// ─── Leave Management ─────────────────────────────────────────────────────
+use App\Http\Controllers\Api\Leave\LeaveTypeController;
+use App\Http\Controllers\Api\Leave\LeaveRequestController;
+use App\Http\Controllers\Api\Leave\LeaveApprovalController;
+use App\Http\Controllers\Api\Leave\LeaveBalanceController;
+use App\Http\Controllers\Api\Leave\LeaveCalendarController;
+use App\Http\Controllers\Api\Leave\LeaveDashboardController;
+use App\Http\Controllers\Api\Leave\HolidayController as LeaveHolidayController; // aliased: Api\System\HolidayController above already exists (PH public-holiday lookup) — this is a separate, HR-managed calendar-holiday CRUD for the Leave module
 
 // ─── Public Routes ─────────────────────────────────────────────────────
 Route::post('/login',          [AuthController::class, 'login'])
@@ -59,6 +70,20 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::prefix('profile')->group(function () {
         Route::get('/status',    [ProfileController::class, 'status']);
         Route::post('/complete', [ProfileController::class, 'complete']);
+    });
+// ─── My Account (self-service: contact number, e-signatures) ──────────────
+    Route::prefix('account')->name('account.')->group(function () {
+        Route::put('/profile',   [AccountController::class, 'updateProfile']);
+        Route::get('/signatures', [AccountController::class, 'signatures']);
+        Route::get('/activity',   [AccountController::class, 'activity']);
+        Route::post('/signatures/{type}', [AccountController::class, 'uploadSignature'])
+            ->whereIn('type', ['primary', 'countersign']);
+        Route::delete('/signatures/{type}', [AccountController::class, 'deleteSignature'])
+            ->whereIn('type', ['primary', 'countersign'])
+            ->name('signatures.delete');
+        Route::get('/signatures/{type}/preview', [AccountController::class, 'previewSignature'])
+            ->whereIn('type', ['primary', 'countersign'])
+            ->name('signatures.preview');
     });
 // ─── Users ─────────────────────────────────────────────────────
     Route::get('/pending-users',            [UserController::class, 'pendingUsers']);
@@ -335,6 +360,50 @@ Route::prefix('announcement-attachments')->middleware('throttle:announcements')-
         Route::get('/{release}',    [ReleaseController::class, 'show']);
         Route::post('/',           [ReleaseController::class, 'store']);
         Route::delete('/{release}', [ReleaseController::class, 'destroy']);
+    });
+// ─── AI Chat (Ollama-backed assistant) ─────────────────────────────────────────────────────
+    Route::prefix('ai-chat')->middleware('throttle:ai-chat')->group(function () {
+        Route::get('/health', [AiChatController::class, 'health']);
+        Route::post('/send',  [AiChatController::class, 'send']);
+    });
+// ─── Leave Management ─────────────────────────────────────────────────────
+    Route::prefix('leave')->group(function () {
+        Route::get('/types',                  [LeaveTypeController::class, 'index']);
+        Route::post('/types',                 [LeaveTypeController::class, 'store']);
+        Route::put('/types/{leaveType}',      [LeaveTypeController::class, 'update']);
+        Route::delete('/types/{leaveType}',   [LeaveTypeController::class, 'destroy']);
+        Route::get('/holidays',               [LeaveHolidayController::class, 'index']);
+        Route::post('/holidays',              [LeaveHolidayController::class, 'store']);
+        Route::put('/holidays/{holiday}',     [LeaveHolidayController::class, 'update']);
+        Route::delete('/holidays/{holiday}',  [LeaveHolidayController::class, 'destroy']);
+        // calendar view for leave requests and holidays (for all employees, for a given month)
+        Route::get('/calendar', [LeaveCalendarController::class, 'index']);
+        // dashboard views for leave requests and approvals (personal, overview, activity)
+        Route::get('/dashboard/personal',      [LeaveDashboardController::class, 'personal']);
+        Route::get('/dashboard/recent',        [LeaveDashboardController::class, 'recent']);
+        Route::get('/dashboard/overview',      [LeaveDashboardController::class, 'overview']);
+        Route::get('/dashboard/activity',      [LeaveDashboardController::class, 'activity']);
+        // leave balances and adjustments
+        Route::get('/employees/{employee}/balances',                        [LeaveBalanceController::class, 'forEmployee']);
+        Route::post('/employees/{employee}/balances/{leaveType}/credits',   [LeaveBalanceController::class, 'setCredits']);
+        Route::delete('/employees/{employee}/balances/{leaveType}/credits', [LeaveBalanceController::class, 'resetCredits']);
+        Route::get('/balances',                                             [LeaveBalanceController::class, 'index']);
+        Route::post('/balances/adjust',                                     [LeaveBalanceController::class, 'adjust']);
+        // leave requests and approvals
+        Route::get('/requests',                                                   [LeaveRequestController::class, 'index']);
+        Route::get('/requests/{leave_request}',                                   [LeaveRequestController::class, 'show']);
+        Route::post('/requests/{leave_request}/cancel',                           [LeaveRequestController::class, 'cancel']);
+        Route::get('/requests/{leave_request}/documents/{document}/download',     [LeaveRequestController::class, 'downloadDocument']
+        );
+        // approval actions (approve/reject) and bulk approval
+        Route::middleware('throttle:leave-submissions')->group(function () {
+            Route::post('/requests', [LeaveRequestController::class, 'store']);
+        });
+        // approval actions (approve/reject) and bulk approval
+        Route::get('/approvals/pending',                     [LeaveApprovalController::class, 'pending']);
+        Route::get('/approvals/recent-decisions',            [LeaveApprovalController::class, 'recentDecisions']);
+        Route::post('/approvals/{leave_request}/act',        [LeaveApprovalController::class, 'act']);
+        Route::post('/approvals/bulk-approve',               [LeaveApprovalController::class, 'bulkApprove']);
     });
 
 });

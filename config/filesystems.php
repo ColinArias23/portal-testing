@@ -47,6 +47,20 @@ return [
             'report' => false,
         ],
 
+        'leave_documents' => [
+            'driver' => 'local',
+            'root' => storage_path('app/leave-documents'),
+            'visibility' => 'private',
+            'throw' => true,
+        ],
+
+        'signatures' => [
+            'driver' => 'local',
+            'root' => storage_path('app/signatures'),
+            'visibility' => 'private',
+            'throw' => true,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

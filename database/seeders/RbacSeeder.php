@@ -50,9 +50,12 @@ class RbacSeeder extends Seeder
         'leave.approval.view',
         'leave.approval.manage',
         'leave.balance.view',
+        'leave.balance.manage',
         'leave.calendar.view',
         'leave.request.view',
         'leave.request.manage',
+        'leave.holidays.manage',
+        'leave.types.manage',
 
         // Employees
         'employees.view',
@@ -122,6 +125,9 @@ class RbacSeeder extends Seeder
 
         // Bug Reports
         'bug-reports.view',
+
+        // AI Assistant
+        'ai_chat.use',
     ];
 
     public function run(): void
@@ -176,6 +182,7 @@ class RbacSeeder extends Seeder
             'OIC'        => Role::firstOrCreate(['name' => 'Officer In Charge',    'guard_name' => self::GUARD]),
             'Supervisor' => Role::firstOrCreate(['name' => 'Supervisor',           'guard_name' => self::GUARD]),
             'Staff'      => Role::firstOrCreate(['name' => 'Staff',                'guard_name' => self::GUARD]),
+            'MCC'        => Role::firstOrCreate(['name' => 'Medical Center Chief', 'guard_name' => self::GUARD]),
         ];
     }
 
@@ -201,6 +208,7 @@ class RbacSeeder extends Seeder
         $this->assignRole('HEAD',       'Head');
         $this->assignRole('SUPERVISOR', 'Supervisor');
         $this->assignRole('STAFF',      'Staff');
+        $this->assignRole('MCC',        'Medical Center Chief');
     }
 
     private function assignRole(string $username, string $role): void

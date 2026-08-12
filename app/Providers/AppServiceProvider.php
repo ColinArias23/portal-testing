@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Models\Report;
 use App\Policies\ReportPolicy;
+use App\Services\AiChat\Contracts\ChatServiceInterface;
+use App\Services\AiChat\OllamaChatService;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -14,6 +16,7 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->bind(ChatServiceInterface::class, OllamaChatService::class);
     }
 
     public function boot(): void
@@ -31,6 +34,14 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('announcements', function (Request $request) {
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+        });
+
+        RateLimiter::for('ai-chat', function (Request $request) {
+            return Limit::perMinute(20)->by($request->user()?->id ?: $request->ip());
+        });
+
+        RateLimiter::for('leave-submissions', function (Request $request) {
+            return Limit::perMinute(6)->by($request->user()?->id ?: $request->ip());
         });
     }
 }

@@ -16,9 +16,6 @@ class DepartmentService
     ) {
     }
 
-    /**
-     * @return Collection<int, array>
-     */
     public function index(): Collection
     {
         $departments = $this->departments->allOrderedByName();

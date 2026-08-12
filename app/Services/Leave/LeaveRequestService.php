@@ -1,0 +1,222 @@
+<?php
+
+namespace App\Services\Leave;
+
+use App\Enums\ApprovalStepStatus;
+use App\Enums\LeaveRequestStatus;
+use App\Events\Leave\LeaveRequestSubmitted;
+use App\Models\Employee;
+use App\Models\LeaveRequest;
+use App\Models\LeaveRequestLog;
+use App\Models\LeaveType;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use RuntimeException;
+
+class LeaveRequestService
+{
+    public function __construct(
+        private readonly LeaveApproverResolver $approverResolver,
+        private readonly LeaveBalanceService $balanceService,
+    ) {
+    }
+
+    public function submit(array $data, User $submittedBy): LeaveRequest
+    {
+        return DB::transaction(function () use ($data, $submittedBy) {
+            $employee = Employee::findOrFail($data['employee_id']);
+            $leaveType = LeaveType::findOrFail($data['leave_type_id']);
+
+            $totalDays = $this->computeDays($leaveType, $data);
+
+            $this->assertNoOverlap($employee, $data);
+
+            if ($leaveType->max_days && $totalDays && $totalDays > $leaveType->max_days) {
+                throw new RuntimeException("{$leaveType->name} cannot exceed {$leaveType->max_days} days.");
+            }
+
+            if ($leaveType->requires_balance_check && $totalDays) {
+                $year = isset($data['start_date']) ? \Carbon\Carbon::parse($data['start_date'])->year : now()->year;
+                $available = $this->balanceService->available($employee, $leaveType, $year);
+                if ($available < $totalDays) {
+                    throw new RuntimeException(
+                        "Insufficient {$leaveType->name} balance. Available: "
+                        . number_format($available, 2) . ' day(s), requested: ' . number_format($totalDays, 2) . '.'
+                    );
+                }
+            }
+
+            if ($leaveType->code === 'monetization') {
+                $credits = (float) ($data['details']['creditsToMonetize'] ?? 0);
+                if ($credits <= 0) {
+                    throw new RuntimeException('creditsToMonetize must be a positive number.');
+                }
+                $available = $this->balanceService->available($employee, $leaveType, now()->year);
+                if ($available < $credits) {
+                    throw new RuntimeException(
+                        "Insufficient balance to monetize. Available: " . number_format($available, 2)
+                        . ' day(s), requested: ' . number_format($credits, 2) . '.'
+                    );
+                }
+            }
+
+            $flowSteps = $leaveType->approvalFlowSteps;
+            if ($flowSteps->isEmpty()) {
+                throw new RuntimeException("No approval workflow is configured for '{$leaveType->name}'. Contact HR/system admin.");
+            }
+
+            $leaveRequest = LeaveRequest::create([
+                'employee_id' => $employee->id,
+                'leave_type_id' => $leaveType->id,
+                'status' => LeaveRequestStatus::Pending,
+                'start_date' => $data['start_date'] ?? null,
+                'end_date' => $data['end_date'] ?? null,
+                'is_half_day' => $data['is_half_day'] ?? false,
+                'total_days' => $totalDays,
+                'reason' => $data['reason'] ?? null,
+                'details' => $data['details'] ?? [],
+                'is_confidential' => $leaveType->is_confidential,
+                'current_step_order' => 1,
+                'total_steps' => $flowSteps->count(),
+                'submitted_at' => now(),
+                'created_by' => $submittedBy->id,
+            ]);
+
+            foreach ($flowSteps as $flowStep) {
+                $approver = $this->approverResolver->resolve($flowStep, $employee);
+
+                $leaveRequest->approvalSteps()->create([
+                    'flow_step_id' => $flowStep->id,
+                    'step_order' => $flowStep->step_order,
+                    'approver_source' => $flowStep->approver_source,
+                    'label' => $flowStep->label,
+                    'approver_id' => $approver?->id,
+                    'approver_role' => $flowStep->approver_role,
+                    'status' => ApprovalStepStatus::Pending,
+                ]);
+            }
+
+            $this->initializeCurrentStep($leaveRequest);
+
+            LeaveRequestLog::create([
+                'leave_request_id' => $leaveRequest->id,
+                'action' => 'submitted',
+                'actor_id' => $submittedBy->id,
+                'metadata' => ['total_days' => $totalDays],
+            ]);
+
+            event(new LeaveRequestSubmitted($leaveRequest->fresh(['approvalSteps'])));
+
+            return $leaveRequest->fresh(['leaveType', 'employee', 'approvalSteps.approver', 'documents']);
+        });
+    }
+
+    private function initializeCurrentStep(LeaveRequest $leaveRequest): void
+    {
+        $steps = $leaveRequest->approvalSteps()->orderBy('step_order')->get();
+
+        $firstActionable = $steps->first(fn ($step) => $step->approver_id !== null);
+
+        if (! $firstActionable) {
+            throw new RuntimeException(
+                'No valid approver could be resolved for any step in this leave request\'s approval chain. Contact HR/system admin.'
+            );
+        }
+
+        $stepsToSkip = $steps->where('step_order', '<', $firstActionable->step_order);
+
+        foreach ($stepsToSkip as $skippedStep) {
+            $skippedStep->update([
+                'status' => ApprovalStepStatus::Skipped,
+                'remarks' => 'Auto-skipped: no approver could be resolved for this step (e.g. the applicant is the assigned approver).',
+                'acted_at' => now(),
+            ]);
+
+            LeaveRequestLog::create([
+                'leave_request_id' => $leaveRequest->id,
+                'action' => 'step_skipped',
+                'actor_id' => null,
+                'metadata' => ['step_order' => $skippedStep->step_order],
+            ]);
+        }
+
+        if ($firstActionable->step_order !== $leaveRequest->current_step_order) {
+            $leaveRequest->update(['current_step_order' => $firstActionable->step_order]);
+        }
+    }
+
+    public function cancel(LeaveRequest $leaveRequest, User $actor, string $reason): LeaveRequest
+    {
+        return DB::transaction(function () use ($leaveRequest, $actor, $reason) {
+            if (in_array($leaveRequest->status, [LeaveRequestStatus::Cancelled, LeaveRequestStatus::Rejected], true)) {
+                throw new RuntimeException('This request has already been finalized and cannot be cancelled.');
+            }
+
+            $wasApproved = $leaveRequest->status === LeaveRequestStatus::Approved;
+
+            $leaveRequest->update([
+                'status' => LeaveRequestStatus::Cancelled,
+                'cancelled_at' => now(),
+                'cancellation_reason' => $reason,
+                'updated_by' => $actor->id,
+            ]);
+
+            if ($wasApproved) {
+                $this->balanceService->restore($leaveRequest, "Restored due to cancellation of {$leaveRequest->request_number}");
+            }
+
+            LeaveRequestLog::create([
+                'leave_request_id' => $leaveRequest->id,
+                'action' => 'cancelled',
+                'actor_id' => $actor->id,
+                'remarks' => $reason,
+            ]);
+
+            return $leaveRequest->fresh();
+        });
+    }
+
+    private function assertNoOverlap(Employee $employee, array $data): void
+    {
+        if (empty($data['start_date']) || empty($data['end_date'])) {
+            return;
+        }
+
+        $overlapExists = LeaveRequest::query()
+            ->where('employee_id', $employee->id)
+            ->whereIn('status', [LeaveRequestStatus::Pending, LeaveRequestStatus::Approved])
+            ->whereNotNull('start_date')
+            ->whereNotNull('end_date')
+            ->where('start_date', '<=', $data['end_date'])
+            ->where('end_date', '>=', $data['start_date'])
+            ->exists();
+
+        if ($overlapExists) {
+            throw new RuntimeException(
+                'You already have a pending or approved leave request that overlaps these dates.'
+            );
+        }
+    }
+
+    private function computeDays(LeaveType $leaveType, array $data): ?float
+    {
+        if (! $leaveType->requires_date_range) {
+            return null;
+        }
+
+        if (empty($data['start_date']) || empty($data['end_date'])) {
+            throw new RuntimeException('Start date and end date are required for this leave type.');
+        }
+
+        $start = \Carbon\Carbon::parse($data['start_date'])->startOfDay();
+        $end = \Carbon\Carbon::parse($data['end_date'])->startOfDay();
+
+        if ($end->lt($start)) {
+            throw new RuntimeException('End date cannot be before start date.');
+        }
+
+        $days = $start->diffInDays($end) + 1;
+
+        return ! empty($data['is_half_day']) ? $days - 0.5 : (float) $days;
+    }
+}
