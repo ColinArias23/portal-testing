@@ -170,7 +170,8 @@ class EmployeeRepository
     }
 
     // ── Listing / search / CRUD (EmployeeController) ─────────────────────
-    public function baseQuery(?int $divisionId, ?int $departmentId): Builder
+
+    public function baseQuery(?int $divisionId, ?int $departmentId, ?string $employmentType = null): Builder
     {
         $query = Employee::with(self::FULL_RELATIONS);
 
@@ -182,10 +183,12 @@ class EmployeeRepository
             $query->whereRaw('JSON_CONTAINS(department_ids, ?)', [json_encode($departmentId)]);
         }
 
+        $this->applyEmploymentTypeFilter($query, $employmentType);
+
         return $query->orderBy('id');
     }
 
-    public function searchCandidatesQuery(?int $divisionId, ?int $departmentId): Builder
+    public function searchCandidatesQuery(?int $divisionId, ?int $departmentId, ?string $employmentType = null): Builder
     {
         $query = Employee::select(self::SEARCH_COLUMNS);
 
@@ -197,7 +200,23 @@ class EmployeeRepository
             $query->whereRaw('JSON_CONTAINS(department_ids, ?)', [json_encode($departmentId)]);
         }
 
+        $this->applyEmploymentTypeFilter($query, $employmentType);
+
         return $query->orderBy('id');
+    }
+
+    private function applyEmploymentTypeFilter(Builder $query, ?string $employmentType): void
+    {
+        if (! $employmentType) {
+            return;
+        }
+
+        match ($employmentType) {
+            'plantilla' => $query->plantilla(),
+            'consultant' => $query->consultant(),
+            'contract-of-service' => $query->cos(),
+            default => null,
+        };
     }
 
     public function findManyWithFullRelations(array $ids): Collection

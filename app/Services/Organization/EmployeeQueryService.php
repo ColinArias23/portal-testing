@@ -20,18 +20,19 @@ class EmployeeQueryService
 
     public function index(Request $request): array
     {
-        $perPage    = max(1, (int) ($request->per_page ?? self::PER_PAGE));
-        $page       = max(1, (int) ($request->page ?? 1));
-        $allDepts   = $this->employees->cachedDepartmentsById();
-        $divisionId = $request->filled('division_id') ? $request->integer('division_id') : null;
-        $deptId     = $request->filled('department_id') ? (int) $request->department_id : null;
+        $perPage        = max(1, (int) ($request->per_page ?? self::PER_PAGE));
+        $page           = max(1, (int) ($request->page ?? 1));
+        $allDepts       = $this->employees->cachedDepartmentsById();
+        $divisionId     = $request->filled('division_id') ? $request->integer('division_id') : null;
+        $deptId         = $request->filled('department_id') ? (int) $request->department_id : null;
+        $employmentType = $request->filled('employment_type') ? $request->string('employment_type')->toString() : null;
 
         if ($request->filled('search')) {
-            return $this->search($request->get('search'), $divisionId, $deptId, $page, $perPage, $allDepts);
+            return $this->search($request->get('search'), $divisionId, $deptId, $employmentType, $page, $perPage, $allDepts);
         }
 
         $paginator = $this->employees
-            ->baseQuery($divisionId, $deptId)
+            ->baseQuery($divisionId, $deptId, $employmentType)
             ->paginate($perPage, ['*'], 'page', $page);
 
         $paginator->getCollection()->transform(
@@ -45,13 +46,14 @@ class EmployeeQueryService
         string $term,
         ?int $divisionId,
         ?int $deptId,
+        ?string $employmentType,
         int $page,
         int $perPage,
         $allDepts
     ): array {
         $term = strtolower(trim($term));
 
-        $candidates = $this->employees->searchCandidatesQuery($divisionId, $deptId)->get();
+        $candidates = $this->employees->searchCandidatesQuery($divisionId, $deptId, $employmentType)->get();
 
         $matchingIds = $candidates
             ->filter(function (Employee $emp) use ($term) {
