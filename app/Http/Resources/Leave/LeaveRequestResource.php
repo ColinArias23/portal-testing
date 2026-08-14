@@ -2,7 +2,11 @@
 
 namespace App\Http\Resources\Leave;
 
+use App\Enums\ApprovalStepStatus;
+use App\Enums\ApproverSource;
 use App\Models\Department;
+use App\Models\LeaveRequestApprovalStep;
+use App\Models\User;
 use App\Policies\LeaveRequestPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -10,6 +14,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class LeaveRequestResource extends JsonResource
 {
     private static array $departmentCache = [];
+
+    private static array $roleHolderCountCache = [];
 
     public function toArray(Request $request): array
     {
@@ -50,14 +56,10 @@ class LeaveRequestResource extends JsonResource
             ),
             'current_step_order' => $this->current_step_order,
             'total_steps' => $this->total_steps,
-            'approval_steps' => $this->whenLoaded('approvalSteps', fn () => $this->approvalSteps->map(fn ($step) => [
-                'step_order' => $step->step_order,
-                'label' => $step->label,
-                'approver' => $step->approver ? ['id' => $step->approver->id, 'name' => $step->approver->name] : null,
-                'status' => $step->status->value,
-                'remarks' => $step->remarks,
-                'acted_at' => $step->acted_at?->toIso8601String(),
-            ])),
+            'approval_steps' => $this->whenLoaded(
+                'approvalSteps',
+                fn () => $this->approvalSteps->map(fn ($step) => $this->formatApprovalStep($step))
+            ),
             'documents' => $this->whenLoaded('documents', fn () => $this->documents->map(fn ($doc) => [
                 'id' => $doc->id,
                 'requirement_key' => $doc->requirement_key,
@@ -70,6 +72,50 @@ class LeaveRequestResource extends JsonResource
             'cancelled_at' => $this->cancelled_at?->toIso8601String(),
             'created_at' => $this->created_at->toIso8601String(),
         ];
+    }
+
+    private function formatApprovalStep(LeaveRequestApprovalStep $step): array
+    {
+        return [
+            'step_order' => $step->step_order,
+            'label' => $step->label,
+            'approver' => $this->resolveStepApproverDisplay($step),
+            'status' => $step->status->value,
+            'remarks' => $step->remarks,
+            'acted_at' => $step->acted_at?->toIso8601String(),
+        ];
+    }
+
+    private function resolveStepApproverDisplay(LeaveRequestApprovalStep $step): ?array
+    {
+        if ($step->status !== ApprovalStepStatus::Pending) {
+            $actualActor = $step->actor ?? $step->approver;
+
+            return $actualActor ? ['id' => $actualActor->id, 'name' => $actualActor->name] : null;
+        }
+
+        if ($step->approver_source !== ApproverSource::Role) {
+            return $step->approver ? ['id' => $step->approver->id, 'name' => $step->approver->name] : null;
+        }
+
+        if (! $step->approver_role) {
+            return null;
+        }
+
+        $holders = $this->activeHoldersOfRole($step->approver_role);
+
+        return $holders->count() === 1
+            ? ['id' => $holders->first()->id, 'name' => $holders->first()->name]
+            : null;
+    }
+
+    private function activeHoldersOfRole(string $role)
+    {
+        if (! array_key_exists($role, self::$roleHolderCountCache)) {
+            self::$roleHolderCountCache[$role] = User::role($role)->approved()->get();
+        }
+
+        return self::$roleHolderCountCache[$role];
     }
 
     private function resolveDepartment(): ?Department

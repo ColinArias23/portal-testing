@@ -112,7 +112,9 @@ class LeaveApprovalService
             ->orderBy('step_order')
             ->get();
 
-        $nextActionableStep = $remainingSteps->first(fn ($step) => $step->approver_id !== null);
+        $nextActionableStep = $remainingSteps->first(
+            fn ($step) => $step->approver_id !== null || $step->approver_role !== null
+        );
 
         $stepsToSkip = $nextActionableStep
             ? $remainingSteps->where('step_order', '<', $nextActionableStep->step_order)

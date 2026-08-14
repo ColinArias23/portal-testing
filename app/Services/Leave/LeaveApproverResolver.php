@@ -3,6 +3,8 @@
 namespace App\Services\Leave;
 
 use App\Enums\ApproverSource;
+use App\Models\Department;
+use App\Models\Division;
 use App\Models\Employee;
 use App\Models\LeaveApprovalFlowStep;
 use App\Models\User;
@@ -15,9 +17,27 @@ class LeaveApproverResolver
         return match ($flowStep->approver_source) {
             ApproverSource::ImmediateSupervisor => $this->resolveImmediateSupervisor($employee, $flowStep),
             ApproverSource::DepartmentHead => $this->resolveDepartmentHead($employee, $flowStep),
+            ApproverSource::ManagementChain => $this->resolveManagementChain($employee, $flowStep),
             ApproverSource::Role => $this->resolveByRole($flowStep),
             ApproverSource::FixedUser => $this->resolveFixedUser($flowStep),
         };
+    }
+
+    public function describeManagementChainLabel(Employee $employee): string
+    {
+        $headedDivision = Division::where('head_employee_id', $employee->id)->first();
+
+        if ($headedDivision) {
+            return $headedDivision->parent_id ? 'Directorate' : 'Directorate (Top Level)';
+        }
+
+        $headedDepartment = Department::where('head_employee_id', $employee->id)->first();
+
+        if ($headedDepartment) {
+            return 'Division Head';
+        }
+
+        return 'Department Head';
     }
 
     private function resolveImmediateSupervisor(Employee $employee, LeaveApprovalFlowStep $flowStep): ?User
@@ -39,7 +59,7 @@ class LeaveApproverResolver
         if (! $head) {
             $departmentId = $employee->department_ids[0] ?? null;
             if ($departmentId) {
-                $head = \App\Models\Department::find($departmentId)?->head;
+                $head = Department::find($departmentId)?->head;
             }
         }
 
@@ -48,7 +68,61 @@ class LeaveApproverResolver
             return null;
         }
 
-        if ($employee->user && $head->user->id === $employee->user->id) {
+        if ($head->id === $employee->id) {
+            return null;
+        }
+
+        return $head->user;
+    }
+
+    private function resolveManagementChain(Employee $employee, LeaveApprovalFlowStep $flowStep): ?User
+    {
+        $headedDivision = Division::where('head_employee_id', $employee->id)->first();
+
+        if ($headedDivision) {
+            if (! $headedDivision->parent_id) {
+                return null;
+            }
+
+            $directorate = $headedDivision->parent;
+
+            return $this->resolveDivisionHeadUser($directorate, $employee, $flowStep, 'Directorate');
+        }
+
+        $headedDepartment = Department::where('head_employee_id', $employee->id)->first();
+
+        if ($headedDepartment) {
+            $division = $headedDepartment->division;
+
+            if (! $division) {
+                $this->failIfRequired(
+                    $flowStep,
+                    "Department '{$headedDepartment->name}' has no division configured to escalate its head's leave to."
+                );
+                return null;
+            }
+
+            return $this->resolveDivisionHeadUser($division, $employee, $flowStep, 'Division');
+        }
+
+        // Regular staff - not a head of anything - escalates to their own
+        // Department Head.
+        return $this->resolveDepartmentHead($employee, $flowStep);
+    }
+
+    private function resolveDivisionHeadUser(Division $division, Employee $employee, LeaveApprovalFlowStep $flowStep, string $levelLabel): ?User
+    {
+        $head = $division->head;
+
+        if (! $head || ! $head->user) {
+            $this->failIfRequired(
+                $flowStep,
+                "{$levelLabel} '{$division->name}' has no designated head with a linked user account."
+            );
+            return null;
+        }
+
+        if ($head->id === $employee->id) {
             return null;
         }
 

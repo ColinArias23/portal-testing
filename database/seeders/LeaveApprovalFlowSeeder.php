@@ -12,7 +12,7 @@ class LeaveApprovalFlowSeeder extends Seeder
     private const MCC_ROLE = 'Medical Center Chief';
 
     private const STANDARD_CHAIN = [
-        ['approver_source' => 'department_head', 'label' => 'Department Head', 'is_required' => true],
+        ['approver_source' => 'management_chain', 'label' => 'Management Approval', 'is_required' => true],
         ['approver_source' => 'role', 'approver_role' => self::HR_ROLE, 'label' => 'HR', 'is_required' => true],
         ['approver_source' => 'role', 'approver_role' => self::MCC_ROLE, 'label' => 'MCC', 'is_required' => true],
     ];

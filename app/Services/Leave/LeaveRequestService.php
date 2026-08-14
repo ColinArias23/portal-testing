@@ -3,6 +3,7 @@
 namespace App\Services\Leave;
 
 use App\Enums\ApprovalStepStatus;
+use App\Enums\ApproverSource;
 use App\Enums\LeaveRequestStatus;
 use App\Events\Leave\LeaveRequestSubmitted;
 use App\Models\Employee;
@@ -85,11 +86,15 @@ class LeaveRequestService
             foreach ($flowSteps as $flowStep) {
                 $approver = $this->approverResolver->resolve($flowStep, $employee);
 
+                $label = $flowStep->approver_source === ApproverSource::ManagementChain
+                    ? $this->approverResolver->describeManagementChainLabel($employee)
+                    : $flowStep->label;
+
                 $leaveRequest->approvalSteps()->create([
                     'flow_step_id' => $flowStep->id,
                     'step_order' => $flowStep->step_order,
                     'approver_source' => $flowStep->approver_source,
-                    'label' => $flowStep->label,
+                    'label' => $label,
                     'approver_id' => $approver?->id,
                     'approver_role' => $flowStep->approver_role,
                     'status' => ApprovalStepStatus::Pending,
@@ -115,7 +120,12 @@ class LeaveRequestService
     {
         $steps = $leaveRequest->approvalSteps()->orderBy('step_order')->get();
 
-        $firstActionable = $steps->first(fn ($step) => $step->approver_id !== null);
+        $firstActionable = $steps->first(
+            // Same fix as LeaveApprovalService::advanceToNextActionableStep()
+            // - a step with approver_role set is actionable by any user
+            // holding that role, even with no fixed approver_id snapshot.
+            fn ($step) => $step->approver_id !== null || $step->approver_role !== null
+        );
 
         if (! $firstActionable) {
             throw new RuntimeException(

@@ -40,7 +40,7 @@ class LeaveApprovalController extends Controller
                     });
             })
             ->visibleTo($request->user())
-            ->with(['leaveType', 'employee.department', 'approvalSteps.approver'])
+            ->with(['leaveType', 'employee.primaryDepartmentAssignment.department', 'approvalSteps.approver'])
             ->latest('submitted_at');
 
         return LeaveRequestResource::collection($query->paginate($request->integer('per_page', 15)))
@@ -52,7 +52,11 @@ class LeaveApprovalController extends Controller
         $query = LeaveRequest::query()
             ->whereHas('approvalSteps', fn ($q) => $q->where('acted_by', $request->user()->id))
             ->whereIn('status', ['approved', 'rejected'])
-            ->with(['leaveType', 'employee', 'approvalSteps' => fn ($q) => $q->where('acted_by', $request->user()->id)])
+            ->with([
+                'leaveType',
+                'employee.primaryDepartmentAssignment.department',
+                'approvalSteps' => fn ($q) => $q->where('acted_by', $request->user()->id),
+            ])
             ->latest('finalized_at')
             ->limit($request->integer('limit', 5));
 
@@ -72,7 +76,9 @@ class LeaveApprovalController extends Controller
         }
 
         return response()->json([
-            'data' => new LeaveRequestResource($updated->load(['leaveType', 'employee', 'approvalSteps.approver'])),
+            'data' => new LeaveRequestResource(
+                $updated->load(['leaveType', 'employee.primaryDepartmentAssignment.department', 'approvalSteps.approver'])
+            ),
             'message' => $request->input('action') === 'approved' ? 'Request approved.' : 'Request rejected.',
         ]);
     }
