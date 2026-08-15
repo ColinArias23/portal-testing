@@ -73,6 +73,11 @@ class User extends Authenticatable
         return $parts ? implode(' ', $parts) : $this->username;
     }
 
+    public function getFormalNameAttribute(): string
+    {
+        return $this->employee?->formal_name ?? $this->name;
+    }
+
     public function getAvatarUrlAttribute(): ?string
     {
         if (! $this->relationLoaded('employee') && ! $this->employee_id) {

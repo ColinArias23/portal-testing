@@ -9,7 +9,6 @@ class LeaveBalanceResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        /** @var \App\Models\LeaveBalance $this */
         return [
             'id' => $this->id,
             'leave_type' => [

@@ -81,6 +81,23 @@ class Employee extends Model
         ])->filter()->implode(' ');
     }
 
+    public function getFormalNameAttribute(): string
+    {
+        $namePart = collect([$this->first_name, $this->middle_name, $this->last_name])
+            ->filter()
+            ->implode(' ');
+
+        $prefixPart = $this->prefix ? rtrim($this->prefix, '.') . '.' : null;
+
+        $nameWithPrefix = collect([$prefixPart, $namePart])->filter()->implode(' ');
+
+        $titles = is_array($this->title) ? $this->title : array_filter([$this->title]);
+
+        $trailing = collect([$this->suffix, ...$titles])->filter()->implode(', ');
+
+        return $trailing !== '' ? "{$nameWithPrefix}, {$trailing}" : $nameWithPrefix;
+    }
+
     public function getRolePositionLabelAttribute(): string
     {
         return collect($this->role_position)->filter()->implode(', ');
