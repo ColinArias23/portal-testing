@@ -3,6 +3,7 @@
 namespace App\Services\Training;
 
 use App\Events\Training\TrainingCreated;
+use App\Support\Broadcasting\SafeBroadcast;
 use App\Events\Training\TrainingDeleted;
 use App\Events\Training\TrainingParticipantUpdated;
 use App\Models\ActivityLog;
@@ -19,6 +20,7 @@ class TrainingService
     public function __construct(
         private readonly TrainingRepository $trainings,
         private readonly TrainingFormatterService $formatter,
+        private readonly NotificationService $notifications,
     ) {
     }
 
@@ -59,8 +61,8 @@ class TrainingService
         $employeeId = $this->trainings->employeeIdForUser($posterId);
         $formatted = $this->formatter->format($training, $employeeId);
 
-        NotificationService::trainingCreated($training, $posterId);
-        broadcast(new TrainingCreated($training, $posterId, $formatted));
+        $this->notifications->notifyTrainingCreated($training, $posterId);
+        SafeBroadcast::send(new TrainingCreated($training, $posterId, $formatted));
 
         ActivityLog::record(
             action:       'training.created',
@@ -98,7 +100,7 @@ class TrainingService
         $employeeId = $this->trainings->employeeIdForUser($request->user()?->id);
         $formatted  = $this->formatter->format($training, $employeeId);
 
-        broadcast(new TrainingParticipantUpdated($formatted));
+        SafeBroadcast::send(new TrainingParticipantUpdated($formatted));
 
         ActivityLog::record(
             action:       'training.updated',
@@ -136,7 +138,7 @@ class TrainingService
 
         $this->trainings->delete($training);
 
-        broadcast(new TrainingDeleted($id));
+        SafeBroadcast::send(new TrainingDeleted($id));
 
         ActivityLog::record(
             action:       'training.deleted',
@@ -173,7 +175,7 @@ class TrainingService
         $employeeId = $this->trainings->employeeIdForUser($request->user()?->id);
         $formatted  = $this->formatter->format($training, $employeeId);
 
-        broadcast(new TrainingParticipantUpdated($formatted));
+        SafeBroadcast::send(new TrainingParticipantUpdated($formatted));
 
         ActivityLog::record(
             action:       'training.participants_assigned',
@@ -206,7 +208,7 @@ class TrainingService
         $employeeId = $this->trainings->employeeIdForUser($request->user()?->id);
         $formatted  = $this->formatter->format($training, $employeeId);
 
-        broadcast(new TrainingParticipantUpdated($formatted));
+        SafeBroadcast::send(new TrainingParticipantUpdated($formatted));
 
         ActivityLog::record(
             action:       'training.participant_updated',
@@ -235,7 +237,7 @@ class TrainingService
         $employeeId = $this->trainings->employeeIdForUser($request->user()?->id);
         $formatted  = $this->formatter->format($training, $employeeId);
 
-        broadcast(new TrainingParticipantUpdated($formatted));
+        SafeBroadcast::send(new TrainingParticipantUpdated($formatted));
 
         ActivityLog::record(
             action:       'training.participant_removed',
@@ -269,7 +271,7 @@ class TrainingService
         $employeeId = $this->trainings->employeeIdForUser($request->user()?->id);
         $formatted  = $this->formatter->format($training, $employeeId);
 
-        broadcast(new TrainingParticipantUpdated($formatted));
+        SafeBroadcast::send(new TrainingParticipantUpdated($formatted));
 
         ActivityLog::record(
             action:       'training.attendance_marked',
@@ -325,7 +327,7 @@ class TrainingService
 
         $formatted = $this->formatter->format($training, $employee->id);
 
-        broadcast(new TrainingParticipantUpdated($formatted));
+        SafeBroadcast::send(new TrainingParticipantUpdated($formatted));
 
         ActivityLog::record(
             action:       'training.joined',
