@@ -142,20 +142,23 @@ class EmployeeRepository
 
     public function attachDepartmentToEmployees(int $departmentId, array $employeeIds): void
     {
-        foreach ($employeeIds as $employeeId) {
-            $employee = $this->find((int) $employeeId);
+        $employeeIds = array_values(array_unique(array_map('intval', $employeeIds)));
 
-            if (! $employee) {
-                continue;
-            }
-
-            $ids = array_map('intval', $employee->department_ids ?? []);
-
-            if (! in_array($departmentId, $ids, true)) {
-                $employee->department_ids = [...$ids, $departmentId];
-                $employee->save();
-            }
+        if (empty($employeeIds)) {
+            return;
         }
+
+        Employee::select(['id', 'department_ids'])
+            ->whereIn('id', $employeeIds)
+            ->get()
+            ->each(function (Employee $employee) use ($departmentId) {
+                $ids = array_map('intval', $employee->department_ids ?? []);
+
+                if (! in_array($departmentId, $ids, true)) {
+                    $employee->department_ids = [...$ids, $departmentId];
+                    $employee->save();
+                }
+            });
     }
 
     public function removeDepartmentFromAllEmployees(int $departmentId): void
@@ -188,8 +191,12 @@ class EmployeeRepository
         return $query->orderBy('id');
     }
 
-    public function searchCandidatesQuery(?int $divisionId, ?int $departmentId, ?string $employmentType = null): Builder
-    {
+    public function searchCandidatesQuery(
+        string $term,
+        ?int $divisionId,
+        ?int $departmentId,
+        ?string $employmentType = null
+    ): Builder {
         $query = Employee::select(self::SEARCH_COLUMNS);
 
         if ($divisionId !== null) {
@@ -202,7 +209,19 @@ class EmployeeRepository
 
         $this->applyEmploymentTypeFilter($query, $employmentType);
 
-        return $query->orderBy('id');
+        $like = '%'.addcslashes($term, '%_\\').'%';
+
+        $query->where(function (Builder $q) use ($like, $term) {
+            $q->whereRaw(
+                "CONCAT_WS(' ', prefix, first_name, middle_name, last_name, suffix) LIKE ?",
+                [$like]
+            )->orWhereRaw(
+                'JSON_SEARCH(LOWER(role_position), "one", ?) IS NOT NULL',
+                ['%'.strtolower(addcslashes($term, '%_\\')).'%']
+            );
+        });
+
+        return $query->orderBy('last_name')->orderBy('first_name');
     }
 
     private function applyEmploymentTypeFilter(Builder $query, ?string $employmentType): void
