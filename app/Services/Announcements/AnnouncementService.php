@@ -3,6 +3,7 @@
 namespace App\Services\Announcements;
 
 use App\DTOs\AnnouncementDTO;
+use App\Support\Broadcasting\SafeBroadcast;
 use App\Events\Announcements\AnnouncementCreated;
 use App\Events\Announcements\AnnouncementDeleted;
 use App\Events\Announcements\AnnouncementUpdated;
@@ -45,7 +46,7 @@ class AnnouncementService
 
         $fresh = $announcement->fresh(self::EAGER_LOAD);
 
-        broadcast(new AnnouncementCreated($fresh))->toOthers();
+        SafeBroadcast::send(new AnnouncementCreated($fresh), toOthers: true);
 
         Notification::create([
             'type'       => 'announcement',
@@ -74,7 +75,7 @@ class AnnouncementService
 
         $fresh = $announcement->fresh(self::EAGER_LOAD);
 
-        broadcast(new AnnouncementUpdated($fresh))->toOthers();
+        SafeBroadcast::send(new AnnouncementUpdated($fresh), toOthers: true);
 
         return $fresh;
     }
@@ -87,7 +88,7 @@ class AnnouncementService
         $announcementId = $announcement->id;
         $announcement->delete();
 
-        broadcast(new AnnouncementDeleted($announcementId))->toOthers();
+        SafeBroadcast::send(new AnnouncementDeleted($announcementId), toOthers: true);
     }
 
     public function togglePin(int $id, Request $request): Announcement
@@ -97,7 +98,7 @@ class AnnouncementService
 
         $announcement->update(['is_pinned' => ! $announcement->is_pinned]);
 
-        broadcast(new AnnouncementUpdated($announcement->fresh(self::EAGER_LOAD)))->toOthers();
+        SafeBroadcast::send(new AnnouncementUpdated($announcement->fresh(self::EAGER_LOAD)), toOthers: true);
 
         return $announcement;
     }
@@ -109,7 +110,7 @@ class AnnouncementService
 
         $announcement->update(['is_archived' => ! $announcement->is_archived]);
 
-        broadcast(new AnnouncementUpdated($announcement->fresh(self::EAGER_LOAD)))->toOthers();
+        SafeBroadcast::send(new AnnouncementUpdated($announcement->fresh(self::EAGER_LOAD)), toOthers: true);
 
         return $announcement;
     }
