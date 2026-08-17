@@ -38,6 +38,13 @@ class NotificationRepository
         return Notification::relevantTo($user)->pluck('id');
     }
 
+    public function unreadIdsForUser(User $user): Collection
+    {
+        return Notification::relevantTo($user)
+            ->whereDoesntHave('reads', fn ($q) => $q->where('user_id', $user->id))
+            ->pluck('id');
+    }
+
     public function markManyRead(Collection $notificationIds, int $userId): void
     {
         if ($notificationIds->isEmpty()) {
@@ -51,7 +58,7 @@ class NotificationRepository
             'read_at'         => $now,
         ])->all();
 
-        NotificationRead::upsert($rows, uniqueBy: ['notification_id', 'user_id'], update: []);
+        NotificationRead::upsert($rows, uniqueBy: ['notification_id', 'user_id'], update: ['read_at']);
     }
 
     public function unreadCountForUser(User $user): int

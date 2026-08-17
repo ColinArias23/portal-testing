@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Events\Notifications\NotificationCreated;
+use App\Support\Broadcasting\SafeBroadcast;
 use App\Traits\Concerns\AutoUppercase;
 use Illuminate\Database\Eloquent\Model;
 
@@ -32,7 +33,7 @@ class Notification extends Model
     protected static function booted(): void
     {
         static::created(function ($notification) {
-            broadcast(new NotificationCreated($notification))->toOthers();
+            SafeBroadcast::send(new NotificationCreated($notification), toOthers: true);
         });
     }
 
