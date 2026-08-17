@@ -3,6 +3,7 @@
 namespace App\Services\Recruitment\Hiring;
 
 use App\Events\Recruitment\Hiring\OnboardingUpdated;
+use App\Support\Broadcasting\SafeBroadcast;
 use App\Models\ActivityLog;
 use App\Models\Onboarding;
 use App\Models\OnboardingTask;
@@ -59,7 +60,7 @@ class OnboardingService
 
     private function broadcastUpdate(Onboarding $onboarding): void
     {
-        broadcast(new OnboardingUpdated($this->format($onboarding)))->toOthers();
+        SafeBroadcast::send(new OnboardingUpdated($this->format($onboarding)), toOthers: true);
     }
 
     public function assertTaskBelongsToOnboarding(OnboardingTask $task, Onboarding $onboarding): bool
@@ -197,7 +198,7 @@ class OnboardingService
             userAgent: $request->userAgent(),
         );
 
-        broadcast(new \App\Events\OnboardingDeleted($id))->toOthers();
+        SafeBroadcast::send(new \App\Events\OnboardingDeleted($id), toOthers: true);
     }
 
     public function toggleTask(Request $request, Onboarding $onboarding, OnboardingTask $task): Onboarding

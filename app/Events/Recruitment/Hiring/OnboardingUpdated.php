@@ -4,10 +4,10 @@ namespace App\Events\Recruitment\Hiring;
 
 use App\Models\Hiring\Onboarding;
 use Illuminate\Broadcasting\Channel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Queue\SerializesModels;
 
-class OnboardingUpdated implements ShouldBroadcast
+class OnboardingUpdated implements ShouldBroadcastNow
 {
     use SerializesModels;
 

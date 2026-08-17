@@ -3,6 +3,7 @@
 namespace App\Services\Recruitment\PlantillaPosting;
 
 use App\Events\Recruitment\PlantillaPosting\PlantillaApplicationInterviewUpdated;
+use App\Support\Broadcasting\SafeBroadcast;
 use App\Models\ActivityLog;
 use App\Models\PlantillaPostingApplication;
 use App\Models\PlantillaPostingApplicationInterview;
@@ -68,7 +69,7 @@ class PlantillaApplicationInterviewService
 
         $this->interviews->loadRelations($interview);
 
-        broadcast(new PlantillaApplicationInterviewUpdated($interview))->toOthers();
+        SafeBroadcast::send(new PlantillaApplicationInterviewUpdated($interview), toOthers: true);
 
         ActivityLog::record(
             action: 'plantilla_application_interview.updated',

@@ -3,6 +3,7 @@
 namespace App\Services\Recruitment\Hiring;
 
 use App\Models\ActivityLog;
+use App\Support\Broadcasting\SafeBroadcast;
 use App\Models\Applicant;
 use App\Models\Interview;
 use App\Repositories\Recruitment\Hiring\InterviewRepository;
@@ -41,7 +42,7 @@ class InterviewService
 
         $interview = $this->interviews->updateOrCreateForApplicant($applicant->id, $data);
 
-        broadcast(new \App\Events\InterviewUpdated($interview->load('applicant')))->toOthers();
+        SafeBroadcast::send(new \App\Events\InterviewUpdated($interview->load('applicant')), toOthers: true);
 
         ActivityLog::record(
             action: 'interview.updated',

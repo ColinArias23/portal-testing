@@ -3,9 +3,9 @@
 namespace App\Events\Recruitment\Hiring;
 
 use Illuminate\Broadcasting\Channel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 
-class ContractUpdated implements ShouldBroadcast
+class ContractUpdated implements ShouldBroadcastNow
 {
     public $contract;
 
