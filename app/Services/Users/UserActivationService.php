@@ -3,6 +3,7 @@
 namespace App\Services\Users;
 
 use App\Events\RBAC\UserActivated;
+use App\Support\Broadcasting\SafeBroadcast;
 use App\Models\ActivityLog;
 use App\Models\User;
 use App\Repositories\Shared\EmployeeRepository;
@@ -54,7 +55,7 @@ class UserActivationService
             userAgent: $request->userAgent(),
         );
 
-        broadcast(new UserActivated($user->id, $fresh->employee_id));
+        SafeBroadcast::send(new UserActivated($user->id, $fresh->employee_id));
 
         return $fresh;
     }
@@ -103,7 +104,7 @@ class UserActivationService
                 userAgent: $request->userAgent(),
             );
 
-            broadcast(new UserActivated($user->id, $userData->employee_id));
+            SafeBroadcast::send(new UserActivated($user->id, $userData->employee_id));
         }
 
         return ['count' => $users->count(), 'users' => $users];

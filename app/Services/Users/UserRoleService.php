@@ -3,6 +3,7 @@
 namespace App\Services\Users;
 
 use App\Events\RBAC\PermissionsUpdated;
+use App\Support\Broadcasting\SafeBroadcast;
 use App\Exceptions\Users\PermissionUpdateForbiddenException;
 use App\Models\ActivityLog;
 use App\Models\User;
@@ -58,7 +59,7 @@ class UserRoleService
             userAgent: $request->userAgent(),
         );
 
-        broadcast(new PermissionsUpdated($target->id));
+        SafeBroadcast::send(new PermissionsUpdated($target->id));
 
         return ['roles' => $target->getRoleNames()];
     }

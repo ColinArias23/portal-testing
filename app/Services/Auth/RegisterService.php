@@ -3,6 +3,7 @@
 namespace App\Services\Auth;
 
 use App\DTOs\UserDTO;
+use App\Support\Broadcasting\SafeBroadcast;
 use App\Events\RBAC\UserRegistered;
 use App\Models\ActivityLog;
 use App\Models\User;
@@ -16,6 +17,7 @@ class RegisterService
     public function __construct(
         private readonly UserRepository $users,
         private readonly UserFormatterService $formatter,
+        private readonly NotificationService $notifications,
     ) {
     }
 
@@ -31,8 +33,8 @@ class RegisterService
             'approval_status' => 'PENDING',
         ]);
 
-        broadcast(new UserRegistered($user->id));
-        NotificationService::accountPending($user->username);
+        SafeBroadcast::send(new UserRegistered($user->id));
+        $this->notifications->notifyAccountPending($user);
 
         ActivityLog::record(
             action: 'auth.register',

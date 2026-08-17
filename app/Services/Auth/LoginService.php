@@ -3,6 +3,7 @@
 namespace App\Services\Auth;
 
 use App\DTOs\LoginDTO;
+use App\Support\Broadcasting\SafeBroadcast;
 use App\Events\RBAC\UserLoggedInElsewhere;
 use App\Models\ActivityLog;
 use App\Models\User;
@@ -68,7 +69,7 @@ class LoginService
     private function invalidateExistingTokens(User $user): void
     {
         if ($user->tokens()->exists()) {
-            broadcast(new UserLoggedInElsewhere($user->id));
+            SafeBroadcast::send(new UserLoggedInElsewhere($user->id));
             $user->tokens()->delete();
         }
     }
