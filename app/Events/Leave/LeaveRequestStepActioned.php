@@ -5,11 +5,11 @@ namespace App\Events\Leave;
 use App\Models\LeaveRequestApprovalStep;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class LeaveRequestStepActioned implements ShouldBroadcast
+class LeaveRequestStepActioned implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
@@ -28,8 +28,17 @@ class LeaveRequestStepActioned implements ShouldBroadcast
         }
 
         $nextStep = $leaveRequest->approvalSteps->firstWhere('step_order', $leaveRequest->current_step_order);
-        if ($nextStep && $nextStep->approver_id) {
-            $channels[] = new PrivateChannel("App.Models.User.{$nextStep->approver_id}");
+
+        if ($nextStep) {
+            if ($nextStep->approver_id) {
+                $channels[] = new PrivateChannel("App.Models.User.{$nextStep->approver_id}");
+            } elseif ($nextStep->approver_role) {
+                $roleChannels = \App\Models\User::role($nextStep->approver_role)
+                    ->get(['id'])
+                    ->map(fn ($user) => new PrivateChannel("App.Models.User.{$user->id}"))
+                    ->all();
+                $channels = [...$channels, ...$roleChannels];
+            }
         }
 
         return $channels;

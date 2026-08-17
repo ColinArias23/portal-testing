@@ -9,13 +9,16 @@ use App\Events\Leave\LeaveRequestStepActioned;
 use App\Models\LeaveRequest;
 use App\Models\LeaveRequestLog;
 use App\Models\User;
+use App\Support\Leave\LeaveApprovalNotifier;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 class LeaveApprovalService
 {
-    public function __construct(private readonly LeaveBalanceService $balanceService)
-    {
+    public function __construct(
+        private readonly LeaveBalanceService $balanceService,
+        private readonly LeaveApprovalNotifier $notifier,
+    ) {
     }
 
     public function approveStep(LeaveRequest $leaveRequest, User $actor, ?string $remarks): LeaveRequest
@@ -141,6 +144,12 @@ class LeaveApprovalService
 
         $leaveRequest->update(['current_step_order' => $nextActionableStep->step_order]);
 
+        $this->notifier->notifyActionableStep(
+            $nextActionableStep,
+            'Leave request awaiting your approval',
+            "{$leaveRequest->employee->full_name}'s {$leaveRequest->leaveType->name} request needs your review.",
+        );
+
         return $leaveRequest->fresh(['approvalSteps.approver']);
     }
 
@@ -162,6 +171,18 @@ class LeaveApprovalService
         ]);
 
         $leaveRequest = $leaveRequest->fresh(['leaveType', 'employee', 'approvalSteps.approver']);
+
+        $employeeUserId = $leaveRequest->employee->user?->id;
+        if ($employeeUserId) {
+            $verb = $finalStatus === LeaveRequestStatus::Approved ? 'approved' : 'rejected';
+            $this->notifier->notifyUser(
+                $employeeUserId,
+                'leave',
+                "Leave request {$verb}",
+                "Your {$leaveRequest->leaveType->name} request ({$leaveRequest->request_number}) has been {$verb}.",
+                ['leave_request_id' => $leaveRequest->id, 'status' => $finalStatus->value],
+            );
+        }
 
         event(new LeaveRequestFinalized($leaveRequest));
 

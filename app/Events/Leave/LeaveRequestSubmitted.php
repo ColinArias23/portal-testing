@@ -5,11 +5,11 @@ namespace App\Events\Leave;
 use App\Models\LeaveRequest;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class LeaveRequestSubmitted implements ShouldBroadcast
+class LeaveRequestSubmitted implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
@@ -21,13 +21,30 @@ class LeaveRequestSubmitted implements ShouldBroadcast
     {
         $step = $this->leaveRequest->currentStep();
 
-        if (! $step || ! $step->approver_id) {
+        if (! $step) {
             return [];
         }
 
-        return [
-            new PrivateChannel("App.Models.User.{$step->approver_id}"),
-        ];
+        return $this->channelsForStep($step);
+    }
+
+    /**
+     * @return PrivateChannel[]
+     */
+    private function channelsForStep($step): array
+    {
+        if ($step->approver_id) {
+            return [new PrivateChannel("App.Models.User.{$step->approver_id}")];
+        }
+
+        if ($step->approver_role) {
+            return \App\Models\User::role($step->approver_role)
+                ->get(['id'])
+                ->map(fn ($user) => new PrivateChannel("App.Models.User.{$user->id}"))
+                ->all();
+        }
+
+        return [];
     }
 
     public function broadcastAs(): string

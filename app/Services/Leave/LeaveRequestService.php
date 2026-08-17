@@ -11,6 +11,7 @@ use App\Models\LeaveRequest;
 use App\Models\LeaveRequestLog;
 use App\Models\LeaveType;
 use App\Models\User;
+use App\Support\Leave\LeaveApprovalNotifier;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -19,6 +20,7 @@ class LeaveRequestService
     public function __construct(
         private readonly LeaveApproverResolver $approverResolver,
         private readonly LeaveBalanceService $balanceService,
+        private readonly LeaveApprovalNotifier $notifier,
     ) {
     }
 
@@ -110,7 +112,18 @@ class LeaveRequestService
                 'metadata' => ['total_days' => $totalDays],
             ]);
 
-            event(new LeaveRequestSubmitted($leaveRequest->fresh(['approvalSteps'])));
+            $fresh = $leaveRequest->fresh(['approvalSteps']);
+
+            $currentStep = $fresh->approvalSteps->firstWhere('step_order', $fresh->current_step_order);
+            if ($currentStep) {
+                $this->notifier->notifyActionableStep(
+                    $currentStep,
+                    'New leave request to review',
+                    "{$employee->full_name} filed a {$leaveType->name} request awaiting your approval.",
+                );
+            }
+
+            event(new LeaveRequestSubmitted($fresh));
 
             return $leaveRequest->fresh(['leaveType', 'employee', 'approvalSteps.approver', 'documents']);
         });
@@ -121,9 +134,6 @@ class LeaveRequestService
         $steps = $leaveRequest->approvalSteps()->orderBy('step_order')->get();
 
         $firstActionable = $steps->first(
-            // Same fix as LeaveApprovalService::advanceToNextActionableStep()
-            // - a step with approver_role set is actionable by any user
-            // holding that role, even with no fixed approver_id snapshot.
             fn ($step) => $step->approver_id !== null || $step->approver_role !== null
         );
 
