@@ -3,6 +3,7 @@
 namespace App\Jobs\Reports;
 
 use App\Events\Reports\ReportSubmitted;
+use App\Support\Broadcasting\SafeBroadcast;
 use App\Models\Report;
 use App\Models\User;
 use App\Notifications\Reports\NewReportNotification;
@@ -35,7 +36,7 @@ class ProcessNewReport implements ShouldQueue
     private function broadcastToAdmins(Report $report): void
     {
         try {
-            broadcast(new ReportSubmitted($report));
+            SafeBroadcast::send(new ReportSubmitted($report));
         } catch (\Throwable $e) {
             Log::error('ReportSubmitted broadcast failed', [
                 'report_id' => $report->id,
