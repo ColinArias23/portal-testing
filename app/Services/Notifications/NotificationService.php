@@ -3,6 +3,7 @@
 namespace App\Services\Notifications;
 
 use App\Models\Notification;
+use App\Models\Training;
 use App\Models\User;
 use App\Repositories\Notifications\NotificationRepository;
 class NotificationService
@@ -41,7 +42,7 @@ class NotificationService
 
     public function markAllRead(User $user): void
     {
-        $ids = $this->notifications->relevantIdsForUser($user);
+        $ids = $this->notifications->unreadIdsForUser($user);
 
         $this->notifications->markManyRead($ids, $user->id);
     }
@@ -49,5 +50,30 @@ class NotificationService
     public function unreadCount(User $user): int
     {
         return $this->notifications->unreadCountForUser($user);
+    }
+
+    public function notifyAccountPending(User $user): Notification
+    {
+        return Notification::create([
+            'type'       => 'account_pending',
+            'title'      => 'New account pending approval',
+            'message'    => "{$user->username} registered and is awaiting activation.",
+            'data'       => ['user_id' => $user->id],
+            'visibility' => 'admin',
+        ]);
+    }
+
+    public function notifyTrainingCreated(Training $training, int $postedByUserId): Notification
+    {
+        return Notification::create([
+            'type'       => 'training',
+            'title'      => 'New Training Program',
+            'message'    => "A new training program \"{$training->title}\" has been posted.",
+            'data'       => [
+                'training_id'        => $training->id,
+                'posted_by_user_id'  => $postedByUserId,
+            ],
+            'visibility' => 'all',
+        ]);
     }
 }
