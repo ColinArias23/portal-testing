@@ -51,38 +51,40 @@ class EmployeeQueryService
         int $perPage,
         $allDepts
     ): array {
-        $term = strtolower(trim($term));
+        $term = trim($term);
 
-        $candidates = $this->employees->searchCandidatesQuery($divisionId, $deptId, $employmentType)->get();
+        if ($term === '') {
+            return $this->index(new Request(array_filter([
+                'page'            => $page,
+                'per_page'        => $perPage,
+                'division_id'     => $divisionId,
+                'department_id'   => $deptId,
+                'employment_type' => $employmentType,
+            ])));
+        }
 
-        $matchingIds = $candidates
-            ->filter(function (Employee $emp) use ($term) {
-                $fullName = collect([$emp->prefix, $emp->first_name, $emp->middle_name, $emp->last_name, $emp->suffix])
-                    ->filter()
-                    ->implode(' ');
+        $paginator = $this->employees
+            ->searchCandidatesQuery($term, $divisionId, $deptId, $employmentType)
+            ->paginate($perPage, ['*'], 'page', $page);
 
-                return str_contains(strtolower($fullName), $term)
-                    || collect($emp->role_position ?? [])
-                        ->contains(fn ($r) => str_contains(strtolower($r), $term));
-            })
-            ->pluck('id')
+        $pageIds = $paginator->getCollection()->pluck('id')->all();
+
+        $fullyLoaded = $this->employees->findManyWithFullRelations($pageIds)->keyBy('id');
+
+        $items = collect($pageIds)
+            ->map(fn ($id) => $fullyLoaded->get($id))
+            ->filter()
+            ->map(fn (Employee $emp) => $this->formatter->format($emp, $allDepts))
             ->values();
 
-        $total    = $matchingIds->count();
-        $lastPage = (int) ceil($total / $perPage) ?: 1;
-        $pageIds  = $matchingIds->slice(($page - 1) * $perPage, $perPage)->values()->all();
-
-        $items = $this->employees->findManyWithFullRelations($pageIds)
-            ->map(fn ($emp) => $this->formatter->format($emp, $allDepts));
-
         return [
-            'data'         => $items->values()->all(),
-            'current_page' => $page,
-            'last_page'    => $lastPage,
-            'per_page'     => $perPage,
-            'total'        => $total,
-            'from'         => $total ? ($page - 1) * $perPage + 1 : null,
-            'to'           => $total ? min($page * $perPage, $total) : null,
+            'data'         => $items->all(),
+            'current_page' => $paginator->currentPage(),
+            'last_page'    => $paginator->lastPage(),
+            'per_page'     => $paginator->perPage(),
+            'total'        => $paginator->total(),
+            'from'         => $paginator->firstItem(),
+            'to'           => $paginator->lastItem(),
         ];
     }
 

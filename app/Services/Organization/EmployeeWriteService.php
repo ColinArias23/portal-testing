@@ -3,6 +3,7 @@
 namespace App\Services\Organization;
 
 use App\Events\Organization\EmployeeUpdated;
+use App\Support\Broadcasting\SafeBroadcast;
 use App\Models\ActivityLog;
 use App\Models\Employee;
 use App\Models\EmployeeAssignment;
@@ -305,7 +306,7 @@ class EmployeeWriteService
         }
 
         $formatted = $this->formatter->format($employee);
-        broadcast(new EmployeeUpdated($formatted))->toOthers();
+        SafeBroadcast::send(new EmployeeUpdated($formatted), toOthers: true);
 
         return $formatted;
     }
