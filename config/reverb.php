@@ -35,8 +35,8 @@ return [
             'hostname' => env('REVERB_HOST'),
             'options' => [
                 'tls' => [
-                    'local_cert' => env('REVERB_TLS_CERT', 'C:/Users/colin/Desktop/MACLANG DEPT/cert.pem'),
-                    'local_pk' => env('REVERB_TLS_KEY', 'C:/Users/colin/Desktop/MACLANG DEPT/key.pem'),
+                    'local_cert' => env('REVERB_TLS_CERT'),
+                    'local_pk' => env('REVERB_TLS_KEY'),
                 ],
             ],
             'max_request_size' => env('REVERB_MAX_REQUEST_SIZE', 10_000),
