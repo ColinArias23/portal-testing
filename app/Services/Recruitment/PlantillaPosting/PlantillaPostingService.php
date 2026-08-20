@@ -5,6 +5,7 @@ namespace App\Services\Recruitment\PlantillaPosting;
 use App\Models\PlantillaPosition;
 use App\Models\PlantillaPosting;
 use App\Repositories\Recruitment\PlantillaPosting\PlantillaPostingRepository;
+use App\Services\Notifications\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -17,6 +18,7 @@ class PlantillaPostingService
 
     public function __construct(
         private readonly PlantillaPostingRepository $postings,
+        private readonly NotificationService $notifications,
     ) {
     }
 
@@ -223,6 +225,8 @@ class PlantillaPostingService
 
             return $posting;
         });
+
+        $this->notifications->notifyPlantillaPosted($posting, (int) $data['created_by']);
 
         return $this->postings->loadListingRelations($posting);
     }

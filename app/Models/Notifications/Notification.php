@@ -67,7 +67,7 @@ class Notification extends Model
 
     public function scopeRelevantTo($query, $user)
     {
-        $selfExcludedTypes = ['training', 'announcement'];
+        $selfExcludedTypes = ['training', 'announcement', 'plantilla_posting'];
 
         return $query->visibleTo($user)->where(function ($q) use ($user, $selfExcludedTypes) {
             $q->whereNotIn('type', $selfExcludedTypes)

@@ -3,6 +3,7 @@
 namespace App\Services\Notifications;
 
 use App\Models\Notification;
+use App\Models\PlantillaPosting;
 use App\Models\Training;
 use App\Models\User;
 use App\Repositories\Notifications\NotificationRepository;
@@ -71,6 +72,28 @@ class NotificationService
             'message'    => "A new training program \"{$training->title}\" has been posted.",
             'data'       => [
                 'training_id'        => $training->id,
+                'posted_by_user_id'  => $postedByUserId,
+            ],
+            'visibility' => 'all',
+        ]);
+    }
+
+    public function notifyPlantillaPosted(PlantillaPosting $posting, int $postedByUserId): Notification
+    {
+        $posting->loadMissing(['department', 'salaryGrade']);
+
+        return Notification::create([
+            'type'       => 'plantilla_posting',
+            'title'      => 'New Plantilla Item Posted',
+            'message'    => "A new plantilla item \"{$posting->title}\" (Item No. {$posting->position_slot_name}) is now open for application.",
+            'data'       => [
+                'posting_id'         => $posting->id,
+                'position_slot_name'   => $posting->position_slot_name,
+                'title'              => $posting->title,
+                'department'         => $posting->department?->name,
+                'salary_grade'       => $posting->salaryGrade?->salary_grade,
+                'vacancies'          => $posting->vacancies,
+                'closing_date'       => $posting->closing_date,
                 'posted_by_user_id'  => $postedByUserId,
             ],
             'visibility' => 'all',
