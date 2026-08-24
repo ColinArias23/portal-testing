@@ -61,6 +61,9 @@ class EmployeeWriteService
             'step_increment_id'      => ['nullable', 'exists:step_increments,id'],
             'cos_position_id'        => ['nullable', 'exists:cos_positions,id'],
             'consultant_position_id' => ['nullable', 'exists:consultant_positions,id'],
+            'first_day_of_service'   => ['nullable', 'date'],
+            'contract_period_from'   => ['nullable', 'date'],
+            'contract_period_to'     => ['nullable', 'date', 'after_or_equal:contract_period_from'],
             'gender'                 => ['nullable', 'in:MALE,FEMALE'],
             'address'                => ['nullable'],
             'birthdate'              => ['nullable', 'date'],
@@ -109,6 +112,10 @@ class EmployeeWriteService
 
                 $data['cos_position_id']        = $request->cos_position_id        ?? null;
                 $data['consultant_position_id'] = $request->consultant_position_id ?? null;
+
+                $data['first_day_of_service'] = $request->first_day_of_service ?: null;
+                $data['contract_period_from'] = $request->contract_period_from ?: null;
+                $data['contract_period_to']   = $request->contract_period_to   ?: null;
 
                 $data = $this->reconcileManualSalaryInputs($request, $data);
                 $data['salary_override'] = $request->boolean('salary_override');
@@ -203,6 +210,10 @@ class EmployeeWriteService
 
                 $data['cos_position_id']        = $request->cos_position_id        ?? null;
                 $data['consultant_position_id'] = $request->consultant_position_id ?? null;
+
+                $data['first_day_of_service'] = $request->first_day_of_service ?: null;
+                $data['contract_period_from'] = $request->contract_period_from ?: null;
+                $data['contract_period_to']   = $request->contract_period_to   ?: null;
 
                 $data = $this->reconcileManualSalaryInputs($request, $data);
                 $data['salary_override'] = $request->boolean('salary_override');

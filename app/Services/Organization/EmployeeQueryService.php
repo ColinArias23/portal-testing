@@ -15,17 +15,16 @@ class EmployeeQueryService
     public function __construct(
         private readonly EmployeeRepository $employees,
         private readonly EmployeeFormatterService $formatter,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): array
     {
-        $perPage        = max(1, (int) ($request->per_page ?? self::PER_PAGE));
-        $page           = max(1, (int) ($request->page ?? 1));
-        $allDepts       = $this->employees->cachedDepartmentsById();
-        $divisionId     = $request->filled('division_id') ? $request->integer('division_id') : null;
-        $deptId         = $request->filled('department_id') ? (int) $request->department_id : null;
-        $employmentType = $request->filled('employment_type') ? $request->string('employment_type')->toString() : null;
+        $perPage = max(1, (int) ($request->per_page ?? self::PER_PAGE));
+        $page = max(1, (int) ($request->page ?? 1));
+        $allDepts = $this->employees->cachedDepartmentsById();
+        $divisionId = $request->filled('division_id') ? $request->integer('division_id') : null;
+        $deptId = $request->filled('department_id') ? (int) $request->department_id : null;
+        $employmentType = $request->filled('employment_type') ? $request->input('employment_type') : null;
 
         if ($request->filled('search')) {
             return $this->search($request->get('search'), $divisionId, $deptId, $employmentType, $page, $perPage, $allDepts);
@@ -46,7 +45,7 @@ class EmployeeQueryService
         string $term,
         ?int $divisionId,
         ?int $deptId,
-        ?string $employmentType,
+        array|string|null $employmentType,
         int $page,
         int $perPage,
         $allDepts
@@ -55,10 +54,10 @@ class EmployeeQueryService
 
         if ($term === '') {
             return $this->index(new Request(array_filter([
-                'page'            => $page,
-                'per_page'        => $perPage,
-                'division_id'     => $divisionId,
-                'department_id'   => $deptId,
+                'page' => $page,
+                'per_page' => $perPage,
+                'division_id' => $divisionId,
+                'department_id' => $deptId,
                 'employment_type' => $employmentType,
             ])));
         }
@@ -78,13 +77,13 @@ class EmployeeQueryService
             ->values();
 
         return [
-            'data'         => $items->all(),
+            'data' => $items->all(),
             'current_page' => $paginator->currentPage(),
-            'last_page'    => $paginator->lastPage(),
-            'per_page'     => $paginator->perPage(),
-            'total'        => $paginator->total(),
-            'from'         => $paginator->firstItem(),
-            'to'           => $paginator->lastItem(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
         ];
     }
 
@@ -97,7 +96,7 @@ class EmployeeQueryService
 
     public function team(): array
     {
-        $allDepts  = $this->employees->cachedDepartmentsById();
+        $allDepts = $this->employees->cachedDepartmentsById();
         $employees = $this->employees->teamQuery()->get();
 
         return $employees->map(fn ($e) => $this->formatter->format($e, $allDepts))->values()->all();
@@ -105,16 +104,16 @@ class EmployeeQueryService
 
     public function nonRoot(): array
     {
-        $rootIds   = $this->employees->rootEmployeeIds();
+        $rootIds = $this->employees->rootEmployeeIds();
         $employees = $this->employees->nonRootEmployees($rootIds);
 
         return $employees->map(fn ($emp) => [
-            'id'        => $emp->id,
+            'id' => $emp->id,
             'full_name' => $emp->full_name,
-            'division'  => $emp->division?->only(['id', 'name']),
+            'division' => $emp->division?->only(['id', 'name']),
             'skill_summary' => $emp->latestAssessment ? [
                 'average_score' => $emp->latestAssessment->average_score,
-                'gap_count'     => $emp->latestAssessment->gap_count,
+                'gap_count' => $emp->latestAssessment->gap_count,
             ] : null,
         ])->values()->all();
     }
@@ -124,9 +123,9 @@ class EmployeeQueryService
         $counts = $this->employees->genderCounts();
 
         return [
-            'male'   => $counts['male'],
+            'male' => $counts['male'],
             'female' => $counts['female'],
-            'total'  => $counts['male'] + $counts['female'],
+            'total' => $counts['male'] + $counts['female'],
         ];
     }
 
@@ -173,19 +172,19 @@ class EmployeeQueryService
         }
 
         return [
-            'pending'            => true,
-            'application_id'     => $application->id,
-            'posting_title'      => $application->posting->title,
+            'pending' => true,
+            'application_id' => $application->id,
+            'posting_title' => $application->posting->title,
             'plantilla_position' => [
-                'id'                 => $vacantPosition->id,
-                'base_item_number'   => $vacantPosition->base_item_number,
+                'id' => $vacantPosition->id,
+                'base_item_number' => $vacantPosition->base_item_number,
                 'position_slot_name' => $vacantPosition->position_slot_name,
-                'position_title'     => $vacantPosition->position_title,
-                'salary_grade_id'    => $vacantPosition->salary_grade_id,
-                'salary_grade'       => $vacantPosition->salaryGrade?->salary_grade,
-                'step_increment_id'  => $vacantPosition->step_increment_id,
+                'position_title' => $vacantPosition->position_title,
+                'salary_grade_id' => $vacantPosition->salary_grade_id,
+                'salary_grade' => $vacantPosition->salaryGrade?->salary_grade,
+                'step_increment_id' => $vacantPosition->step_increment_id,
                 'display_department' => $vacantPosition->displayDepartment?->only(['id', 'name', 'code']),
-                'display_division'   => $vacantPosition->displayDivision?->only(['id', 'name', 'code']),
+                'display_division' => $vacantPosition->displayDivision?->only(['id', 'name', 'code']),
             ],
         ];
     }

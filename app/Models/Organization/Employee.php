@@ -26,6 +26,9 @@ class Employee extends Model
         'annual_salary',
         'monthly_salary',
         'salary_override',
+        'first_day_of_service',
+        'contract_period_from',
+        'contract_period_to',
         'created_at',
         'updated_at',
     ];
@@ -49,6 +52,9 @@ class Employee extends Model
         'employment_status',
         'cos_position_id',
         'consultant_position_id',
+        'first_day_of_service',
+        'contract_period_from',
+        'contract_period_to',
         'avatar_url',
         'border_color',
         'aligned',
@@ -66,6 +72,9 @@ class Employee extends Model
         'annual_salary'        => 'decimal:2',
         'monthly_salary'       => 'decimal:2',
         'salary_override'      => 'boolean',
+        'first_day_of_service' => 'date:Y-m-d',
+        'contract_period_from' => 'date:Y-m-d',
+        'contract_period_to'   => 'date:Y-m-d',
     ];
 
     protected $appends = ['full_name'];

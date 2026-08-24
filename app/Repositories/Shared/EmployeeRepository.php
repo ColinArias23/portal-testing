@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 class EmployeeRepository
 {
     private const DEPARTMENTS_CACHE_KEY = 'departments:all:id_name';
+
     private const DEPARTMENTS_CACHE_TTL = 3600;
 
     private const FULL_RELATIONS = [
@@ -76,8 +77,8 @@ class EmployeeRepository
 
         DB::table('employee_info')->insert([
             'employee_id' => $employeeId,
-            'created_at'  => $now,
-            'updated_at'  => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
         ]);
 
         return $employeeId;
@@ -87,7 +88,7 @@ class EmployeeRepository
     {
         DB::table('employees')->where('id', $employeeId)->update([
             'employment_status' => $status,
-            'updated_at'        => now()->toDateTimeString(),
+            'updated_at' => now()->toDateTimeString(),
         ]);
     }
 
@@ -99,7 +100,7 @@ class EmployeeRepository
 
         DB::table('employees')->whereIn('id', $employeeIds)->update([
             'employment_status' => $status,
-            'updated_at'        => now()->toDateTimeString(),
+            'updated_at' => now()->toDateTimeString(),
         ]);
     }
 
@@ -174,7 +175,7 @@ class EmployeeRepository
 
     // ── Listing / search / CRUD (EmployeeController) ─────────────────────
 
-    public function baseQuery(?int $divisionId, ?int $departmentId, ?string $employmentType = null): Builder
+    public function baseQuery(?int $divisionId, ?int $departmentId, array|string|null $employmentType = null): Builder
     {
         $query = Employee::with(self::FULL_RELATIONS);
 
@@ -195,7 +196,7 @@ class EmployeeRepository
         string $term,
         ?int $divisionId,
         ?int $departmentId,
-        ?string $employmentType = null
+        array|string|null $employmentType = null
     ): Builder {
         $query = Employee::select(self::SEARCH_COLUMNS);
 
@@ -224,18 +225,36 @@ class EmployeeRepository
         return $query->orderBy('last_name')->orderBy('first_name');
     }
 
-    private function applyEmploymentTypeFilter(Builder $query, ?string $employmentType): void
+    private function applyEmploymentTypeFilter(Builder $query, array|string|null $employmentType): void
     {
         if (! $employmentType) {
             return;
         }
 
-        match ($employmentType) {
-            'plantilla' => $query->plantilla(),
-            'consultant' => $query->consultant(),
-            'contract-of-service' => $query->cos(),
-            default => null,
-        };
+        $values = is_array($employmentType) ? $employmentType : [$employmentType];
+
+        $scopes = collect($values)
+            ->filter(fn ($v) => is_string($v) && trim($v) !== '')
+            ->map(fn ($v) => strtolower(str_replace(' ', '-', trim($v))))
+            ->map(fn ($v) => match ($v) {
+                'plantilla' => 'plantilla',
+                'consultant' => 'consultant',
+                'contract-of-service', 'cos' => 'cos',
+                default => null,
+            })
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($scopes->isEmpty()) {
+            return;
+        }
+
+        $query->where(function (Builder $q) use ($scopes) {
+            foreach ($scopes as $scope) {
+                $q->orWhere(fn (Builder $sub) => $sub->{$scope}());
+            }
+        });
     }
 
     public function findManyWithFullRelations(array $ids): Collection
@@ -279,7 +298,7 @@ class EmployeeRepository
             ->first();
 
         return [
-            'male'   => (int) ($row->male ?? 0),
+            'male' => (int) ($row->male ?? 0),
             'female' => (int) ($row->female ?? 0),
         ];
     }
@@ -303,7 +322,7 @@ class EmployeeRepository
         foreach (array_filter($parentIds) as $parentId) {
             EmployeeHierarchy::create([
                 'employee_id' => $employeeId,
-                'parent_id'   => $parentId,
+                'parent_id' => $parentId,
             ]);
         }
     }

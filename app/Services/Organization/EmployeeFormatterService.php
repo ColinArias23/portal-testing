@@ -132,6 +132,10 @@ class EmployeeFormatterService
             'cos_position_id'        => $employee->cos_position_id,
             'consultant_position_id' => $employee->consultant_position_id,
 
+            'first_day_of_service' => $employee->first_day_of_service?->toDateString(),
+            'contract_period_from' => $employee->contract_period_from?->toDateString(),
+            'contract_period_to'   => $employee->contract_period_to?->toDateString(),
+
             'salary_history' => $salaryHistory ? [
                 'id'             => $salaryHistory->id,
                 'gross_salary'   => $salaryHistory->gross_salary,
