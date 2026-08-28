@@ -71,5 +71,12 @@ class UserPermissionService
                 403
             );
         }
+
+        if ($target->hasRole('HR') && !$actor->hasRole('HR') && !$actor->hasRole('SuperAdmin')) {
+            throw new PermissionUpdateForbiddenException(
+                'Only an HR or SuperAdmin account can modify permissions for an HR account.',
+                403
+            );
+        }
     }
 }

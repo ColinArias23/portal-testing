@@ -9,6 +9,7 @@ use App\Models\ActivityLog;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -17,6 +18,7 @@ class UserRoleService
     private const GUARD = 'web';
     private const ROLES_CACHE_KEY = 'rbac:roles:by_guard:web';
     private const ROLES_CACHE_TTL = 3600;
+    private const AUTO_FULL_ACCESS_ROLES = ['hr'];
 
     public function update(User $target, User $actor, ?string $roleName, Request $request): array
     {
@@ -28,9 +30,23 @@ class UserRoleService
 
         $before = $target->getRoleNames()->toArray();
 
+        $wasAutoFullAccess = collect($before)->contains(
+            fn ($r) => in_array(strtolower($r), self::AUTO_FULL_ACCESS_ROLES, true)
+        );
+
         if ($roleName && strtolower($roleName) !== 'none') {
             $role = $this->findRoleOrFail($roleName);
             $target->syncRoles([$role->name]);
+
+            $isAutoFullAccess = in_array(strtolower($role->name), self::AUTO_FULL_ACCESS_ROLES, true);
+
+            if ($isAutoFullAccess) {
+                $target->syncPermissions($this->allPermissionNames());
+                $target->unsetRelation('permissions');
+            } elseif ($wasAutoFullAccess) {
+                $target->syncPermissions([]);
+                $target->unsetRelation('permissions');
+            }
         } else {
             $toRemove = $target->getRoleNames()
                 ->filter(fn ($r) => strtolower($r) !== 'superadmin')
@@ -38,6 +54,11 @@ class UserRoleService
 
             if (!empty($toRemove)) {
                 $target->removeRole(...$toRemove);
+            }
+
+            if ($wasAutoFullAccess) {
+                $target->syncPermissions([]);
+                $target->unsetRelation('permissions');
             }
         }
 
@@ -110,5 +131,12 @@ class UserRoleService
     public static function forgetRolesCache(): void
     {
         Cache::forget(self::ROLES_CACHE_KEY);
+    }
+
+    private function allPermissionNames(): array
+    {
+        return Permission::where('guard_name', self::GUARD)
+            ->pluck('name')
+            ->toArray();
     }
 }
