@@ -91,6 +91,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::patch('/users/{user}/activate',  [UserController::class, 'activate']);
     Route::post('/users/bulk-activate',     [UserController::class, 'bulkActivate']);
     Route::get('/approved-users',           [UserController::class, 'approvedUsers']);
+    Route::get('/permissions',              [UserController::class, 'permissions']);
     Route::put('/users/{user}/permissions', [UserController::class, 'updatePermissions']);
     Route::put('/users/{user}/role',        [UserController::class, 'updateRole']);
 // ─── Audit Logs ─────────────────────────────────────────────────────
