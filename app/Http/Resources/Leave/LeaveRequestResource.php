@@ -38,6 +38,10 @@ class LeaveRequestResource extends JsonResource
                 'division_id' => $department?->division_id ?? $department?->parent_division_id,
                 'division' => $department?->division?->name ?? $department?->parentDivision?->name,
                 'designation' => $this->employee->position_title,
+                'first_name' => $this->employee->first_name,
+                'middle_name' => $this->employee->middle_name,
+                'last_name' => $this->employee->last_name,
+                'suffix' => $this->employee->suffix,
                 'salary' => $monthlySalary,
             ],
             'leave_type' => [
