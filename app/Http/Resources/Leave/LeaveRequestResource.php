@@ -8,6 +8,7 @@ use App\Models\Department;
 use App\Models\LeaveRequestApprovalStep;
 use App\Models\User;
 use App\Policies\LeaveRequestPolicy;
+use App\Services\Organization\EmployeeFormatterService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -24,6 +25,8 @@ class LeaveRequestResource extends JsonResource
 
         $department = $this->resolveDepartment();
 
+        $monthlySalary = app(EmployeeFormatterService::class)->resolveMonthlySalary($this->employee);
+
         return [
             'id' => $this->id,
             'request_number' => $this->request_number,
@@ -35,6 +38,7 @@ class LeaveRequestResource extends JsonResource
                 'division_id' => $department?->division_id ?? $department?->parent_division_id,
                 'division' => $department?->division?->name ?? $department?->parentDivision?->name,
                 'designation' => $this->employee->position_title,
+                'salary' => $monthlySalary,
             ],
             'leave_type' => [
                 'id' => $this->leaveType->id,
