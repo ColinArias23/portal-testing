@@ -32,6 +32,7 @@ class LeaveRequestResource extends JsonResource
             'request_number' => $this->request_number,
             'employee' => [
                 'id' => $this->employee->id,
+                'employee_number' => $this->employee->employee_number,
                 'name' => $this->employee->full_name,
                 'department_id' => $department?->id,
                 'department' => $department?->name,
@@ -41,7 +42,6 @@ class LeaveRequestResource extends JsonResource
                 'first_name' => $this->employee->first_name,
                 'middle_name' => $this->employee->middle_name,
                 'last_name' => $this->employee->last_name,
-                'suffix' => $this->employee->suffix,
                 'salary' => $monthlySalary,
             ],
             'leave_type' => [
