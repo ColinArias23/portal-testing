@@ -118,7 +118,20 @@ class UserController extends Controller
                 'nullable',
                 'string',
                 'max:100',
-                Rule::exists('roles', 'name')->where('guard_name', self::GUARD),
+                function ($attribute, $value, $fail) {
+                    if ($value === null || strtolower($value) === 'none') {
+                        return;
+                    }
+
+                    $exists = DB::table('roles')
+                        ->where('name', $value)
+                        ->where('guard_name', self::GUARD)
+                        ->exists();
+
+                    if (! $exists) {
+                        $fail('The selected role is invalid.');
+                    }
+                },
             ],
         ]);
 

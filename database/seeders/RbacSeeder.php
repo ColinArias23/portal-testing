@@ -93,6 +93,7 @@ class RbacSeeder extends Seeder
         'plantilla_items.view',
         'plantilla_items.manage',
         'positions.view',
+        'roles.view',
 
         // Rewards & Recognition
         'rewards.view',
@@ -122,6 +123,9 @@ class RbacSeeder extends Seeder
 
         // Audit Logs
         'audit_logs.view',
+
+        // DTR
+        'dtr.view',
 
         // Bug Reports
         'bug-reports.view',
