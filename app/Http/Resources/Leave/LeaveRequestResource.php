@@ -12,6 +12,7 @@ use App\Policies\LeaveRequestPolicy;
 use App\Services\Organization\EmployeeFormatterService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\URL;
 
 class LeaveRequestResource extends JsonResource
 {
@@ -131,7 +132,7 @@ class LeaveRequestResource extends JsonResource
                     'id' => $step->approver->id,
                     'name' => $step->approver->name,
                     'formal_name' => $step->approver->formal_name,
-                    'signature_url' => null, 
+                    'signature_url' => null,
                 ]
                 : null;
         }
@@ -147,7 +148,7 @@ class LeaveRequestResource extends JsonResource
                 'id' => $holders->first()->id,
                 'name' => $holders->first()->name,
                 'formal_name' => $holders->first()->formal_name,
-                'signature_url' => null, 
+                'signature_url' => null,
             ]
             : null;
     }
@@ -163,10 +164,11 @@ class LeaveRequestResource extends JsonResource
             ->exists();
 
         return $hasPrimary
-            ? route('employees.signatures.preview', [
-                'employee' => $actor->employee_id,
-                'type' => SignatureType::Primary->value,
-            ])
+            ? URL::temporarySignedRoute(
+                'employees.signatures.preview',
+                now()->addMinutes(30),
+                ['employee' => $actor->employee_id, 'type' => SignatureType::Primary->value]
+            )
             : null;
     }
 
