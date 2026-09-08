@@ -56,6 +56,7 @@ class RbacSeeder extends Seeder
         'leave.request.manage',
         'leave.holidays.manage',
         'leave.types.manage',
+        'leave.suspensions.manage',
 
         // Employees
         'employees.view',

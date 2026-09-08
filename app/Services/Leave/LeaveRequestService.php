@@ -64,6 +64,13 @@ class LeaveRequestService
             }
 
             $flowSteps = $leaveType->approvalFlowSteps;
+
+            if ($employee->employment_type !== 'Plantilla') {
+                $flowSteps = $flowSteps
+                    ->where('approver_source', ApproverSource::ManagementChain)
+                    ->values();
+            }
+
             if ($flowSteps->isEmpty()) {
                 throw new RuntimeException("No approval workflow is configured for '{$leaveType->name}'. Contact HR/system admin.");
             }
@@ -163,6 +170,43 @@ class LeaveRequestService
         if ($firstActionable->step_order !== $leaveRequest->current_step_order) {
             $leaveRequest->update(['current_step_order' => $firstActionable->step_order]);
         }
+    }
+
+    public function reschedule(
+        LeaveRequest $leaveRequest,
+        array $newDates,
+        string $reason,
+        User $actor,
+    ): LeaveRequest {
+        return DB::transaction(function () use ($leaveRequest, $newDates, $reason, $actor) {
+            if (in_array($leaveRequest->status, [LeaveRequestStatus::Cancelled, LeaveRequestStatus::Rejected], true)) {
+                throw new RuntimeException('This request has already been finalized and cannot be rescheduled.');
+            }
+
+            $this->cancel($leaveRequest, $actor, "Rescheduled: {$reason}");
+
+            $newRequest = $this->submit([
+                'employee_id' => $leaveRequest->employee_id,
+                'leave_type_id' => $leaveRequest->leave_type_id,
+                'start_date' => $newDates['start_date'] ?? null,
+                'end_date' => $newDates['end_date'] ?? null,
+                'is_half_day' => $leaveRequest->is_half_day,
+                'reason' => $leaveRequest->reason,
+                'details' => $leaveRequest->details ?? [],
+            ], $actor);
+
+            $newRequest->update(['rescheduled_from_id' => $leaveRequest->id]);
+
+            LeaveRequestLog::create([
+                'leave_request_id' => $leaveRequest->id,
+                'action' => 'rescheduled',
+                'actor_id' => $actor->id,
+                'remarks' => $reason,
+                'metadata' => ['new_leave_request_id' => $newRequest->id],
+            ]);
+
+            return $newRequest->fresh(['leaveType', 'employee', 'approvalSteps.approver', 'documents']);
+        });
     }
 
     public function cancel(LeaveRequest $leaveRequest, User $actor, string $reason): LeaveRequest

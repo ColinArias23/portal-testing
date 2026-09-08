@@ -79,6 +79,20 @@ class LeaveRequestResource extends JsonResource
             'submitted_at' => $this->submitted_at?->toIso8601String(),
             'finalized_at' => $this->finalized_at?->toIso8601String(),
             'cancelled_at' => $this->cancelled_at?->toIso8601String(),
+            'cancellation_reason' => $this->cancellation_reason,
+            'rescheduled_from_id' => $this->rescheduled_from_id,
+            'rescheduled_from' => $this->whenLoaded('rescheduledFrom', fn () => $this->rescheduledFrom ? [
+                'id' => $this->rescheduledFrom->id,
+                'request_number' => $this->rescheduledFrom->request_number,
+                'start_date' => $this->rescheduledFrom->start_date?->toDateString(),
+                'end_date' => $this->rescheduledFrom->end_date?->toDateString(),
+            ] : null),
+            'rescheduled_to' => $this->whenLoaded('rescheduledTo', fn () => optional($this->rescheduledTo->first(), fn ($r) => [
+                'id' => $r->id,
+                'request_number' => $r->request_number,
+                'start_date' => $r->start_date?->toDateString(),
+                'end_date' => $r->end_date?->toDateString(),
+            ])),
             'created_at' => $this->created_at->toIso8601String(),
         ];
     }

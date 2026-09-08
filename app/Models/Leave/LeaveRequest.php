@@ -32,6 +32,7 @@ class LeaveRequest extends Model
         'request_number',
         'employee_id',
         'leave_type_id',
+        'rescheduled_from_id',
         'status',
         'start_date',
         'end_date',
@@ -98,6 +99,16 @@ class LeaveRequest extends Model
     public function approvalSteps(): HasMany
     {
         return $this->hasMany(LeaveRequestApprovalStep::class)->orderBy('step_order');
+    }
+
+    public function rescheduledFrom(): BelongsTo
+    {
+        return $this->belongsTo(LeaveRequest::class, 'rescheduled_from_id');
+    }
+
+    public function rescheduledTo(): HasMany
+    {
+        return $this->hasMany(LeaveRequest::class, 'rescheduled_from_id');
     }
 
     public function currentStep(): ?LeaveRequestApprovalStep

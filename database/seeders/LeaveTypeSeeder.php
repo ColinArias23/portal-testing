@@ -8,7 +8,7 @@ use Illuminate\Database\Seeder;
 class LeaveTypeSeeder extends Seeder
 {
     private const ALL_TYPES = ['Plantilla', 'Contract of Service', 'Consultant'];
-    private const NON_PLANTILLA_ELIGIBLE = ['vawc', 'solo_parent', 'maternity', 'paternity', 'special_women', 'calamity'];
+    private const NON_PLANTILLA_ELIGIBLE = ['vacation', 'sick', 'maternity', 'paternity'];
 
     public function run(): void
     {

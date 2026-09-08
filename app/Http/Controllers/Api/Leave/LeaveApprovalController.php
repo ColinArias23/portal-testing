@@ -51,11 +51,13 @@ class LeaveApprovalController extends Controller
     {
         $query = LeaveRequest::query()
             ->whereHas('approvalSteps', fn ($q) => $q->where('acted_by', $request->user()->id))
-            ->whereIn('status', ['approved', 'rejected'])
+            ->whereIn('status', ['approved', 'rejected', 'cancelled'])
             ->with([
                 'leaveType',
                 'employee.primaryDepartmentAssignment.department',
                 'approvalSteps' => fn ($q) => $q->where('acted_by', $request->user()->id),
+                'rescheduledFrom',
+                'rescheduledTo',
             ])
             ->latest('finalized_at')
             ->limit($request->integer('limit', 5));

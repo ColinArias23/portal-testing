@@ -51,6 +51,8 @@ class LeaveRequestController extends Controller
                 'employee.primaryDepartmentAssignment.department.division',
                 'employee.primaryDepartmentAssignment.department.parentDivision',
                 'approvalSteps.approver',
+                'rescheduledFrom',
+                'rescheduledTo',
             ])
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')))
             ->when($request->filled('leave_type_id'), fn ($q) => $q->where('leave_type_id', $request->input('leave_type_id')))
@@ -88,7 +90,7 @@ class LeaveRequestController extends Controller
 
     public function show(LeaveRequest $leaveRequest): JsonResponse
     {
-        $leaveRequest->load(['leaveType', 'employee.primaryDepartmentAssignment.department', 'approvalSteps.approver', 'documents', 'logs.actor']);
+        $leaveRequest->load(['leaveType', 'employee.primaryDepartmentAssignment.department', 'approvalSteps.approver', 'documents', 'logs.actor', 'rescheduledFrom', 'rescheduledTo']);
 
         return response()->json(['data' => new LeaveRequestResource($leaveRequest)]);
     }
@@ -102,6 +104,29 @@ class LeaveRequestController extends Controller
         $updated = $this->leaveRequestService->cancel($leaveRequest, $request->user(), $request->input('reason'));
 
         return response()->json(['data' => new LeaveRequestResource($updated), 'message' => 'Leave request cancelled.']);
+    }
+
+    public function reschedule(Request $request, LeaveRequest $leaveRequest): JsonResponse
+    {
+        $this->authorize('cancel', $leaveRequest);
+
+        $validated = $request->validate([
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        $newRequest = $this->leaveRequestService->reschedule(
+            $leaveRequest,
+            ['start_date' => $validated['start_date'], 'end_date' => $validated['end_date']],
+            $validated['reason'],
+            $request->user(),
+        );
+
+        return response()->json([
+            'data' => new LeaveRequestResource($newRequest),
+            'message' => 'Leave request rescheduled. Your new dates are now pending approval.',
+        ]);
     }
 
     public function downloadDocument(Request $request, LeaveRequest $leaveRequest, LeaveRequestDocument $document): mixed

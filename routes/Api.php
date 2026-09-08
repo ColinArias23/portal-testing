@@ -50,6 +50,7 @@ use App\Http\Controllers\Api\Leave\LeaveBalanceController;
 use App\Http\Controllers\Api\Leave\LeaveCalendarController;
 use App\Http\Controllers\Api\Leave\LeaveDashboardController;
 use App\Http\Controllers\Api\Leave\HolidayController as LeaveHolidayController; // aliased: Api\System\HolidayController above already exists (PH public-holiday lookup) — this is a separate, HR-managed calendar-holiday CRUD for the Leave module
+use App\Http\Controllers\Api\Leave\WorkSuspensionController;
 
 // ─── Public Routes ─────────────────────────────────────────────────────
 Route::post('/login',          [AuthController::class, 'login'])
@@ -124,6 +125,9 @@ Route::prefix('announcement-attachments')->middleware('throttle:announcements')-
     Route::get('/employees/{employee}/avatar',                            [EmployeeController::class, 'avatar']);
     Route::get('/team',                                                   [EmployeeController::class, 'team']);
     Route::get('/employees/{employee}/pending-plantilla-provision',       [EmployeeController::class, 'pendingPlantillaProvision']);
+    Route::get('/employees/{employee}/signatures/{type}/preview',         [AccountController::class, 'previewEmployeeSignature'])
+        ->whereIn('type', ['primary', 'countersign'])
+        ->name('employees.signatures.preview');
 // ─── Employee Department Assignments ─────────────────────────────────────────────────────
     Route::apiResource(
         'employees.department-assignments',
@@ -394,6 +398,9 @@ Route::prefix('announcement-attachments')->middleware('throttle:announcements')-
         Route::get('/requests',                                                   [LeaveRequestController::class, 'index']);
         Route::get('/requests/{leave_request}',                                   [LeaveRequestController::class, 'show']);
         Route::post('/requests/{leave_request}/cancel',                           [LeaveRequestController::class, 'cancel']);
+        Route::post('/requests/{leave_request}/reschedule',                       [LeaveRequestController::class, 'reschedule']);
+        Route::get('/suspensions',                                                [WorkSuspensionController::class, 'index']);
+        Route::post('/suspensions',                                               [WorkSuspensionController::class, 'store']);
         Route::get('/requests/{leave_request}/documents/{document}/download',     [LeaveRequestController::class, 'downloadDocument']
         );
         // approval actions (approve/reject) and bulk approval

@@ -4,10 +4,12 @@ namespace App\Http\Resources\Leave;
 
 use App\Enums\ApprovalStepStatus;
 use App\Enums\ApproverSource;
+use App\Enums\SignatureType;
 use App\Models\Department;
 use App\Models\LeaveRequestApprovalStep;
 use App\Models\User;
 use App\Policies\LeaveRequestPolicy;
+use App\Services\Organization\EmployeeFormatterService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -24,17 +26,25 @@ class LeaveRequestResource extends JsonResource
 
         $department = $this->resolveDepartment();
 
+        $monthlySalary = app(EmployeeFormatterService::class)->resolveMonthlySalary($this->employee);
+
         return [
             'id' => $this->id,
             'request_number' => $this->request_number,
             'employee' => [
                 'id' => $this->employee->id,
+                'employee_number' => $this->employee->employee_number,
+                'employment_type' => $this->employee->employment_type,
                 'name' => $this->employee->full_name,
                 'department_id' => $department?->id,
                 'department' => $department?->name,
                 'division_id' => $department?->division_id ?? $department?->parent_division_id,
                 'division' => $department?->division?->name ?? $department?->parentDivision?->name,
                 'designation' => $this->employee->position_title,
+                'first_name' => $this->employee->first_name,
+                'middle_name' => $this->employee->middle_name,
+                'last_name' => $this->employee->last_name,
+                'salary' => $monthlySalary,
             ],
             'leave_type' => [
                 'id' => $this->leaveType->id,
@@ -70,6 +80,20 @@ class LeaveRequestResource extends JsonResource
             'submitted_at' => $this->submitted_at?->toIso8601String(),
             'finalized_at' => $this->finalized_at?->toIso8601String(),
             'cancelled_at' => $this->cancelled_at?->toIso8601String(),
+            'cancellation_reason' => $this->cancellation_reason,
+            'rescheduled_from_id' => $this->rescheduled_from_id,
+            'rescheduled_from' => $this->whenLoaded('rescheduledFrom', fn () => $this->rescheduledFrom ? [
+                'id' => $this->rescheduledFrom->id,
+                'request_number' => $this->rescheduledFrom->request_number,
+                'start_date' => $this->rescheduledFrom->start_date?->toDateString(),
+                'end_date' => $this->rescheduledFrom->end_date?->toDateString(),
+            ] : null),
+            'rescheduled_to' => $this->whenLoaded('rescheduledTo', fn () => optional($this->rescheduledTo->first(), fn ($r) => [
+                'id' => $r->id,
+                'request_number' => $r->request_number,
+                'start_date' => $r->start_date?->toDateString(),
+                'end_date' => $r->end_date?->toDateString(),
+            ])),
             'created_at' => $this->created_at->toIso8601String(),
         ];
     }
@@ -79,8 +103,6 @@ class LeaveRequestResource extends JsonResource
         return [
             'step_order' => $step->step_order,
             'label' => $step->label,
-            'approver_source' => $step->approver_source->value,
-            'approver_role' => $step->approver_role,
             'approver' => $this->resolveStepApproverDisplay($step),
             'status' => $step->status->value,
             'remarks' => $step->remarks,
@@ -94,13 +116,23 @@ class LeaveRequestResource extends JsonResource
             $actualActor = $step->actor ?? $step->approver;
 
             return $actualActor
-                ? ['id' => $actualActor->id, 'name' => $actualActor->name, 'formal_name' => $actualActor->formal_name]
+                ? [
+                    'id' => $actualActor->id,
+                    'name' => $actualActor->name,
+                    'formal_name' => $actualActor->formal_name,
+                    'signature_url' => $this->resolveActorSignatureUrl($actualActor),
+                ]
                 : null;
         }
 
         if ($step->approver_source !== ApproverSource::Role) {
             return $step->approver
-                ? ['id' => $step->approver->id, 'name' => $step->approver->name, 'formal_name' => $step->approver->formal_name]
+                ? [
+                    'id' => $step->approver->id,
+                    'name' => $step->approver->name,
+                    'formal_name' => $step->approver->formal_name,
+                    'signature_url' => null,
+                ]
                 : null;
         }
 
@@ -111,7 +143,30 @@ class LeaveRequestResource extends JsonResource
         $holders = $this->activeHoldersOfRole($step->approver_role);
 
         return $holders->count() === 1
-            ? ['id' => $holders->first()->id, 'name' => $holders->first()->name, 'formal_name' => $holders->first()->formal_name]
+            ? [
+                'id' => $holders->first()->id,
+                'name' => $holders->first()->name,
+                'formal_name' => $holders->first()->formal_name,
+                'signature_url' => null,
+            ]
+            : null;
+    }
+
+    private function resolveActorSignatureUrl(User $actor): ?string
+    {
+        if (! $actor->employee_id) {
+            return null;
+        }
+
+        $hasPrimary = $actor->employee?->signatures()
+            ->where('type', SignatureType::Primary->value)
+            ->exists();
+
+        return $hasPrimary
+            ? route('employees.signatures.preview', [
+                'employee' => $actor->employee_id,
+                'type' => SignatureType::Primary->value,
+            ])
             : null;
     }
 
