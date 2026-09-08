@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Models\Employee;
 use App\Models\Report;
+use App\Policies\EmployeePolicy;
 use App\Policies\ReportPolicy;
 use App\Services\AiChat\Contracts\ChatServiceInterface;
 use App\Services\AiChat\OllamaChatService;
@@ -22,6 +24,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::policy(Report::class, ReportPolicy::class);
+        Gate::policy(Employee::class, EmployeePolicy::class);
 
         $this->configureRateLimiting();
     }

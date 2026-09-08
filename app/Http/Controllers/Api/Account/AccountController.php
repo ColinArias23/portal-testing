@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Account\UpdateAccountProfileRequest;
 use App\Http\Requests\Account\UploadSignatureRequest;
 use App\Http\Resources\Account\EmployeeSignatureResource;
+use App\Models\Employee;
 use App\Services\Account\AccountService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -84,6 +85,19 @@ class AccountController extends Controller
         $signatureType = $this->resolveType($type);
 
         $response = $this->account->streamSignature($request->user(), $signatureType);
+
+        abort_if($response === null, 404, 'No signature uploaded.');
+
+        return $response;
+    }
+
+    public function previewEmployeeSignature(Request $request, Employee $employee, string $type): mixed
+    {
+        $this->authorize('viewSignature', $employee);
+
+        $signatureType = $this->resolveType($type);
+
+        $response = $this->account->streamEmployeeSignature($employee, $signatureType);
 
         abort_if($response === null, 404, 'No signature uploaded.');
 

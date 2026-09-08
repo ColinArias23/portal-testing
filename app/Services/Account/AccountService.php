@@ -120,8 +120,18 @@ class AccountService
 
     public function streamSignature(User $user, SignatureType $type)
     {
-        $signature = $this->signatureOfType($user, $type);
+        return $this->streamSignatureFile($this->signatureOfType($user, $type));
+    }
 
+    public function streamEmployeeSignature(Employee $employee, SignatureType $type)
+    {
+        $signature = $employee->signatures()->where('type', $type->value)->first();
+
+        return $this->streamSignatureFile($signature);
+    }
+
+    private function streamSignatureFile(?EmployeeSignature $signature)
+    {
         if (! $signature || ! Storage::disk($signature->disk)->exists($signature->stored_path)) {
             return null;
         }
