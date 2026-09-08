@@ -4,6 +4,7 @@ namespace App\Http\Resources\Leave;
 
 use App\Enums\ApprovalStepStatus;
 use App\Enums\ApproverSource;
+use App\Enums\SignatureType;
 use App\Models\Department;
 use App\Models\LeaveRequestApprovalStep;
 use App\Models\User;
@@ -114,11 +115,25 @@ class LeaveRequestResource extends JsonResource
         if ($step->status !== ApprovalStepStatus::Pending) {
             $actualActor = $step->actor ?? $step->approver;
 
-            return $actualActor ? ['id' => $actualActor->id, 'name' => $actualActor->name] : null;
+            return $actualActor
+                ? [
+                    'id' => $actualActor->id,
+                    'name' => $actualActor->name,
+                    'formal_name' => $actualActor->formal_name,
+                    'signature_url' => $this->resolveActorSignatureUrl($actualActor),
+                ]
+                : null;
         }
 
         if ($step->approver_source !== ApproverSource::Role) {
-            return $step->approver ? ['id' => $step->approver->id, 'name' => $step->approver->name] : null;
+            return $step->approver
+                ? [
+                    'id' => $step->approver->id,
+                    'name' => $step->approver->name,
+                    'formal_name' => $step->approver->formal_name,
+                    'signature_url' => null, 
+                ]
+                : null;
         }
 
         if (! $step->approver_role) {
@@ -128,7 +143,30 @@ class LeaveRequestResource extends JsonResource
         $holders = $this->activeHoldersOfRole($step->approver_role);
 
         return $holders->count() === 1
-            ? ['id' => $holders->first()->id, 'name' => $holders->first()->name]
+            ? [
+                'id' => $holders->first()->id,
+                'name' => $holders->first()->name,
+                'formal_name' => $holders->first()->formal_name,
+                'signature_url' => null, 
+            ]
+            : null;
+    }
+
+    private function resolveActorSignatureUrl(User $actor): ?string
+    {
+        if (! $actor->employee_id) {
+            return null;
+        }
+
+        $hasPrimary = $actor->employee?->signatures()
+            ->where('type', SignatureType::Primary->value)
+            ->exists();
+
+        return $hasPrimary
+            ? route('employees.signatures.preview', [
+                'employee' => $actor->employee_id,
+                'type' => SignatureType::Primary->value,
+            ])
             : null;
     }
 
