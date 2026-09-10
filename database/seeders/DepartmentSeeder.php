@@ -13,7 +13,7 @@ class DepartmentSeeder extends Seeder
         $departments = [
             ['division_code' => 'MCC','code' => 'MC-CHIEF', 'name' => 'MEDICAL CENTER CHIEF','type' => 'DEPARTMENT', 'head_employee_id' => 1],
             ['division_code' => 'HOPSS','code' => 'ACCT', 'name' => 'ACCOUNTING','type' => 'DEPARTMENT', 'head_employee_id' => null],
-            ['division_code' => 'HOPSS','code' => 'ADM',  'name' => 'ADMITTING','type' => 'DEPARTMENT', 'head_employee_id' => 73],
+            ['division_code' => 'HOPSS','code' => 'ADM',  'name' => 'ADMITTING','type' => 'DEPARTMENT', 'head_employee_id' => 73, 'parent_code' => 'HIMC'],
             ['division_code' => 'MED','code' => 'ACL',  'name' => 'ANATOMIC AND CLINICAL LABORATORY','type' => 'DEPARTMENT', 'head_employee_id' => null],
             ['division_code' => 'HOPSS','code' => 'BILL', 'name' => 'BILLING AND CLAIMS','type' => 'DEPARTMENT', 'head_employee_id' => 103],
             ['division_code' => 'MED','code' => 'BB',   'name' => 'BLOOD BANK','type' => 'DEPARTMENT', 'head_employee_id' => null],
@@ -32,7 +32,7 @@ class DepartmentSeeder extends Seeder
             ['division_code' => 'MED','code' => 'HIM',  'name' => 'HEALTH INFORMATION MANAGEMENT','type' => 'DEPARTMENT', 'head_employee_id' => 200],
             ['division_code' => 'HOPSS','code' => 'HK',   'name' => 'HOUSEKEEPING/LAUNDRY','type' => 'DEPARTMENT', 'head_employee_id' => 40],
             ['division_code' => 'MED','code' => 'HMB',  'name' => 'HUMAN MILK BANK','type' => 'DEPARTMENT', 'head_employee_id' => null],
-            ['division_code' => 'HOPSS','code' => 'HR',   'name' => 'HUMAN RESOURCE MANAGEMENT','type' => 'DEPARTMENT', 'head_employee_id' => 198],
+            ['division_code' => 'HOPSS','code' => 'HR',   'name' => 'HUMAN RESOURCE MANAGEMENT','type' => 'DEPARTMENT', 'head_employee_id' => 198, 'parent_code' => 'ASC'],
             ['division_code' => 'CN','code' => 'ICU',  'name' => 'INTENSIVE CARE','type' => 'UNIT', 'head_employee_id' => null],
             ['division_code' => 'HOPSS','code' => 'MM',   'name' => 'MATERIALS MANAGEMENT','type' => 'DEPARTMENT', 'head_employee_id' => null],
             ['division_code' => 'MED','code' => 'MED',  'name' => 'MEDICAL SERVICE','type' => 'DEPARTMENT', 'head_employee_id' => 55],
@@ -64,13 +64,16 @@ class DepartmentSeeder extends Seeder
             ['division_code' => 'HOPSS','code' => 'PROPERTY', 'name' => 'PROPERTY MANAGEMENT','type' => 'DEPARTMENT', 'head_employee_id' => 139],
             ['division_code' => 'HOPSS','code' => 'D&P', 'name' => 'DESIGN & PLANNING','type' => 'DEPARTMENT', 'head_employee_id' => 146],
             ['division_code' => 'HOPSS','code' => 'SEC&P', 'name' => 'SECURITY','type' => 'DEPARTMENT', 'head_employee_id' => 361],
-            ['division_code' => 'HOPSS','code' => 'MEDREC', 'name' => 'MEDICAL RECORDS','type' => 'DEPARTMENT', 'head_employee_id' => 111],
-            ['division_code' => 'HOPSS','code' => 'IT', 'name' => 'INFORMATION TECHNOLOGY','type' => 'DEPARTMENT', 'head_employee_id' => 85],
-            ['division_code' => 'HOPSS','code' => 'DPO', 'name' => 'DATA PROTECTION OFFICE','type' => 'DEPARTMENT', 'head_employee_id' => 189],
-            ['division_code' => 'HOPSS','code' => 'CRM', 'name' => 'CUSTOMER RELATIONS MANAGEMENT','type' => 'DEPARTMENT', 'head_employee_id' => 134],
-            ['division_code' => 'HOPSS','code' => 'PCS', 'name' => 'PATIENT CARE SUPPORT SERVICES CLUSTER','type' => 'DEPARTMENT', 'head_employee_id' => 158],
-            ['division_code' => 'HOPSS','code' => 'MSS', 'name' => 'MEDICAL SOCIAL SERVICE','type' => 'DEPARTMENT', 'head_employee_id' => 138],
-            ['division_code' => 'HOPSS','code' => 'DIET', 'name' => 'DIETARY','type' => 'DEPARTMENT', 'head_employee_id' => 12],
+            ['division_code' => 'HOPSS','code' => 'MEDREC', 'name' => 'MEDICAL RECORDS','type' => 'DEPARTMENT', 'head_employee_id' => 111, 'parent_code' => 'HIMC'],
+            ['division_code' => 'HOPSS','code' => 'IT', 'name' => 'INFORMATION TECHNOLOGY','type' => 'DEPARTMENT', 'head_employee_id' => 85, 'parent_code' => 'HIMC'],
+            ['division_code' => 'HOPSS','code' => 'DPO', 'name' => 'DATA PROTECTION OFFICE','type' => 'DEPARTMENT', 'head_employee_id' => 189, 'parent_code' => 'ASC'],
+            ['division_code' => 'HOPSS','code' => 'CRM', 'name' => 'CUSTOMER RELATIONS MANAGEMENT','type' => 'DEPARTMENT', 'head_employee_id' => 134, 'parent_code' => 'ASC'],
+            // Clusters sit between HOPSS and the departments listed above/below via 'parent_code'.
+            ['division_code' => 'HOPSS','code' => 'HIMC', 'name' => 'HEALTH INFORMATION MANAGEMENT CLUSTER','type' => 'CLUSTER', 'head_employee_first_name' => 'Ruel', 'head_employee_last_name' => 'Subaran'],
+            ['division_code' => 'HOPSS','code' => 'ASC', 'name' => 'ADMINISTRATIVE SERVICES CLUSTER','type' => 'CLUSTER', 'head_employee_first_name' => 'Cristela', 'head_employee_last_name' => 'Veñegas'],
+            ['division_code' => 'HOPSS','code' => 'PCS', 'name' => 'PATIENT CARE SUPPORT SERVICES CLUSTER','type' => 'CLUSTER', 'head_employee_id' => 158],
+            ['division_code' => 'HOPSS','code' => 'MSS', 'name' => 'MEDICAL SOCIAL SERVICE','type' => 'DEPARTMENT', 'head_employee_id' => 138, 'parent_code' => 'PCS'],
+            ['division_code' => 'HOPSS','code' => 'DIET', 'name' => 'DIETARY','type' => 'DEPARTMENT', 'head_employee_id' => 12, 'parent_code' => 'PCS'],
             ['division_code' => 'FD','code' => 'FS', 'name' => 'FINANCE SERVICES','type' => 'DEPARTMENT', 'head_employee_id' => 114],
             ['division_code' => 'CN','code' => 'PS', 'name' => 'PATIENT SERVICES','type' => 'DEPARTMENT', 'head_employee_id' => 91],
             ['division_code' => 'CN','code' => 'ADMIN', 'name' => 'ADMINISTRATION','type' => 'DEPARTMENT', 'head_employee_id' => 100],
@@ -93,6 +96,19 @@ class DepartmentSeeder extends Seeder
             $head = $d['head_employee_id'] ?? null;
             $head = ($head === '' ? null : $head);
 
+            if (! $head && isset($d['head_employee_first_name'], $d['head_employee_last_name'])) {
+                $head = \App\Models\Employee::whereRaw('UPPER(first_name) = ?', [mb_strtoupper($d['head_employee_first_name'])])
+                    ->whereRaw('UPPER(last_name) = ?', [mb_strtoupper($d['head_employee_last_name'])])
+                    ->value('id');
+
+                if (! $head) {
+                    $this->command?->warn(
+                        "DepartmentSeeder: could not find employee '{$d['head_employee_first_name']} {$d['head_employee_last_name']}' "
+                        . "for department '{$d['code']}'. Head left unset \u2014 please assign manually."
+                    );
+                }
+            }
+
             $rows[] = [
                 'division_id' => $div->id,
                 'type' => $d['type'] ?? 'DEPARTMENT',
@@ -110,5 +126,29 @@ class DepartmentSeeder extends Seeder
             ['division_id', 'code'],
             ['type', 'name', 'description', 'head_employee_id', 'updated_at']
         );
+
+        foreach ($departments as $d) {
+            if (empty($d['parent_code'])) {
+                continue;
+            }
+
+            $div = Division::where('code', $d['division_code'])->first();
+            if (!$div) continue;
+
+            $parentId = DB::table('departments')
+                ->where('division_id', $div->id)
+                ->where('code', $d['parent_code'])
+                ->value('id');
+
+            if (! $parentId) {
+                $this->command?->warn("DepartmentSeeder: parent_code '{$d['parent_code']}' not found for department '{$d['code']}'.");
+                continue;
+            }
+
+            DB::table('departments')
+                ->where('division_id', $div->id)
+                ->where('code', $d['code'])
+                ->update(['parent_id' => $parentId, 'updated_at' => $now]);
+        }
     }
 }

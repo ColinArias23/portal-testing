@@ -17,6 +17,38 @@ class LeaveBalanceController extends Controller
     {
     }
 
+    public function roster(Request $request)
+    {
+        $this->authorize('viewAny', LeaveBalance::class);
+
+        $employees = Employee::query()
+            ->select([
+                'id',
+                'employee_number',
+                'prefix',
+                'first_name',
+                'middle_name',
+                'last_name',
+                'suffix',
+                'employment_type',
+            ])
+            ->with(['primaryDepartmentAssignment.department:id,name'])
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get()
+            ->map(fn (Employee $employee) => [
+                'id' => $employee->id,
+                'employee_id' => $employee->employee_number,
+                'name' => $employee->full_name,
+                'department' => $employee->primary_department?->name,
+                'department_id' => $employee->primary_department?->id,
+                'employment_type' => $employee->employment_type,
+            ])
+            ->values();
+
+        return response()->json(['data' => $employees]);
+    }
+
     public function index(Request $request)
     {
         $this->authorize('viewAny', LeaveBalance::class);

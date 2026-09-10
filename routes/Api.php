@@ -391,6 +391,7 @@ Route::prefix('announcement-attachments')->middleware('throttle:announcements')-
         Route::get('/dashboard/overview',      [LeaveDashboardController::class, 'overview']);
         Route::get('/dashboard/activity',      [LeaveDashboardController::class, 'activity']);
         // leave balances and adjustments
+        Route::get('/balances/roster',                                     [LeaveBalanceController::class, 'roster']);
         Route::get('/employees/{employee}/balances',                        [LeaveBalanceController::class, 'forEmployee']);
         Route::post('/employees/{employee}/balances/{leaveType}/credits',   [LeaveBalanceController::class, 'setCredits']);
         Route::delete('/employees/{employee}/balances/{leaveType}/credits', [LeaveBalanceController::class, 'resetCredits']);
