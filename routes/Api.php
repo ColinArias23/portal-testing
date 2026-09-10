@@ -177,7 +177,9 @@ Route::prefix('announcement-attachments')->middleware('throttle:announcements')-
     });
 // ─── Lightweight Options (dropdown/filter reference data — any authenticated user) ─────
     Route::get('/departments/options',   [DepartmentController::class, 'options']);
+    Route::get('/departments/types',     [DepartmentController::class, 'types']);
     Route::get('/divisions/options',     [DivisionController::class, 'options']);
+    Route::get('/divisions/types',       [DivisionController::class, 'types']);
     Route::get('/salary-grades/options', [SalaryGradeController::class, 'options']);
 // ─── Core API Resources ─────────────────────────────────────────────────────
     Route::apiResources([

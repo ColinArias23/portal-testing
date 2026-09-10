@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Services\Organization\DepartmentService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class DepartmentController extends Controller
 {
@@ -29,6 +30,14 @@ class DepartmentController extends Controller
         return $this->departments->options();
     }
 
+    // ─── Types (valid 'type' enum values, for the Add/Edit dropdown) ───────
+    public function types()
+    {
+        return collect(Department::TYPES)
+            ->map(fn (string $type) => ['value' => $type, 'label' => $type])
+            ->values();
+    }
+
     // ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request)
     {
@@ -36,7 +45,7 @@ class DepartmentController extends Controller
             'division_id'         => ['required', 'exists:divisions,id'],
             'parent_id'           => ['nullable', 'exists:departments,id'],
             'parent_division_id'  => ['nullable', 'exists:divisions,id'],
-            'type'                => ['required', 'in:DEPARTMENT,SECTION,UNIT'],
+            'type'                => ['required', Rule::in(Department::TYPES)],
             'code'                => ['required', 'string', 'max:50', 'unique:departments,code'],
             'name'                => ['required', 'string', 'max:255'],
             'description'         => ['nullable', 'string'],
@@ -59,7 +68,7 @@ class DepartmentController extends Controller
             'division_id'         => ['sometimes', 'exists:divisions,id'],
             'parent_id'           => ['nullable', 'exists:departments,id'],
             'parent_division_id'  => ['nullable', 'exists:divisions,id'],
-            'type'                => ['required', 'in:DEPARTMENT,SECTION,UNIT'],
+            'type'                => ['required', Rule::in(Department::TYPES)],
             'code'                => ['sometimes', 'string', 'max:50', 'unique:departments,code,' . $department->id],
             'name'                => ['sometimes', 'string', 'max:255'],
             'description'         => ['nullable', 'string'],

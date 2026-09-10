@@ -6,6 +6,7 @@ use App\Enums\ApprovalStepStatus;
 use App\Enums\ApproverSource;
 use App\Enums\SignatureType;
 use App\Models\Department;
+use App\Models\Employee;
 use App\Models\LeaveRequestApprovalStep;
 use App\Models\User;
 use App\Policies\LeaveRequestPolicy;
@@ -46,6 +47,7 @@ class LeaveRequestResource extends JsonResource
                 'middle_name' => $this->employee->middle_name,
                 'last_name' => $this->employee->last_name,
                 'salary' => $monthlySalary,
+                'signature_url' => $this->resolveEmployeeSignatureUrl($this->employee),
             ],
             'leave_type' => [
                 'id' => $this->leaveType->id,
@@ -155,11 +157,16 @@ class LeaveRequestResource extends JsonResource
 
     private function resolveActorSignatureUrl(User $actor): ?string
     {
-        if (! $actor->employee_id) {
+        return $this->resolveEmployeeSignatureUrl($actor->employee);
+    }
+
+    private function resolveEmployeeSignatureUrl(?Employee $employee): ?string
+    {
+        if (! $employee) {
             return null;
         }
 
-        $hasPrimary = $actor->employee?->signatures()
+        $hasPrimary = $employee->signatures()
             ->where('type', SignatureType::Primary->value)
             ->exists();
 
@@ -167,7 +174,7 @@ class LeaveRequestResource extends JsonResource
             ? URL::temporarySignedRoute(
                 'employees.signatures.preview',
                 now()->addMinutes(30),
-                ['employee' => $actor->employee_id, 'type' => SignatureType::Primary->value]
+                ['employee' => $employee->id, 'type' => SignatureType::Primary->value]
             )
             : null;
     }

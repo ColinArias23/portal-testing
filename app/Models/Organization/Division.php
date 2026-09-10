@@ -10,6 +10,8 @@ class Division extends Model
 
     use AutoUppercase;
 
+    public const TYPES = ['OFFICE', 'DIVISION', 'DIRECTORATE'];
+
     protected array $uppercaseExclude = [
         'created_at',
         'updated_at',

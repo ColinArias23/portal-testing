@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Division;
 use App\Services\Organization\DivisionService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class DivisionController extends Controller
 {
@@ -29,6 +30,14 @@ class DivisionController extends Controller
         return $this->divisions->options();
     }
 
+    // ─── Types (valid 'type' enum values, for the Add/Edit dropdown) ───────
+    public function types()
+    {
+        return collect(Division::TYPES)
+            ->map(fn (string $type) => ['value' => $type, 'label' => $type])
+            ->values();
+    }
+
     // ─── Store ─────────────────────────────────────────────────────
     public function store(Request $request)
     {
@@ -38,7 +47,7 @@ class DivisionController extends Controller
             'description'      => ['nullable', 'string'],
             'head_employee_id' => ['nullable', 'exists:employees,id'],
             'parent_id'        => ['nullable', 'exists:divisions,id'],
-            'type'             => ['sometimes', 'in:OFFICE,DIVISION,DIRECTORATE'],
+            'type'             => ['sometimes', Rule::in(Division::TYPES)],
         ]);
 
         return $this->divisions->create($data);
@@ -58,7 +67,7 @@ class DivisionController extends Controller
             'name'             => ['sometimes', 'string'],
             'description'      => ['nullable', 'string'],
             'head_employee_id' => ['nullable', 'exists:employees,id'],
-            'type'             => ['sometimes', 'in:OFFICE,DIVISION,DIRECTORATE'],
+            'type'             => ['sometimes', Rule::in(Division::TYPES)],
             'parent_id'        => [
                 'nullable',
                 'exists:divisions,id',

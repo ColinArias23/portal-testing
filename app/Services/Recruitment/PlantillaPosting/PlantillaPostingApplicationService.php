@@ -41,7 +41,7 @@ class PlantillaPostingApplicationService
 
         if (! $employeeId) {
             throw ValidationException::withMessages([
-                'employee' => 'Walang naka-link na employee record ang account mo.',
+                'employee' => 'Your account is not linked to an employee record.',
             ]);
         }
 
@@ -54,7 +54,7 @@ class PlantillaPostingApplicationService
 
         if (! $posting->isAvailableForApplication()) {
             throw ValidationException::withMessages([
-                'posting' => 'Sarado na ang posting na ito o wala nang bakanteng slot.',
+                'posting' => 'This posting is closed or has no more open slots.',
             ]);
         }
 
@@ -141,18 +141,18 @@ class PlantillaPostingApplicationService
         $employeeId = $this->resolveEmployeeId($request);
 
         if ($application->employee_id !== $employeeId) {
-            abort(403, 'Hindi mo pag-aari ang application na ito.');
+            abort(403, 'You do not own this application.');
         }
 
         if (in_array($application->status, ['Completed', 'Rejected'], true)) {
             throw ValidationException::withMessages([
-                'status' => 'Sarado na ang application na ito — hindi na pwedeng magpasa o magpalit ng dokumento.',
+                'status' => 'This application is closed — documents can no longer be submitted or changed.',
             ]);
         }
 
         if (empty($validated['documents'] ?? [])) {
             throw ValidationException::withMessages([
-                'documents' => 'Wala kang pinili na file na i-upload.',
+                'documents' => 'You have not selected any file to upload.',
             ]);
         }
 
@@ -239,7 +239,7 @@ class PlantillaPostingApplicationService
 
         if ($validated['status'] === 'Completed' && ! $application->interview?->hasCompleted()) {
             throw ValidationException::withMessages([
-                'status' => 'Hindi pa pwedeng i-mark as Completed ang application na ito. Kailangan munang i-schedule at i-mark as COMPLETED ang interview.',
+                'status' => 'This application cannot be marked as Completed yet. The interview must first be scheduled and marked as COMPLETED.',
             ]);
         }
 
@@ -251,7 +251,7 @@ class PlantillaPostingApplicationService
         ]);
     }
 
-    public function downloadDocument(Request $request, int $documentId): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    public function downloadDocument(Request $request, int $documentId): \Symfony\Component\HttpFoundation\Response
     {
         $document = $this->applications->findDocumentWithApplication($documentId);
 
@@ -263,6 +263,10 @@ class PlantillaPostingApplicationService
 
         if (! $isOwner && ! $canManage) {
             abort(403);
+        }
+
+        if (! Storage::disk('local')->exists($document->stored_path)) {
+            abort(404, 'File not found. It may have been deleted.');
         }
 
         return Storage::disk('local')->download($document->stored_path, $document->original_filename);

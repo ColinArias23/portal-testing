@@ -10,6 +10,8 @@ class Department extends Model
 
     use AutoUppercase;
 
+    public const TYPES = ['DEPARTMENT', 'SECTION', 'UNIT', 'CLUSTER'];
+
     protected array $uppercaseExclude = [
         'created_at',
         'updated_at',

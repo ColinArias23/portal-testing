@@ -134,9 +134,14 @@ class AnnouncementService
         }
     }
 
-    public function downloadAttachment(int $attachmentId): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    public function downloadAttachment(int $attachmentId): \Symfony\Component\HttpFoundation\Response
     {
         $attachment = AnnouncementAttachment::findOrFail($attachmentId);
+
+        if (! Storage::disk('local')->exists($attachment->stored_path)) {
+            abort(404, 'File not found. It may have been deleted.');
+        }
+
         $attachment->increment('downloads_count');
 
         return Storage::disk('local')->download(
