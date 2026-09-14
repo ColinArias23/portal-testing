@@ -6,6 +6,7 @@ use App\Models\PlantillaPosition;
 use App\Models\PlantillaPosting;
 use App\Repositories\Recruitment\PlantillaPosting\PlantillaPostingRepository;
 use App\Services\Notifications\NotificationService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -15,6 +16,17 @@ use Illuminate\Validation\ValidationException;
 class PlantillaPostingService
 {
     private const DOC_KEYS = ['letter_of_intent', 'pds', 'work_experience', 'performance_rating', 'eligibility', 'transcript', 'diploma'];
+
+    private const MAX_APPLICATION_DEADLINE_DAYS = 15;
+
+    private const DEFAULT_CLOSING_DATE_MONTHS = 9;
+
+    private const CLOSING_DATE_ROLES = ['HR', 'SuperAdmin'];
+
+    private function canManageClosingDate(?Request $request): bool
+    {
+        return (bool) $request?->user()?->hasAnyRole(self::CLOSING_DATE_ROLES);
+    }
 
     public function __construct(
         private readonly PlantillaPostingRepository $postings,
@@ -173,7 +185,27 @@ class PlantillaPostingService
             'required_documents'        => 'required|array',
             'required_documents.*'      => 'boolean',
             'date_posted'               => 'required|date',
-            'closing_date'              => 'required|date|after_or_equal:date_posted',
+            'application_deadline'      => [
+                'required',
+                'date',
+                'after_or_equal:date_posted',
+                function ($attribute, $value, $fail) use ($request) {
+                    $datePosted = $request->input('date_posted');
+                    if (! $datePosted) {
+                        return;
+                    }
+
+                    $days = Carbon::parse($datePosted)->startOfDay()
+                        ->diffInDays(Carbon::parse($value)->startOfDay(), false);
+
+                    if ($days > self::MAX_APPLICATION_DEADLINE_DAYS) {
+                        $fail('Ang application deadline ay dapat nasa loob lamang ng '.self::MAX_APPLICATION_DEADLINE_DAYS.' araw mula sa posting date.');
+                    }
+                },
+            ],
+            'closing_date'              => $this->canManageClosingDate($request)
+                ? 'required|date|after_or_equal:date_posted'
+                : 'nullable|date|after_or_equal:date_posted',
             'expected_appointment_date' => 'nullable|date',
             'status'                    => ['required', Rule::in(['Open', 'Closing Soon', 'Closed'])],
         ]);
@@ -219,6 +251,12 @@ class PlantillaPostingService
         $data['position_slot_name'] = $slots->pluck('position_slot_name')->implode(', ');
         $data['created_by']         = $request->user()?->id;
 
+        if (empty($data['closing_date'])) {
+            $data['closing_date'] = Carbon::parse($data['date_posted'])
+                ->addMonths(self::DEFAULT_CLOSING_DATE_MONTHS)
+                ->toDateString();
+        }
+
         $posting = \Illuminate\Support\Facades\DB::transaction(function () use ($data, $slots) {
             $posting = $this->postings->create($data);
             $this->postings->syncPositions($posting, $slots->pluck('id'));
@@ -243,6 +281,10 @@ class PlantillaPostingService
 
         unset($data['plantilla_position_ids']);
         unset($data['position_slot_name']);
+
+        if (empty($data['closing_date'])) {
+            $data['closing_date'] = $posting->closing_date?->toDateString();
+        }
 
         $this->postings->update($posting, $data);
 

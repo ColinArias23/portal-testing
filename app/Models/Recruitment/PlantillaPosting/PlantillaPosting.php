@@ -33,6 +33,7 @@ class PlantillaPosting extends Model
         'qualification_competency',
         'required_documents',
         'date_posted',
+        'application_deadline',
         'closing_date',
         'expected_appointment_date',
         'status',
@@ -44,6 +45,7 @@ class PlantillaPosting extends Model
         'monthly_salary' => 'decimal:2',
         'annual_salary' => 'decimal:2',
         'date_posted' => 'date',
+        'application_deadline' => 'date',
         'closing_date' => 'date',
         'expected_appointment_date' => 'date',
     ];
@@ -135,13 +137,13 @@ class PlantillaPosting extends Model
         }
 
         $today = now()->startOfDay();
-        $closing = $this->closing_date?->copy()->startOfDay();
+        $deadline = $this->application_deadline?->copy()->startOfDay();
 
-        if ($closing && $today->greaterThan($closing)) {
+        if ($deadline && $today->greaterThan($deadline)) {
             return 'Closed';
         }
 
-        if ($closing && $today->diffInDays($closing, false) <= 10) {
+        if ($deadline && $today->diffInDays($deadline, false) <= 3) {
             return 'Closing Soon';
         }
 

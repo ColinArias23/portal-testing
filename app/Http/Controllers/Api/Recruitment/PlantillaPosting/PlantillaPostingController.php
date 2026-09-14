@@ -3,13 +3,18 @@
 namespace App\Http\Controllers\Api\Recruitment\PlantillaPosting;
 
 use App\Http\Controllers\Controller;
+use App\Models\PlantillaPosting;
 use App\Models\PlantillaPostingApplication;
 use App\Services\Recruitment\PlantillaPosting\PlantillaPostingApplicationService;
 use App\Services\Recruitment\PlantillaPosting\PlantillaPostingService;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 
 class PlantillaPostingController extends Controller
 {
+    private const CLOSING_DATE_ROLES = ['HR', 'SuperAdmin'];
+
     public function __construct(
         private readonly PlantillaPostingService $postings,
         private readonly PlantillaPostingApplicationService $applications,
@@ -25,13 +30,19 @@ class PlantillaPostingController extends Controller
     // ─── Index ─────────────────────────────────────────────────────
     public function index(Request $request)
     {
-        return response()->json($this->postings->index($request));
+        $postings = $this->postings->index($request);
+        $this->hideClosingDateUnlessAuthorized($request, $postings);
+
+        return response()->json($postings);
     }
 
     // ─── Available ─────────────────────────────────────────────────
     public function available(Request $request)
     {
-        return response()->json($this->postings->available($request));
+        $postings = $this->postings->available($request);
+        $this->hideClosingDateUnlessAuthorized($request, $postings);
+
+        return response()->json($postings);
     }
 
     // ─── VacantItems ───────────────────────────────────────────────
@@ -49,9 +60,25 @@ class PlantillaPostingController extends Controller
     }
 
     // ─── Show ─────────────────────────────────────────────────────
-    public function show($id)
+    public function show(Request $request, $id)
     {
-        return response()->json($this->postings->show((int) $id));
+        $posting = $this->postings->show((int) $id);
+        $this->hideClosingDateUnlessAuthorized($request, $posting);
+
+        return response()->json($posting);
+    }
+    // ─── hideClosingDateUnlessAuthorized ─────────────────────────────────────────────────────
+    private function hideClosingDateUnlessAuthorized(Request $request, LengthAwarePaginator|PlantillaPosting $postings): void
+    {
+        if ($request->user()?->hasAnyRole(self::CLOSING_DATE_ROLES)) {
+            return;
+        }
+
+        $models = $postings instanceof LengthAwarePaginator
+            ? $postings->getCollection()
+            : Collection::make([$postings]);
+
+        $models->each(fn (PlantillaPosting $posting) => $posting->makeHidden('closing_date'));
     }
 
     // ─── Update ─────────────────────────────────────────────────────
