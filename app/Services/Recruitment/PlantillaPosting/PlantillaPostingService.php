@@ -10,6 +10,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -31,6 +32,7 @@ class PlantillaPostingService
     public function __construct(
         private readonly PlantillaPostingRepository $postings,
         private readonly NotificationService $notifications,
+        private readonly PlantillaPostingApplicationService $applications,
     ) {
     }
 
@@ -291,9 +293,24 @@ class PlantillaPostingService
         return $this->postings->loadListingRelations($posting);
     }
 
-    public function destroy(int $id): void
+    public function destroy(Request $request, int $id): void
     {
         $posting = $this->postings->find($id);
-        $this->postings->delete($posting);
+
+        DB::transaction(function () use ($request, $posting) {
+            $cancelledApplications = $this->applications->cancelApplicationsForPosting(
+                $posting,
+                $request->user()?->id,
+            );
+
+            foreach ($cancelledApplications as $application) {
+                $this->notifications->notifyApplicationPostingCancelled(
+                    $application,
+                    $request->user()?->id,
+                );
+            }
+
+            $this->postings->delete($posting);
+        });
     }
 }

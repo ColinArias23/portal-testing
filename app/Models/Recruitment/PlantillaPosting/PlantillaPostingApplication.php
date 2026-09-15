@@ -10,6 +10,8 @@ class PlantillaPostingApplication extends Model
 {
     use HasFactory;
 
+    public const STATUS_POSTING_CANCELLED = 'Posting Cancelled';
+
     protected $fillable = [
         'plantilla_posting_id',
         'employee_id',
@@ -30,7 +32,7 @@ class PlantillaPostingApplication extends Model
 
     public function posting()
     {
-        return $this->belongsTo(PlantillaPosting::class, 'plantilla_posting_id');
+        return $this->belongsTo(PlantillaPosting::class, 'plantilla_posting_id')->withTrashed();
     }
 
     public function employee()

@@ -4,6 +4,7 @@ namespace App\Services\Notifications;
 
 use App\Models\Notification;
 use App\Models\PlantillaPosting;
+use App\Models\PlantillaPostingApplication;
 use App\Models\Training;
 use App\Models\User;
 use App\Repositories\Notifications\NotificationRepository;
@@ -97,6 +98,37 @@ class NotificationService
                 'posted_by_user_id'  => $postedByUserId,
             ],
             'visibility' => 'all',
+        ]);
+    }
+
+    public function notifyApplicationPostingCancelled(PlantillaPostingApplication $application, ?int $cancelledByUserId): ?Notification
+    {
+        $application->loadMissing(['posting', 'employee.user']);
+
+        $targetUserId = $application->employee?->user?->id;
+
+        if (! $targetUserId) {
+            return null;
+        }
+
+        $postingTitle = $application->posting?->title ?? 'the position';
+        $itemNumber   = $application->posting?->position_slot_name;
+
+        return Notification::create([
+            'type'    => 'plantilla_application_posting_cancelled',
+            'title'   => 'Posting Cancelled',
+            'message' => $itemNumber
+                ? "The posting \"{$postingTitle}\" (Item No. {$itemNumber}) you applied for has been cancelled. Your application will no longer proceed, but your submission remains on record."
+                : "The posting \"{$postingTitle}\" you applied for has been cancelled. Your application will no longer proceed, but your submission remains on record.",
+            'data' => [
+                'application_id'       => $application->id,
+                'posting_id'           => $application->plantilla_posting_id,
+                'position_slot_name'   => $itemNumber,
+                'title'                => $postingTitle,
+                'cancelled_by_user_id' => $cancelledByUserId,
+            ],
+            'visibility'     => 'user',
+            'target_user_id' => $targetUserId,
         ]);
     }
 }

@@ -77,4 +77,23 @@ class PlantillaPostingApplicationRepository
     {
         return PlantillaPostingApplicationDocument::with('application')->findOrFail($documentId);
     }
+
+    public function cancelForPosting(int $postingId, array $excludedStatuses, string $remarks, ?int $reviewedByUserId): Collection
+    {
+        $applications = PlantillaPostingApplication::where('plantilla_posting_id', $postingId)
+            ->whereNotIn('status', $excludedStatuses)
+            ->with(['employee.user', 'posting'])
+            ->get();
+
+        $applications->each(function (PlantillaPostingApplication $application) use ($remarks, $reviewedByUserId) {
+            $application->update([
+                'status'      => PlantillaPostingApplication::STATUS_POSTING_CANCELLED,
+                'remarks'     => $remarks,
+                'reviewed_by' => $reviewedByUserId,
+                'reviewed_at' => now(),
+            ]);
+        });
+
+        return $applications;
+    }
 }

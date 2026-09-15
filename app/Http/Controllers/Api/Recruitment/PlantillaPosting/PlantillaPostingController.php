@@ -88,9 +88,9 @@ class PlantillaPostingController extends Controller
     }
 
     // ─── Destroy ─────────────────────────────────────────────────────
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        $this->postings->destroy((int) $id);
+        $this->postings->destroy($request, (int) $id);
 
         return response()->json(['message' => 'Posting deleted.']);
     }

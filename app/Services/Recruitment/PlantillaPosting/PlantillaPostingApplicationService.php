@@ -28,6 +28,17 @@ class PlantillaPostingApplicationService
         'Rejected',
     ];
 
+    /**
+     * Statuses considered "closed" — a bulk posting-cancellation must never
+     * overwrite these, and no further review/interview action is allowed
+     * once an application is in one of these states.
+     */
+    private const TERMINAL_STATUSES = [
+        'Completed',
+        'Rejected',
+        PlantillaPostingApplication::STATUS_POSTING_CANCELLED,
+    ];
+
     public function __construct(
         private readonly PlantillaPostingApplicationRepository $applications,
         private readonly PlantillaPostingRepository $postings,
@@ -150,6 +161,12 @@ class PlantillaPostingApplicationService
             ]);
         }
 
+        if ($application->status === PlantillaPostingApplication::STATUS_POSTING_CANCELLED) {
+            throw ValidationException::withMessages([
+                'status' => 'This application was closed because the posting was cancelled/deleted — documents can no longer be submitted or changed.',
+            ]);
+        }
+
         if (empty($validated['documents'] ?? [])) {
             throw ValidationException::withMessages([
                 'documents' => 'You have not selected any file to upload.',
@@ -203,6 +220,8 @@ class PlantillaPostingApplicationService
 
         if ($status = $request->get('status')) {
             $query->where('status', $status);
+        } else {
+            $query->where('status', '!=', PlantillaPostingApplication::STATUS_POSTING_CANCELLED);
         }
 
         if ($postingId = $request->get('plantilla_posting_id')) {
@@ -237,6 +256,12 @@ class PlantillaPostingApplicationService
     {
         $application = $this->applications->findWithReviewRelations($applicationId);
 
+        if ($application->status === PlantillaPostingApplication::STATUS_POSTING_CANCELLED) {
+            throw ValidationException::withMessages([
+                'status' => 'This application was closed because the associated posting was cancelled/deleted. No further review action can be taken.',
+            ]);
+        }
+
         if ($validated['status'] === 'Completed' && ! $application->interview?->hasCompleted()) {
             throw ValidationException::withMessages([
                 'status' => 'This application cannot be marked as Completed yet. The interview must first be scheduled and marked as COMPLETED.',
@@ -249,6 +274,22 @@ class PlantillaPostingApplicationService
             'reviewed_by' => $request->user()?->id,
             'reviewed_at' => now(),
         ]);
+    }
+
+    public function cancelApplicationsForPosting(PlantillaPosting $posting, ?int $cancelledByUserId): Collection
+    {
+        $remarks = sprintf(
+            'Automatically closed: the plantilla posting "%s" (Item No. %s) was cancelled/deleted. This is not a rejection — no evaluation of the applicant\'s qualifications was made.',
+            $posting->title,
+            $posting->position_slot_name,
+        );
+
+        return $this->applications->cancelForPosting(
+            $posting->id,
+            self::TERMINAL_STATUSES,
+            $remarks,
+            $cancelledByUserId,
+        );
     }
 
     public function downloadDocument(Request $request, int $documentId): \Symfony\Component\HttpFoundation\Response

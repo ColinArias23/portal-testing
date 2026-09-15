@@ -11,6 +11,7 @@ use App\Repositories\Recruitment\PlantillaPosting\PlantillaApplicationInterviewR
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class PlantillaApplicationInterviewService
 {
@@ -43,6 +44,12 @@ class PlantillaApplicationInterviewService
 
     public function update(Request $request, PlantillaPostingApplication $application, array $data): PlantillaPostingApplicationInterview
     {
+        if ($application->status === PlantillaPostingApplication::STATUS_POSTING_CANCELLED) {
+            throw ValidationException::withMessages([
+                'status' => 'This application was closed because the associated posting was cancelled/deleted. Interview actions can no longer be performed on it.',
+            ]);
+        }
+
         foreach (self::STATUS_FIELDS as $field) {
             if (isset($data[$field])) {
                 $data[$field] = strtoupper($data[$field]);
