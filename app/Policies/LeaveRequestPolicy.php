@@ -54,6 +54,20 @@ class LeaveRequestPolicy
         return $user->can('leave.request.manage');
     }
 
+    public function retract(User $user, LeaveRequest $leaveRequest): bool
+    {
+        if ($leaveRequest->employee_id === $user->employee_id) {
+            return true;
+        }
+
+        return $user->can('leave.request.manage');
+    }
+
+    public function resubmit(User $user, LeaveRequest $leaveRequest): bool
+    {
+        return $leaveRequest->employee_id === $user->employee_id || $user->hasRole('SuperAdmin');
+    }
+
     public function act(User $user, LeaveRequest $leaveRequest): bool
     {
         if (! $user->can('leave.approval.manage')) {

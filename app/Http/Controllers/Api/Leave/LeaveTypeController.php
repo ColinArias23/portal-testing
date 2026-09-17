@@ -28,7 +28,7 @@ class LeaveTypeController extends Controller
 
         if ($wantsFullCatalog) {
             $types = $query->orderBy('sort_order')->get([
-                'id', 'code', 'name', 'color', 'bg_color', 'requires_date_range',
+                'id', 'code', 'name', 'description', 'color', 'bg_color', 'unit', 'requires_date_range',
                 'is_confidential', 'max_days', 'is_accrual_based', 'eligible_employment_types',
             ]);
 
@@ -41,7 +41,7 @@ class LeaveTypeController extends Controller
             ->eligibleFor($employee?->employment_type)
             ->orderBy('sort_order')
             ->get([
-                'id', 'code', 'name', 'color', 'bg_color', 'requires_date_range',
+                'id', 'code', 'name', 'description', 'color', 'bg_color', 'unit', 'requires_date_range',
                 'is_confidential', 'max_days', 'is_accrual_based',
             ]);
 
@@ -98,6 +98,7 @@ class LeaveTypeController extends Controller
             'description' => ['nullable', 'string'],
             'color' => ['nullable', 'string', 'max:20'],
             'bg_color' => ['nullable', 'string', 'max:20'],
+            'unit' => ['nullable', 'string', 'in:days,hours'],
             'requires_date_range' => ['sometimes', 'boolean'],
             'is_confidential' => ['sometimes', 'boolean'],
             'max_days' => ['nullable', 'integer', 'min:0'],

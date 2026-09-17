@@ -4,6 +4,7 @@ namespace App\Http\Resources\Leave;
 
 use App\Enums\ApprovalStepStatus;
 use App\Enums\ApproverSource;
+use App\Enums\LeaveRequestStatus;
 use App\Enums\SignatureType;
 use App\Models\Department;
 use App\Models\Employee;
@@ -56,7 +57,7 @@ class LeaveRequestResource extends JsonResource
                 'color' => $this->leaveType->color,
                 'is_confidential' => $this->leaveType->is_confidential,
             ],
-            'status' => $this->status->value,
+            'status' => $this->resolveDisplayStatus(),
             'start_date' => $this->start_date?->toDateString(),
             'end_date' => $this->end_date?->toDateString(),
             'is_half_day' => $this->is_half_day,
@@ -84,6 +85,10 @@ class LeaveRequestResource extends JsonResource
             'finalized_at' => $this->finalized_at?->toIso8601String(),
             'cancelled_at' => $this->cancelled_at?->toIso8601String(),
             'cancellation_reason' => $this->cancellation_reason,
+            'returned_at' => $this->returned_at?->toIso8601String(),
+            'return_reason' => $this->return_reason,
+            'retracted_at' => $this->retracted_at?->toIso8601String(),
+            'retraction_reason' => $this->retraction_reason,
             'rescheduled_from_id' => $this->rescheduled_from_id,
             'rescheduled_from' => $this->whenLoaded('rescheduledFrom', fn () => $this->rescheduledFrom ? [
                 'id' => $this->rescheduledFrom->id,
@@ -99,6 +104,19 @@ class LeaveRequestResource extends JsonResource
             ])),
             'created_at' => $this->created_at->toIso8601String(),
         ];
+    }
+
+    private function resolveDisplayStatus(): string
+    {
+        if ($this->status !== LeaveRequestStatus::Pending) {
+            return $this->status->value;
+        }
+
+        $currentStep = $this->relationLoaded('approvalSteps')
+            ? $this->approvalSteps->firstWhere('step_order', $this->current_step_order)
+            : null;
+
+        return $currentStep?->approver_role === 'HR' ? 'for_hr_review' : 'pending_approval';
     }
 
     private function formatApprovalStep(LeaveRequestApprovalStep $step): array

@@ -179,7 +179,7 @@ class LeaveRequestService
         User $actor,
     ): LeaveRequest {
         return DB::transaction(function () use ($leaveRequest, $newDates, $reason, $actor) {
-            if (in_array($leaveRequest->status, [LeaveRequestStatus::Cancelled, LeaveRequestStatus::Rejected], true)) {
+            if ($leaveRequest->status->isFinal()) {
                 throw new RuntimeException('This request has already been finalized and cannot be rescheduled.');
             }
 
@@ -212,11 +212,15 @@ class LeaveRequestService
     public function cancel(LeaveRequest $leaveRequest, User $actor, string $reason): LeaveRequest
     {
         return DB::transaction(function () use ($leaveRequest, $actor, $reason) {
-            if (in_array($leaveRequest->status, [LeaveRequestStatus::Cancelled, LeaveRequestStatus::Rejected], true)) {
-                throw new RuntimeException('This request has already been finalized and cannot be cancelled.');
-            }
+            $cancellableFrom = [LeaveRequestStatus::Pending, LeaveRequestStatus::ReturnedForRevision];
 
-            $wasApproved = $leaveRequest->status === LeaveRequestStatus::Approved;
+            if (! in_array($leaveRequest->status, $cancellableFrom, true)) {
+                throw new RuntimeException(
+                    $leaveRequest->status === LeaveRequestStatus::Approved
+                        ? 'This request has already been approved. Use retract instead.'
+                        : 'This request has already been finalized and cannot be cancelled.'
+                );
+            }
 
             $leaveRequest->update([
                 'status' => LeaveRequestStatus::Cancelled,
@@ -224,10 +228,6 @@ class LeaveRequestService
                 'cancellation_reason' => $reason,
                 'updated_by' => $actor->id,
             ]);
-
-            if ($wasApproved) {
-                $this->balanceService->restore($leaveRequest, "Restored due to cancellation of {$leaveRequest->request_number}");
-            }
 
             LeaveRequestLog::create([
                 'leave_request_id' => $leaveRequest->id,
@@ -240,6 +240,89 @@ class LeaveRequestService
         });
     }
 
+    public function retract(LeaveRequest $leaveRequest, User $actor, string $reason): LeaveRequest
+    {
+        return DB::transaction(function () use ($leaveRequest, $actor, $reason) {
+            $leaveRequest = LeaveRequest::query()
+                ->whereKey($leaveRequest->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($leaveRequest->status !== LeaveRequestStatus::Approved) {
+                throw new RuntimeException('Only a fully approved leave request can be retracted.');
+            }
+
+            $leaveRequest->update([
+                'status' => LeaveRequestStatus::Retracted,
+                'retracted_at' => now(),
+                'retraction_reason' => $reason,
+                'updated_by' => $actor->id,
+            ]);
+
+            $this->balanceService->restore($leaveRequest, "Restored due to retraction of {$leaveRequest->request_number}");
+
+            LeaveRequestLog::create([
+                'leave_request_id' => $leaveRequest->id,
+                'action' => 'retracted',
+                'actor_id' => $actor->id,
+                'remarks' => $reason,
+            ]);
+
+            return $leaveRequest->fresh();
+        });
+    }
+
+    public function resubmit(LeaveRequest $leaveRequest, User $actor): LeaveRequest
+    {
+        return DB::transaction(function () use ($leaveRequest, $actor) {
+            $leaveRequest = LeaveRequest::query()
+                ->whereKey($leaveRequest->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($leaveRequest->status !== LeaveRequestStatus::ReturnedForRevision) {
+                throw new RuntimeException('Only a request returned for revision can be resubmitted.');
+            }
+
+            if ($leaveRequest->employee_id !== $actor->employee_id && ! $actor->hasRole('SuperAdmin')) {
+                throw new RuntimeException('Only the filing employee can resubmit this request.');
+            }
+
+            $leaveRequest->approvalSteps()
+                ->where('step_order', $leaveRequest->current_step_order)
+                ->update([
+                    'status' => ApprovalStepStatus::Pending,
+                    'remarks' => null,
+                    'acted_at' => null,
+                    'acted_by' => null,
+                ]);
+
+            $leaveRequest->update([
+                'status' => LeaveRequestStatus::Pending,
+                'submitted_at' => now(),
+            ]);
+
+            LeaveRequestLog::create([
+                'leave_request_id' => $leaveRequest->id,
+                'action' => 'resubmitted',
+                'actor_id' => $actor->id,
+            ]);
+
+            $fresh = $leaveRequest->fresh(['approvalSteps']);
+            $currentStep = $fresh->approvalSteps->firstWhere('step_order', $fresh->current_step_order);
+
+            if ($currentStep) {
+                $this->notifier->notifyActionableStep(
+                    $currentStep,
+                    'Revised leave request ready for review',
+                    "{$leaveRequest->employee->full_name} resubmitted a {$leaveRequest->leaveType->name} request.",
+                );
+            }
+
+            return $leaveRequest->fresh(['leaveType', 'employee', 'approvalSteps.approver', 'documents']);
+        });
+    }
+
     private function assertNoOverlap(Employee $employee, array $data): void
     {
         if (empty($data['start_date']) || empty($data['end_date'])) {
@@ -248,7 +331,11 @@ class LeaveRequestService
 
         $overlapExists = LeaveRequest::query()
             ->where('employee_id', $employee->id)
-            ->whereIn('status', [LeaveRequestStatus::Pending, LeaveRequestStatus::Approved])
+            ->whereIn('status', [
+                LeaveRequestStatus::Pending,
+                LeaveRequestStatus::ReturnedForRevision,
+                LeaveRequestStatus::Approved,
+            ])
             ->whereNotNull('start_date')
             ->whereNotNull('end_date')
             ->where('start_date', '<=', $data['end_date'])

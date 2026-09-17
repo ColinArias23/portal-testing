@@ -401,6 +401,8 @@ Route::prefix('announcement-attachments')->middleware('throttle:announcements')-
         Route::get('/requests',                                                   [LeaveRequestController::class, 'index']);
         Route::get('/requests/{leave_request}',                                   [LeaveRequestController::class, 'show']);
         Route::post('/requests/{leave_request}/cancel',                           [LeaveRequestController::class, 'cancel']);
+        Route::post('/requests/{leave_request}/retract',                          [LeaveRequestController::class, 'retract']);
+        Route::post('/requests/{leave_request}/resubmit',                         [LeaveRequestController::class, 'resubmit']);
         Route::post('/requests/{leave_request}/reschedule',                       [LeaveRequestController::class, 'reschedule']);
         Route::get('/suspensions',                                                [WorkSuspensionController::class, 'index']);
         Route::post('/suspensions',                                               [WorkSuspensionController::class, 'store']);

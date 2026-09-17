@@ -51,7 +51,7 @@ class LeaveApprovalController extends Controller
     {
         $query = LeaveRequest::query()
             ->whereHas('approvalSteps', fn ($q) => $q->where('acted_by', $request->user()->id))
-            ->whereIn('status', ['approved', 'rejected', 'cancelled'])
+            ->whereIn('status', ['approved', 'rejected', 'cancelled', 'returned_for_revision', 'retracted'])
             ->with([
                 'leaveType',
                 'employee.primaryDepartmentAssignment.department',
@@ -69,19 +69,29 @@ class LeaveApprovalController extends Controller
     {
         $this->authorize('act', $leaveRequest);
 
+        $action = $request->input('action');
+
         try {
-            $updated = $request->input('action') === 'approved'
-                ? $this->approvalService->approveStep($leaveRequest, $request->user(), $request->input('remarks'))
-                : $this->approvalService->rejectStep($leaveRequest, $request->user(), $request->input('remarks'));
+            $updated = match ($action) {
+                'approved' => $this->approvalService->approveStep($leaveRequest, $request->user(), $request->input('remarks')),
+                'returned' => $this->approvalService->returnForRevision($leaveRequest, $request->user(), $request->input('remarks')),
+                default => $this->approvalService->rejectStep($leaveRequest, $request->user(), $request->input('remarks')),
+            };
         } catch (\RuntimeException $e) {
             throw ValidationException::withMessages(['action' => $e->getMessage()]);
         }
+
+        $messages = [
+            'approved' => 'Request approved.',
+            'returned' => 'Request returned to the employee for revision.',
+            'rejected' => 'Request rejected.',
+        ];
 
         return response()->json([
             'data' => new LeaveRequestResource(
                 $updated->load(['leaveType', 'employee.primaryDepartmentAssignment.department', 'approvalSteps.approver'])
             ),
-            'message' => $request->input('action') === 'approved' ? 'Request approved.' : 'Request rejected.',
+            'message' => $messages[$action] ?? 'Request updated.',
         ]);
     }
 

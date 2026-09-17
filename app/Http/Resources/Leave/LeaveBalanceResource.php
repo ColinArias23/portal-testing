@@ -16,6 +16,7 @@ class LeaveBalanceResource extends JsonResource
                 'code' => $this->leaveType->code,
                 'name' => $this->leaveType->name,
                 'color' => $this->leaveType->color,
+                'unit' => $this->leaveType->unit ?? 'days',
             ],
             'year' => $this->year,
             'opening_balance' => (float) $this->opening_balance,

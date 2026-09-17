@@ -19,6 +19,8 @@ class LeaveRequest extends Model
         'details',
         'reason',
         'cancellation_reason',
+        'return_reason',
+        'retraction_reason',
         'request_number', 
         'created_at',
         'updated_at',
@@ -26,6 +28,8 @@ class LeaveRequest extends Model
         'submitted_at',
         'finalized_at',
         'cancelled_at',
+        'returned_at',
+        'retracted_at',
     ];
 
     protected $fillable = [
@@ -47,6 +51,10 @@ class LeaveRequest extends Model
         'finalized_at',
         'cancelled_at',
         'cancellation_reason',
+        'returned_at',
+        'return_reason',
+        'retracted_at',
+        'retraction_reason',
         'created_by',
         'updated_by',
     ];
@@ -62,6 +70,8 @@ class LeaveRequest extends Model
         'submitted_at' => 'datetime',
         'finalized_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'returned_at' => 'datetime',
+        'retracted_at' => 'datetime',
     ];
 
     protected static function booted(): void

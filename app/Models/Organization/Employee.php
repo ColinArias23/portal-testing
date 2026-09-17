@@ -19,6 +19,25 @@ class Employee extends Model
 
     use AutoUppercase;
 
+    public function resolveRouteBinding($value, $field = null)
+    {
+        if ($field) {
+            return parent::resolveRouteBinding($value, $field);
+        }
+
+        if (is_numeric($value)) {
+            $employee = $this->newQuery()->where('id', $value)->first();
+
+            if ($employee) {
+                return $employee;
+            }
+        }
+
+        return $this->newQuery()
+            ->whereRaw('UPPER(TRIM(employee_number)) = ?', [strtoupper(trim($value))])
+            ->first();
+    }
+
     protected array $uppercaseExclude = [
         'avatar_url',
         'border_color',

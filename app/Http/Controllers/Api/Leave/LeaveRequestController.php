@@ -106,6 +106,35 @@ class LeaveRequestController extends Controller
         return response()->json(['data' => new LeaveRequestResource($updated), 'message' => 'Leave request cancelled.']);
     }
 
+    public function retract(Request $request, LeaveRequest $leaveRequest): JsonResponse
+    {
+        $this->authorize('retract', $leaveRequest);
+
+        $request->validate(['reason' => ['required', 'string', 'max:500']]);
+
+        $updated = $this->leaveRequestService->retract($leaveRequest, $request->user(), $request->input('reason'));
+
+        return response()->json(['data' => new LeaveRequestResource($updated), 'message' => 'Leave request retracted.']);
+    }
+
+    public function resubmit(Request $request, LeaveRequest $leaveRequest): JsonResponse
+    {
+        $this->authorize('resubmit', $leaveRequest);
+
+        try {
+            $updated = $this->leaveRequestService->resubmit($leaveRequest, $request->user());
+        } catch (\RuntimeException $e) {
+            throw ValidationException::withMessages(['leave_request' => $e->getMessage()]);
+        }
+
+        return response()->json([
+            'data' => new LeaveRequestResource(
+                $updated->load(['leaveType', 'employee', 'approvalSteps.approver', 'documents'])
+            ),
+            'message' => 'Leave request resubmitted for approval.',
+        ]);
+    }
+
     public function reschedule(Request $request, LeaveRequest $leaveRequest): JsonResponse
     {
         $this->authorize('cancel', $leaveRequest);

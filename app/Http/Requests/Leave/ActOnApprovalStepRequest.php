@@ -15,9 +15,9 @@ class ActOnApprovalStepRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'action' => ['required', Rule::in(['approved', 'rejected'])],
+            'action' => ['required', Rule::in(['approved', 'rejected', 'returned'])],
             'remarks' => [
-                Rule::requiredIf(fn () => $this->input('action') === 'rejected'),
+                Rule::requiredIf(fn () => in_array($this->input('action'), ['rejected', 'returned'], true)),
                 'nullable',
                 'string',
                 'max:1000',
@@ -28,7 +28,7 @@ class ActOnApprovalStepRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'remarks.required_if' => 'Remarks are required when rejecting a leave request.',
+            'remarks.required_if' => 'Remarks are required when rejecting or returning a leave request.',
         ];
     }
 }

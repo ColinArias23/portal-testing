@@ -35,6 +35,72 @@ class LeaveApprovalService
         return $this->actOnStep($leaveRequest, $actor, ApprovalStepStatus::Rejected, $remarks);
     }
 
+    public function returnForRevision(LeaveRequest $leaveRequest, User $actor, string $remarks): LeaveRequest
+    {
+        if (trim($remarks) === '') {
+            throw new RuntimeException('Remarks are required when returning a leave request for revision.');
+        }
+
+        return DB::transaction(function () use ($leaveRequest, $actor, $remarks) {
+            $leaveRequest = LeaveRequest::query()
+                ->whereKey($leaveRequest->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($leaveRequest->status !== LeaveRequestStatus::Pending) {
+                throw new RuntimeException('This request is no longer pending and cannot be returned.');
+            }
+
+            $step = $leaveRequest->approvalSteps()
+                ->where('step_order', $leaveRequest->current_step_order)
+                ->where('status', ApprovalStepStatus::Pending)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $step) {
+                throw new RuntimeException('No pending approval step found for this request.');
+            }
+
+            $isAssignedApprover = $step->approver_id === $actor->id;
+            $isRoleMatch = $step->approver_role && $actor->hasRole($step->approver_role);
+
+            if (! $isAssignedApprover && ! $isRoleMatch && ! $actor->hasRole('SuperAdmin')) {
+                throw new RuntimeException('You are not the assigned approver for this step.');
+            }
+
+            $step->update(['remarks' => $remarks]);
+
+            $leaveRequest->update([
+                'status' => LeaveRequestStatus::ReturnedForRevision,
+                'returned_at' => now(),
+                'return_reason' => $remarks,
+            ]);
+
+            LeaveRequestLog::create([
+                'leave_request_id' => $leaveRequest->id,
+                'action' => 'returned_for_revision',
+                'actor_id' => $actor->id,
+                'remarks' => $remarks,
+                'metadata' => ['step_order' => $step->step_order],
+            ]);
+
+            $leaveRequest = $leaveRequest->fresh(['leaveType', 'employee', 'approvalSteps.approver']);
+
+            $employeeUserId = $leaveRequest->employee->user?->id;
+            if ($employeeUserId) {
+                $this->notifier->notifyUser(
+                    $employeeUserId,
+                    'leave',
+                    'Leave request returned for revision',
+                    "Your {$leaveRequest->leaveType->name} request ({$leaveRequest->request_number}) was returned for revision: {$remarks}",
+                    ['leave_request_id' => $leaveRequest->id, 'status' => LeaveRequestStatus::ReturnedForRevision->value],
+                );
+            }
+
+            return $leaveRequest;
+        });
+    }
+
     public function bulkApprove(array $leaveRequestIds, User $actor): array
     {
         $approved = [];

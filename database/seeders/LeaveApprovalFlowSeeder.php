@@ -23,6 +23,7 @@ class LeaveApprovalFlowSeeder extends Seeder
             'vacation', 'mandatory_forced', 'sick', 'maternity', 'paternity',
             'special_privilege', 'solo_parent', 'study', 'rehabilitation',
             'special_women', 'calamity', 'adoption', 'monetization', 'terminal',
+            'wellness', 'compensatory_off',
         ];
 
         foreach ($standardChainTypes as $code) {
