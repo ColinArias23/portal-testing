@@ -2,6 +2,7 @@
 
 namespace App\Services\Recruitment\PlantillaPosting;
 
+use App\Models\ActivityLog;
 use App\Models\PlantillaPosting;
 use App\Models\PlantillaPostingApplication;
 use App\Models\PlantillaPostingApplicationDocument;
@@ -28,11 +29,6 @@ class PlantillaPostingApplicationService
         'Rejected',
     ];
 
-    /**
-     * Statuses considered "closed" — a bulk posting-cancellation must never
-     * overwrite these, and no further review/interview action is allowed
-     * once an application is in one of these states.
-     */
     private const TERMINAL_STATUSES = [
         'Completed',
         'Rejected',
@@ -180,7 +176,6 @@ class PlantillaPostingApplicationService
                     continue;
                 }
 
-                // Resubmission: replace the existing document under the same key.
                 $existing = $this->applications->findExistingDocument($application->id, $key);
 
                 if ($existing) {
@@ -276,7 +271,7 @@ class PlantillaPostingApplicationService
         ]);
     }
 
-    public function cancelApplicationsForPosting(PlantillaPosting $posting, ?int $cancelledByUserId): Collection
+    public function cancelApplicationsForPosting(Request $request, PlantillaPosting $posting, ?int $cancelledByUserId): Collection
     {
         $remarks = sprintf(
             'Automatically closed: the plantilla posting "%s" (Item No. %s) was cancelled/deleted. This is not a rejection — no evaluation of the applicant\'s qualifications was made.',
@@ -284,12 +279,43 @@ class PlantillaPostingApplicationService
             $posting->position_slot_name,
         );
 
-        return $this->applications->cancelForPosting(
+        $previousStatuses = PlantillaPostingApplication::where('plantilla_posting_id', $posting->id)
+            ->whereNotIn('status', self::TERMINAL_STATUSES)
+            ->pluck('status', 'id');
+
+        $cancelledApplications = $this->applications->cancelForPosting(
             $posting->id,
             self::TERMINAL_STATUSES,
             $remarks,
             $cancelledByUserId,
         );
+
+        $cancelledApplications->each(function (PlantillaPostingApplication $application) use (
+            $request,
+            $posting,
+            $cancelledByUserId,
+            $previousStatuses,
+        ) {
+            ActivityLog::record(
+                action: 'plantilla_application.posting_cancelled',
+                userId: $cancelledByUserId,
+                subjectType: PlantillaPostingApplication::class,
+                subjectId: $application->id,
+                subjectLabel: optional($application->employee)->full_name ?? "Application #{$application->id}",
+                payload: [
+                    'plantilla_posting_id' => $posting->id,
+                    'posting_title'        => $posting->title,
+                    'position_slot_name'   => $posting->position_slot_name,
+                    'previous_status'      => $previousStatuses->get($application->id),
+                    'new_status'           => PlantillaPostingApplication::STATUS_POSTING_CANCELLED,
+                    'reason'               => 'plantilla_posting_deleted',
+                ],
+                ip: $request->ip(),
+                userAgent: $request->userAgent(),
+            );
+        });
+
+        return $cancelledApplications;
     }
 
     public function downloadDocument(Request $request, int $documentId): \Symfony\Component\HttpFoundation\Response

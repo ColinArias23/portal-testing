@@ -8,7 +8,9 @@ use Illuminate\Database\Seeder;
 class LeaveTypeSeeder extends Seeder
 {
     private const ALL_TYPES = ['Plantilla', 'Contract of Service', 'Consultant'];
-    private const NON_PLANTILLA_ELIGIBLE = ['vacation', 'sick', 'maternity', 'paternity'];
+
+    private const SHARED_ELIGIBLE = ['vacation', 'sick', 'wellness', 'compensatory_off'];
+
 
     public function run(): void
     {
@@ -102,9 +104,12 @@ class LeaveTypeSeeder extends Seeder
 
         foreach ($types as &$type) {
             $type['unit'] = $type['unit'] ?? 'days';
-            $type['eligible_employment_types'] = in_array($type['code'], self::NON_PLANTILLA_ELIGIBLE, true)
-                ? self::ALL_TYPES
-                : ['Plantilla'];
+
+            if (in_array($type['code'], self::SHARED_ELIGIBLE, true)) {
+                $type['eligible_employment_types'] = self::ALL_TYPES;
+            } else {
+                $type['eligible_employment_types'] = ['Plantilla'];
+            }
         }
         unset($type);
 

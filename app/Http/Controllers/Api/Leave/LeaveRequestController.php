@@ -8,6 +8,8 @@ use App\Http\Resources\Leave\LeaveRequestResource;
 use App\Models\LeaveRequest;
 use App\Models\LeaveRequestDocument;
 use App\Services\Leave\LeaveRequestService;
+use App\Http\Requests\Leave\SaveLeaveRequestDraftRequest;
+use App\Http\Requests\Leave\UpdateLeaveRequestDraftRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -86,6 +88,75 @@ class LeaveRequestController extends Controller
             ['data' => new LeaveRequestResource($leaveRequest), 'message' => 'Leave request submitted successfully.'],
             201
         );
+    }
+
+        public function saveDraft(SaveLeaveRequestDraftRequest $request): JsonResponse
+    {
+        $this->authorize('createDraft', [LeaveRequest::class, (int) $request->input('employee_id')]);
+
+        $leaveRequest = DB::transaction(function () use ($request) {
+            $leaveRequest = $this->leaveRequestService->saveDraft($request->validated(), $request->user());
+            $this->storeDocuments($request, $leaveRequest);
+
+            return $leaveRequest->fresh(['leaveType', 'employee', 'documents']);
+        });
+
+        return response()->json(
+            ['data' => new LeaveRequestResource($leaveRequest), 'message' => 'Draft saved.'],
+            201
+        );
+    }
+
+    public function updateDraft(UpdateLeaveRequestDraftRequest $request, LeaveRequest $leaveRequest): JsonResponse
+    {
+        $this->authorize('manageDraft', $leaveRequest);
+
+        try {
+            $updated = DB::transaction(function () use ($request, $leaveRequest) {
+                $updated = $this->leaveRequestService->updateDraft($leaveRequest, $request->validated(), $request->user());
+                $this->storeDocuments($request, $updated);
+
+                return $updated->fresh(['leaveType', 'employee', 'documents']);
+            });
+        } catch (\RuntimeException $e) {
+            throw ValidationException::withMessages(['leave_request' => $e->getMessage()]);
+        }
+
+        return response()->json(['data' => new LeaveRequestResource($updated), 'message' => 'Draft updated.']);
+    }
+
+    public function destroyDraft(Request $request, LeaveRequest $leaveRequest): JsonResponse
+    {
+        $this->authorize('manageDraft', $leaveRequest);
+
+        try {
+            $this->leaveRequestService->deleteDraft($leaveRequest, $request->user());
+        } catch (\RuntimeException $e) {
+            throw ValidationException::withMessages(['leave_request' => $e->getMessage()]);
+        }
+
+        return response()->json(['message' => 'Draft deleted.']);
+    }
+
+    public function submitDraft(StoreLeaveRequestRequest $request, LeaveRequest $leaveRequest): JsonResponse
+    {
+        $this->authorize('manageDraft', $leaveRequest);
+
+        try {
+            $updated = DB::transaction(function () use ($request, $leaveRequest) {
+                $updated = $this->leaveRequestService->submitDraft($leaveRequest, $request->validated(), $request->user());
+                $this->storeDocuments($request, $updated);
+
+                return $updated->fresh(['leaveType', 'employee', 'approvalSteps.approver', 'documents']);
+            });
+        } catch (\RuntimeException $e) {
+            throw ValidationException::withMessages(['leave_request' => $e->getMessage()]);
+        }
+
+        return response()->json([
+            'data' => new LeaveRequestResource($updated),
+            'message' => 'Leave request submitted successfully.',
+        ]);
     }
 
     public function show(LeaveRequest $leaveRequest): JsonResponse

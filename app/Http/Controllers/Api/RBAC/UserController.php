@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\RBAC;
 
 use App\Exceptions\Users\PermissionUpdateForbiddenException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Users\ListUsersRequest;
+use App\Http\Resources\Users\UserListItemResource;
 use App\Models\User;
 use App\Repositories\Shared\UserRepository;
 use App\Services\Users\UserActivationService;
@@ -29,8 +31,21 @@ class UserController extends Controller
         private readonly UserRoleService $roleService,
     ) {
         $this->middleware('auth:sanctum');
+        $this->middleware('permission:users.view,sanctum')->only(['index']);
         $this->middleware('permission:users.manage,sanctum')->only(['pendingCount', 'pendingUsers', 'approvedUsers', 'permissions', 'activate', 'bulkActivate']);
         $this->middleware('permission:users.manage.roles,sanctum')->only(['updatePermissions', 'updateRole']);
+    }
+
+    // ─── Index (User Management module) ─────────────────────────────────────
+    public function index(ListUsersRequest $request)
+    {
+        $users = $this->users->paginateApprovedUsers(
+            Auth::id(),
+            $request->safe()->only(['search', 'role']),
+            $request->perPage(),
+        );
+
+        return UserListItemResource::collection($users);
     }
 
     // ─── PendingCount ─────────────────────────────────────────────────────
@@ -115,6 +130,7 @@ class UserController extends Controller
     {
         $request->validate([
             'role' => [
+                'present',
                 'nullable',
                 'string',
                 'max:100',

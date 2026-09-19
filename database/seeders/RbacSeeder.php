@@ -95,6 +95,7 @@ class RbacSeeder extends Seeder
         'plantilla_items.manage',
         'positions.view',
         'roles.view',
+        'roles.manage',
 
         // Rewards & Recognition
         'rewards.view',

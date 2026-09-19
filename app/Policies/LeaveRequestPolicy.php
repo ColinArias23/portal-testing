@@ -45,6 +45,20 @@ class LeaveRequestPolicy
         return $user->can('leave.request.manage');
     }
 
+        public function createDraft(User $user, int $targetEmployeeId): bool
+    {
+        return $this->create($user, $targetEmployeeId);
+    }
+
+    public function manageDraft(User $user, LeaveRequest $leaveRequest): bool
+    {
+        if ($leaveRequest->employee_id === $user->employee_id) {
+            return true;
+        }
+
+        return $user->can('leave.request.manage');
+    }
+
     public function cancel(User $user, LeaveRequest $leaveRequest): bool
     {
         if ($leaveRequest->employee_id === $user->employee_id) {

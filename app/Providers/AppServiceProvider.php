@@ -6,6 +6,7 @@ use App\Models\Employee;
 use App\Models\Report;
 use App\Policies\EmployeePolicy;
 use App\Policies\ReportPolicy;
+use App\Models\Department;
 use App\Services\AiChat\Contracts\ChatServiceInterface;
 use App\Services\AiChat\OllamaChatService;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -13,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Spatie\Permission\Models\Role;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -27,6 +29,10 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Employee::class, EmployeePolicy::class);
 
         $this->configureRateLimiting();
+
+        Role::resolveRelationUsing('departments', function (Role $role) {
+            return $role->belongsToMany(Department::class, 'department_role');
+        });
     }
 
     protected function configureRateLimiting(): void

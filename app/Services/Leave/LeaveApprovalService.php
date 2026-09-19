@@ -219,8 +219,45 @@ class LeaveApprovalService
         return $leaveRequest->fresh(['approvalSteps.approver']);
     }
 
+    private function assertFinalApprovalAuthority(LeaveRequest $leaveRequest): void
+    {
+        $leaveType = $leaveRequest->leaveType;
+
+        if (in_array($leaveType->code, config('leave.exempt_from_final_approval_role', []), true)) {
+            return;
+        }
+
+        $requiredRole = config('leave.final_approval_role');
+
+        $terminalStep = $leaveRequest->approvalSteps()
+            ->where('status', ApprovalStepStatus::Approved)
+            ->orderByDesc('step_order')
+            ->first();
+
+        $clearedByRequiredRole = $terminalStep
+            && $terminalStep->approver_role === $requiredRole;
+
+        if (! $clearedByRequiredRole) {
+            report(new RuntimeException(
+                "Leave request #{$leaveRequest->id} ({$leaveType->code}) reached final approval "
+                . "without a '{$requiredRole}' step in its chain. Check LeaveApprovalFlowSeeder / "
+                . "leave_approval_flow_steps for this leave type, or add it to "
+                . "config('leave.exempt_from_final_approval_role') if this is intentional."
+            ));
+
+            throw new RuntimeException(
+                "This leave request cannot be finalized as Approved: its approval chain is "
+                . "missing the required '{$requiredRole}' approval step. Please contact HR/system admin."
+            );
+        }
+    }
+
     private function finalize(LeaveRequest $leaveRequest, LeaveRequestStatus $finalStatus): LeaveRequest
     {
+        if ($finalStatus === LeaveRequestStatus::Approved) {
+            $this->assertFinalApprovalAuthority($leaveRequest);
+        }
+
         $leaveRequest->update([
             'status' => $finalStatus,
             'finalized_at' => now(),

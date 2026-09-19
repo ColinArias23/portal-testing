@@ -27,53 +27,7 @@ class LeaveRequestService
     public function submit(array $data, User $submittedBy): LeaveRequest
     {
         return DB::transaction(function () use ($data, $submittedBy) {
-            $employee = Employee::findOrFail($data['employee_id']);
-            $leaveType = LeaveType::findOrFail($data['leave_type_id']);
-
-            $totalDays = $this->computeDays($leaveType, $data);
-
-            $this->assertNoOverlap($employee, $data);
-
-            if ($leaveType->max_days && $totalDays && $totalDays > $leaveType->max_days) {
-                throw new RuntimeException("{$leaveType->name} cannot exceed {$leaveType->max_days} days.");
-            }
-
-            if ($leaveType->requires_balance_check && $totalDays) {
-                $year = isset($data['start_date']) ? \Carbon\Carbon::parse($data['start_date'])->year : now()->year;
-                $available = $this->balanceService->available($employee, $leaveType, $year);
-                if ($available < $totalDays) {
-                    throw new RuntimeException(
-                        "Insufficient {$leaveType->name} balance. Available: "
-                        . number_format($available, 2) . ' day(s), requested: ' . number_format($totalDays, 2) . '.'
-                    );
-                }
-            }
-
-            if ($leaveType->code === 'monetization') {
-                $credits = (float) ($data['details']['creditsToMonetize'] ?? 0);
-                if ($credits <= 0) {
-                    throw new RuntimeException('creditsToMonetize must be a positive number.');
-                }
-                $available = $this->balanceService->available($employee, $leaveType, now()->year);
-                if ($available < $credits) {
-                    throw new RuntimeException(
-                        "Insufficient balance to monetize. Available: " . number_format($available, 2)
-                        . ' day(s), requested: ' . number_format($credits, 2) . '.'
-                    );
-                }
-            }
-
-            $flowSteps = $leaveType->approvalFlowSteps;
-
-            if ($employee->employment_type !== 'Plantilla') {
-                $flowSteps = $flowSteps
-                    ->where('approver_source', ApproverSource::ManagementChain)
-                    ->values();
-            }
-
-            if ($flowSteps->isEmpty()) {
-                throw new RuntimeException("No approval workflow is configured for '{$leaveType->name}'. Contact HR/system admin.");
-            }
+            [$employee, $leaveType, $totalDays, $flowSteps] = $this->validateForSubmission($data);
 
             $leaveRequest = LeaveRequest::create([
                 'employee_id' => $employee->id,
@@ -92,25 +46,7 @@ class LeaveRequestService
                 'created_by' => $submittedBy->id,
             ]);
 
-            foreach ($flowSteps as $flowStep) {
-                $approver = $this->approverResolver->resolve($flowStep, $employee);
-
-                $label = $flowStep->approver_source === ApproverSource::ManagementChain
-                    ? $this->approverResolver->describeManagementChainLabel($employee)
-                    : $flowStep->label;
-
-                $leaveRequest->approvalSteps()->create([
-                    'flow_step_id' => $flowStep->id,
-                    'step_order' => $flowStep->step_order,
-                    'approver_source' => $flowStep->approver_source,
-                    'label' => $label,
-                    'approver_id' => $approver?->id,
-                    'approver_role' => $flowStep->approver_role,
-                    'status' => ApprovalStepStatus::Pending,
-                ]);
-            }
-
-            $this->initializeCurrentStep($leaveRequest);
+            $this->attachApprovalFlow($leaveRequest, $flowSteps, $employee);
 
             LeaveRequestLog::create([
                 'leave_request_id' => $leaveRequest->id,
@@ -134,6 +70,228 @@ class LeaveRequestService
 
             return $leaveRequest->fresh(['leaveType', 'employee', 'approvalSteps.approver', 'documents']);
         });
+    }
+
+    public function saveDraft(array $data, User $actor): LeaveRequest
+    {
+        return DB::transaction(function () use ($data, $actor) {
+            $employee = Employee::findOrFail($data['employee_id']);
+            $leaveType = LeaveType::findOrFail($data['leave_type_id']);
+
+            $leaveRequest = LeaveRequest::create([
+                'employee_id' => $employee->id,
+                'leave_type_id' => $leaveType->id,
+                'status' => LeaveRequestStatus::Draft,
+                'start_date' => $data['start_date'] ?? null,
+                'end_date' => $data['end_date'] ?? null,
+                'is_half_day' => $data['is_half_day'] ?? false,
+                'reason' => $data['reason'] ?? null,
+                'details' => $data['details'] ?? [],
+                'is_confidential' => $leaveType->is_confidential,
+                'current_step_order' => null,
+                'total_steps' => 0,
+                'created_by' => $actor->id,
+            ]);
+
+            LeaveRequestLog::create([
+                'leave_request_id' => $leaveRequest->id,
+                'action' => 'draft_saved',
+                'actor_id' => $actor->id,
+            ]);
+
+            return $leaveRequest->fresh(['leaveType', 'employee']);
+        });
+    }
+
+    public function updateDraft(LeaveRequest $leaveRequest, array $data, User $actor): LeaveRequest
+    {
+        return DB::transaction(function () use ($leaveRequest, $data, $actor) {
+            $leaveRequest = LeaveRequest::query()
+                ->whereKey($leaveRequest->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($leaveRequest->status !== LeaveRequestStatus::Draft) {
+                throw new RuntimeException('Only a request still in Draft can be edited this way.');
+            }
+
+            $leaveType = isset($data['leave_type_id'])
+                ? LeaveType::findOrFail($data['leave_type_id'])
+                : $leaveRequest->leaveType;
+
+            $leaveRequest->update([
+                'leave_type_id' => $leaveType->id,
+                'start_date' => array_key_exists('start_date', $data) ? $data['start_date'] : $leaveRequest->start_date,
+                'end_date' => array_key_exists('end_date', $data) ? $data['end_date'] : $leaveRequest->end_date,
+                'is_half_day' => $data['is_half_day'] ?? $leaveRequest->is_half_day,
+                'reason' => array_key_exists('reason', $data) ? $data['reason'] : $leaveRequest->reason,
+                'details' => $data['details'] ?? $leaveRequest->details,
+                'is_confidential' => $leaveType->is_confidential,
+                'updated_by' => $actor->id,
+            ]);
+
+            return $leaveRequest->fresh(['leaveType', 'employee']);
+        });
+    }
+
+    public function deleteDraft(LeaveRequest $leaveRequest, User $actor): void
+    {
+        DB::transaction(function () use ($leaveRequest, $actor) {
+            $leaveRequest = LeaveRequest::query()
+                ->whereKey($leaveRequest->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($leaveRequest->status !== LeaveRequestStatus::Draft) {
+                throw new RuntimeException('Only a request still in Draft can be deleted.');
+            }
+
+            LeaveRequestLog::create([
+                'leave_request_id' => $leaveRequest->id,
+                'action' => 'draft_deleted',
+                'actor_id' => $actor->id,
+            ]);
+
+            $leaveRequest->delete();
+        });
+    }
+
+    public function submitDraft(LeaveRequest $leaveRequest, array $data, User $submittedBy): LeaveRequest
+    {
+        return DB::transaction(function () use ($leaveRequest, $data, $submittedBy) {
+            $leaveRequest = LeaveRequest::query()
+                ->whereKey($leaveRequest->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($leaveRequest->status !== LeaveRequestStatus::Draft) {
+                throw new RuntimeException('Only a request still in Draft can be submitted.');
+            }
+
+            $merged = array_merge(
+                $leaveRequest->only(['leave_type_id', 'start_date', 'end_date', 'is_half_day', 'reason', 'details']),
+                array_filter($data, fn ($value) => $value !== null),
+            );
+            $merged['employee_id'] = $leaveRequest->employee_id;
+
+            [$employee, $leaveType, $totalDays, $flowSteps] = $this->validateForSubmission($merged);
+
+            $leaveRequest->update([
+                'leave_type_id' => $leaveType->id,
+                'start_date' => $merged['start_date'] ?? null,
+                'end_date' => $merged['end_date'] ?? null,
+                'is_half_day' => $merged['is_half_day'] ?? false,
+                'total_days' => $totalDays,
+                'reason' => $merged['reason'] ?? null,
+                'details' => $merged['details'] ?? [],
+                'is_confidential' => $leaveType->is_confidential,
+                'status' => LeaveRequestStatus::Pending,
+                'current_step_order' => 1,
+                'total_steps' => $flowSteps->count(),
+                'submitted_at' => now(),
+                'updated_by' => $submittedBy->id,
+            ]);
+
+            $this->attachApprovalFlow($leaveRequest, $flowSteps, $employee);
+
+            LeaveRequestLog::create([
+                'leave_request_id' => $leaveRequest->id,
+                'action' => 'submitted',
+                'actor_id' => $submittedBy->id,
+                'metadata' => ['total_days' => $totalDays, 'from_draft' => true],
+            ]);
+
+            $fresh = $leaveRequest->fresh(['approvalSteps']);
+
+            $currentStep = $fresh->approvalSteps->firstWhere('step_order', $fresh->current_step_order);
+            if ($currentStep) {
+                $this->notifier->notifyActionableStep(
+                    $currentStep,
+                    'New leave request to review',
+                    "{$employee->full_name} filed a {$leaveType->name} request awaiting your approval.",
+                );
+            }
+
+            event(new LeaveRequestSubmitted($fresh));
+
+            return $leaveRequest->fresh(['leaveType', 'employee', 'approvalSteps.approver', 'documents']);
+        });
+    }
+
+    private function validateForSubmission(array $data): array
+    {
+        $employee = Employee::findOrFail($data['employee_id']);
+        $leaveType = LeaveType::findOrFail($data['leave_type_id']);
+
+        $totalDays = $this->computeDays($leaveType, $data);
+
+        $this->assertNoOverlap($employee, $data);
+
+        if ($leaveType->max_days && $totalDays && $totalDays > $leaveType->max_days) {
+            throw new RuntimeException("{$leaveType->name} cannot exceed {$leaveType->max_days} days.");
+        }
+
+        if ($leaveType->requires_balance_check && $totalDays) {
+            $year = isset($data['start_date']) ? \Carbon\Carbon::parse($data['start_date'])->year : now()->year;
+            $available = $this->balanceService->available($employee, $leaveType, $year);
+            if ($available < $totalDays) {
+                throw new RuntimeException(
+                    "Insufficient {$leaveType->name} balance. Available: "
+                    . number_format($available, 2) . ' day(s), requested: ' . number_format($totalDays, 2) . '.'
+                );
+            }
+        }
+
+        if ($leaveType->code === 'monetization') {
+            $credits = (float) ($data['details']['creditsToMonetize'] ?? 0);
+            if ($credits <= 0) {
+                throw new RuntimeException('creditsToMonetize must be a positive number.');
+            }
+            $available = $this->balanceService->available($employee, $leaveType, now()->year);
+            if ($available < $credits) {
+                throw new RuntimeException(
+                    "Insufficient balance to monetize. Available: " . number_format($available, 2)
+                    . ' day(s), requested: ' . number_format($credits, 2) . '.'
+                );
+            }
+        }
+
+        $flowSteps = $leaveType->approvalFlowSteps;
+
+        if ($employee->employment_type !== 'Plantilla') {
+            $flowSteps = $flowSteps
+                ->where('approver_source', ApproverSource::ManagementChain)
+                ->values();
+        }
+
+        if ($flowSteps->isEmpty()) {
+            throw new RuntimeException("No approval workflow is configured for '{$leaveType->name}'. Contact HR/system admin.");
+        }
+
+        return [$employee, $leaveType, $totalDays, $flowSteps];
+    }
+
+    private function attachApprovalFlow(LeaveRequest $leaveRequest, $flowSteps, Employee $employee): void
+    {
+        foreach ($flowSteps as $flowStep) {
+            $approver = $this->approverResolver->resolve($flowStep, $employee);
+
+            $label = $flowStep->approver_source === ApproverSource::ManagementChain
+                ? $this->approverResolver->describeManagementChainLabel($employee)
+                : $flowStep->label;
+
+            $leaveRequest->approvalSteps()->create([
+                'flow_step_id' => $flowStep->id,
+                'step_order' => $flowStep->step_order,
+                'approver_source' => $flowStep->approver_source,
+                'label' => $label,
+                'approver_id' => $approver?->id,
+                'approver_role' => $flowStep->approver_role,
+                'status' => ApprovalStepStatus::Pending,
+            ]);
+        }
+
+        $this->initializeCurrentStep($leaveRequest);
     }
 
     private function initializeCurrentStep(LeaveRequest $leaveRequest): void

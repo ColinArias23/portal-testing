@@ -11,6 +11,10 @@ class LeaveType extends Model
 {
     use HasFactory, AutoUppercase;
 
+    public const CATEGORY_CREDIT_BASED = 'credit_based';
+
+    public const CATEGORY_ENTITLEMENT_BASED = 'entitlement_based';
+
     protected array $uppercaseExclude = [
         'code',
         'name',
@@ -50,6 +54,20 @@ class LeaveType extends Model
         'default_monthly_accrual' => 'decimal:2',
         'eligible_employment_types' => 'array',
     ];
+
+    public function getCategoryAttribute(): string
+    {
+        return $this->requires_balance_check
+            ? self::CATEGORY_CREDIT_BASED
+            : self::CATEGORY_ENTITLEMENT_BASED;
+    }
+
+    public function getCategoryLabelAttribute(): string
+    {
+        return $this->requires_balance_check
+            ? 'Credit-Based Leave'
+            : 'Entitlement-Based Leave';
+    }
 
     public function isEligibleFor(?string $employmentType): bool
     {

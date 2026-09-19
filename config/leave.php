@@ -4,6 +4,10 @@ return [
 
     'hide_date_selection' => ['monetization'],
 
+    'final_approval_role' => 'Medical Center Chief',
+
+    'exempt_from_final_approval_role' => ['vawc'],
+
     'types' => [
 
         'vacation' => [

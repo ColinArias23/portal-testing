@@ -2,6 +2,7 @@
 
 namespace App\Services\Recruitment\PlantillaPosting;
 
+use App\Models\ActivityLog;
 use App\Models\PlantillaPosition;
 use App\Models\PlantillaPosting;
 use App\Repositories\Recruitment\PlantillaPosting\PlantillaPostingRepository;
@@ -299,6 +300,7 @@ class PlantillaPostingService
 
         DB::transaction(function () use ($request, $posting) {
             $cancelledApplications = $this->applications->cancelApplicationsForPosting(
+                $request,
                 $posting,
                 $request->user()?->id,
             );
@@ -311,6 +313,21 @@ class PlantillaPostingService
             }
 
             $this->postings->delete($posting);
+
+            ActivityLog::record(
+                action: 'plantilla_posting.deleted',
+                userId: $request->user()?->id,
+                subjectType: PlantillaPosting::class,
+                subjectId: $posting->id,
+                subjectLabel: $posting->title ?: "Posting #{$posting->id}",
+                payload: [
+                    'base_item_number'          => $posting->base_item_number,
+                    'position_slot_name'        => $posting->position_slot_name,
+                    'cancelled_application_ids' => $cancelledApplications->pluck('id')->values()->all(),
+                ],
+                ip: $request->ip(),
+                userAgent: $request->userAgent(),
+            );
         });
     }
 }

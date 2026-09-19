@@ -29,8 +29,8 @@ class LeaveTypeController extends Controller
         if ($wantsFullCatalog) {
             $types = $query->orderBy('sort_order')->get([
                 'id', 'code', 'name', 'description', 'color', 'bg_color', 'unit', 'requires_date_range',
-                'is_confidential', 'max_days', 'is_accrual_based', 'eligible_employment_types',
-            ]);
+                'is_confidential', 'max_days', 'is_accrual_based', 'requires_balance_check', 'eligible_employment_types',
+            ])->append(['category', 'category_label']);
 
             return response()->json(['data' => $types]);
         }
@@ -42,8 +42,8 @@ class LeaveTypeController extends Controller
             ->orderBy('sort_order')
             ->get([
                 'id', 'code', 'name', 'description', 'color', 'bg_color', 'unit', 'requires_date_range',
-                'is_confidential', 'max_days', 'is_accrual_based',
-            ]);
+                'is_confidential', 'max_days', 'is_accrual_based', 'requires_balance_check',
+            ])->append(['category', 'category_label']);
 
         return response()->json(['data' => $types]);
     }

@@ -3,11 +3,16 @@
 namespace App\Repositories\Shared;
 
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class UserRepository
 {
+    private const LIKE_ESCAPE = '!';
+    private const MAX_SEARCH_WORDS = 5;
+
     private const USER_COLUMNS = [
         'id', 'employee_id', 'username', 'email', 'password',
         'given_name', 'middle_name', 'last_name',
@@ -130,6 +135,91 @@ class UserRepository
             ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'SuperAdmin'))
             ->orderBy('approved_at', 'desc')
             ->cursorPaginate($perPage);
+    }
+
+    /**
+     * Server-side paginated, filterable list of approved, non-SuperAdmin users
+     * (excluding the acting user) for the User Management module.
+     *
+     * @param  array{search?: ?string, role?: ?string}  $filters
+     */
+    public function paginateApprovedUsers(
+        int $currentUserId,
+        array $filters = [],
+        int $perPage = 15,
+    ): LengthAwarePaginator {
+        $search = trim((string) ($filters['search'] ?? ''));
+        $role   = trim((string) ($filters['role'] ?? ''));
+
+        return User::query()
+            ->select([
+                'users.id', 'users.username', 'users.email', 'users.employee_id',
+                'users.given_name', 'users.middle_name', 'users.last_name',
+                'users.approved_at',
+            ])
+            ->with([
+                'employee' => fn ($q) => $q->select([
+                    'id', 'prefix', 'first_name', 'middle_name', 'last_name', 'suffix', 'role_position',
+                ]),
+                'roles:id,name',
+                'permissions:id,name',
+            ])
+            ->where('users.approval_status', 'APPROVED')
+            ->where('users.id', '!=', $currentUserId)
+            ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'SuperAdmin'))
+            ->when($role !== '', fn (Builder $q) => $q->whereHas(
+                'roles',
+                fn ($r) => $r->where('name', $role)
+            ))
+            ->when($search !== '', fn (Builder $q) => $this->applySearch($q, $search))
+            ->orderByDesc('users.approved_at')
+            ->orderByDesc('users.id')
+            ->paginate($perPage);
+    }
+
+    /**
+     * Every whitespace-separated word must match at least one name/contact
+     * column, so "juan cruz" finds first_name=Juan + last_name=Cruz.
+     */
+    private function applySearch(Builder $query, string $term): void
+    {
+        $words = array_slice(
+            preg_split('/\s+/', $term, -1, PREG_SPLIT_NO_EMPTY) ?: [],
+            0,
+            self::MAX_SEARCH_WORDS,
+        );
+
+        foreach ($words as $word) {
+            $pattern = '%' . $this->escapeLike($word) . '%';
+
+            $query->where(function (Builder $q) use ($pattern) {
+                foreach (['users.username', 'users.email', 'users.given_name', 'users.last_name'] as $column) {
+                    $q->orWhereRaw($this->likeSql($column), [$pattern]);
+                }
+
+                $q->orWhereHas('employee', function (Builder $e) use ($pattern) {
+                    $e->where(function (Builder $inner) use ($pattern) {
+                        foreach (['employees.first_name', 'employees.middle_name', 'employees.last_name'] as $column) {
+                            $inner->orWhereRaw($this->likeSql($column), [$pattern]);
+                        }
+                    });
+                });
+            });
+        }
+    }
+
+    private function likeSql(string $column): string
+    {
+        return $column . " LIKE ? ESCAPE '" . self::LIKE_ESCAPE . "'";
+    }
+
+    private function escapeLike(string $value): string
+    {
+        return str_replace(
+            [self::LIKE_ESCAPE, '%', '_'],
+            [self::LIKE_ESCAPE . self::LIKE_ESCAPE, self::LIKE_ESCAPE . '%', self::LIKE_ESCAPE . '_'],
+            $value,
+        );
     }
 
     public function findByIds(array $ids): Collection
