@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Recruitment\PlantillaPosting;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Recruitment\PlantillaPosting\ApplicantQualificationResource;
 use App\Models\PlantillaPosting;
 use App\Models\PlantillaPostingApplication;
 use App\Services\Recruitment\PlantillaPosting\PlantillaPostingApplicationService;
@@ -23,7 +24,7 @@ class PlantillaPostingController extends Controller
 
         $this->middleware('permission:hiring.plantilla.postings.view')->only(['index']);
         $this->middleware('permission:hiring.plantilla.postings.manage')->only(['store', 'update', 'destroy']);
-        $this->middleware('permission:hiring.plantilla.applications.view')->only(['applications']);
+        $this->middleware('permission:hiring.plantilla.applications.view')->only(['applications', 'qualifications']);
         $this->middleware('permission:hiring.plantilla.applications.manage')->only(['reviewApplication']);
     }
 
@@ -127,6 +128,14 @@ class PlantillaPostingController extends Controller
     public function allApplications(Request $request)
     {
         return response()->json($this->applications->allApplications($request));
+    }
+
+    // ─── Qualifications (PSB Comparative Assessment reference) ─────────
+    public function qualifications($applicationId)
+    {
+        $application = $this->applications->qualifications((int) $applicationId);
+
+        return new ApplicantQualificationResource($application);
     }
 
     // ─── ReviewApplication ─────────────────────────────────────────────

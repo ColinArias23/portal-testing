@@ -8,6 +8,7 @@ use App\Models\PlantillaPostingApplication;
 use App\Models\PlantillaPostingApplicationDocument;
 use App\Repositories\Recruitment\PlantillaPosting\PlantillaPostingApplicationRepository;
 use App\Repositories\Recruitment\PlantillaPosting\PlantillaPostingRepository;
+use App\Support\Recruitment\PlantillaApplicationDocumentKeys;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +18,7 @@ use Illuminate\Validation\ValidationException;
 
 class PlantillaPostingApplicationService
 {
-    private const DOC_KEYS = ['resume', 'pds', 'transcript', 'diploma', 'eligibility', 'certificates', 'others'];
+    private const DOC_KEYS = PlantillaApplicationDocumentKeys::ALL;
 
     private const REVIEW_STATUSES = [
         'Initial Review/Evaluation',
@@ -33,6 +34,15 @@ class PlantillaPostingApplicationService
         'Completed',
         'Rejected',
         PlantillaPostingApplication::STATUS_POSTING_CANCELLED,
+    ];
+
+    private const PIPELINE_ORDER = [
+        'Initial Review/Evaluation' => 0,
+        'For Initial Deliberation'  => 1,
+        'Scheduled for Interview'   => 2,
+        'For HRMPSB Compliance'     => 3,
+        'For HRMPSB Deliberation'   => 4,
+        'Completed'                 => 5,
     ];
 
     public function __construct(
@@ -239,11 +249,17 @@ class PlantillaPostingApplicationService
         return $query->get();
     }
 
+    public function qualifications(int $applicationId): PlantillaPostingApplication
+    {
+        return $this->applications->findWithQualificationRelations($applicationId);
+    }
+
     public function reviewValidationRules(): array
     {
         return [
             'status'  => ['required', Rule::in(self::REVIEW_STATUSES)],
             'remarks' => 'nullable|string|max:2000',
+            'reason'  => 'nullable|string|max:1000',
         ];
     }
 
@@ -263,12 +279,58 @@ class PlantillaPostingApplicationService
             ]);
         }
 
-        return $this->applications->updateReview($application, [
+        $previousStatus = $application->status;
+        $reason = $validated['reason'] ?? null;
+
+        $this->assertValidStatusTransition($previousStatus, $validated['status'], $reason);
+
+        $updated = $this->applications->updateReview($application, [
             'status'      => $validated['status'],
             'remarks'     => $validated['remarks'] ?? null,
             'reviewed_by' => $request->user()?->id,
             'reviewed_at' => now(),
         ]);
+
+        if ($this->isBackwardTransition($previousStatus, $validated['status'])) {
+            ActivityLog::record(
+                action: 'plantilla_posting_application.status_reverted',
+                userId: $request->user()?->id,
+                subjectType: PlantillaPostingApplication::class,
+                subjectId: $application->id,
+                subjectLabel: optional($application->employee)->full_name ?? "Application #{$application->id}",
+                payload: [
+                    'from'   => $previousStatus,
+                    'to'     => $validated['status'],
+                    'reason' => $reason,
+                ],
+                ip: $request->ip(),
+                userAgent: $request->userAgent(),
+            );
+        }
+
+        return $updated;
+    }
+
+    private function isBackwardTransition(string $from, string $to): bool
+    {
+        if (! isset(self::PIPELINE_ORDER[$from], self::PIPELINE_ORDER[$to])) {
+            return false;
+        }
+
+        return self::PIPELINE_ORDER[$to] < self::PIPELINE_ORDER[$from];
+    }
+
+    private function assertValidStatusTransition(string $from, string $to, ?string $reason): void
+    {
+        if (! $this->isBackwardTransition($from, $to)) {
+            return;
+        }
+
+        if (! $reason || trim($reason) === '') {
+            throw ValidationException::withMessages([
+                'reason' => "A reason is required when moving this application back from \"{$from}\" to \"{$to}\".",
+            ]);
+        }
     }
 
     public function cancelApplicationsForPosting(Request $request, PlantillaPosting $posting, ?int $cancelledByUserId): Collection

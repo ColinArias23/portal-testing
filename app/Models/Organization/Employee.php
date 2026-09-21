@@ -151,6 +151,34 @@ class Employee extends Model
         return $this->hasMany(EmployeeSignatureLog::class)->latest('created_at');
     }
 
+    public function pdsEducations()
+    {
+        return $this->hasMany(PdsEducation::class)->orderBy('order');
+    }
+
+    public function pdsEligibilities()
+    {
+        return $this->hasMany(PdsEligibility::class)->orderBy('order');
+    }
+
+    public function pdsTrainings()
+    {
+        return $this->hasMany(PdsTraining::class)->orderBy('order');
+    }
+
+    public function pdsWorkExperiences()
+    {
+        return $this->hasMany(PdsWorkExperience::class)->orderBy('order');
+    }
+
+    public function hasPdsOnFile(): bool
+    {
+        return $this->pdsEducations()->exists()
+            || $this->pdsEligibilities()->exists()
+            || $this->pdsTrainings()->exists()
+            || $this->pdsWorkExperiences()->exists();
+    }
+
     public function division()
     {
         return $this->belongsTo(Division::class);

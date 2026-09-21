@@ -7,6 +7,7 @@ use App\Models\PlantillaPosition;
 use App\Models\PlantillaPosting;
 use App\Repositories\Recruitment\PlantillaPosting\PlantillaPostingRepository;
 use App\Services\Notifications\NotificationService;
+use App\Support\Recruitment\PlantillaApplicationDocumentKeys;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -17,7 +18,7 @@ use Illuminate\Validation\ValidationException;
 
 class PlantillaPostingService
 {
-    private const DOC_KEYS = ['letter_of_intent', 'pds', 'work_experience', 'performance_rating', 'eligibility', 'transcript', 'diploma'];
+    private const DOC_KEYS = PlantillaApplicationDocumentKeys::ALL;
 
     private const MAX_APPLICATION_DEADLINE_DAYS = 15;
 

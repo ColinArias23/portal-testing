@@ -229,6 +229,7 @@ Route::prefix('announcement-attachments')->middleware('throttle:announcements')-
     });
     // Cross-posting application management (list-all was previously missing)
     Route::get('/plantilla-posting-applications', [PlantillaPostingController::class, 'allApplications']);
+    Route::get('/plantilla-posting-applications/{application}/qualifications', [PlantillaPostingController::class, 'qualifications']);
     Route::patch('/plantilla-posting-applications/{application}/review', [PlantillaPostingController::class, 'reviewApplication']);
     Route::post('/plantilla-posting-applications/{application}/documents', [PlantillaPostingController::class, 'uploadDocuments']);
     Route::get('/plantilla-posting-applications/documents/{document}/download', [PlantillaPostingController::class, 'downloadDocument']);

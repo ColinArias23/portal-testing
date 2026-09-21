@@ -66,6 +66,20 @@ class PlantillaPostingApplicationRepository
             ->findOrFail($id);
     }
 
+    public function findWithQualificationRelations(int $id): PlantillaPostingApplication
+    {
+        return PlantillaPostingApplication::with([
+            'posting.department',
+            'posting.division',
+            'posting.salaryGrade',
+            'employee.pdsEligibilities',
+            'employee.pdsEducations',
+            'employee.pdsTrainings',
+            'employee.pdsWorkExperiences',
+            'documents',
+        ])->findOrFail($id);
+    }
+
     public function updateReview(PlantillaPostingApplication $application, array $data): PlantillaPostingApplication
     {
         $application->update($data);

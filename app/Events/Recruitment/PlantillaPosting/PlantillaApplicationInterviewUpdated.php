@@ -2,7 +2,7 @@
 
 namespace App\Events\Recruitment\PlantillaPosting;
 
-use App\Models\PlantillaPosting\PlantillaPostingApplicationInterview;
+use App\Models\PlantillaPostingApplicationInterview;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
