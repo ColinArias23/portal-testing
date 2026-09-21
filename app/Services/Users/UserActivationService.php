@@ -20,15 +20,12 @@ class UserActivationService
     public function __construct(
         private readonly UserRepository $users,
         private readonly EmployeeRepository $employees,
-        private readonly EmployeeLinkService $employeeLink,
     ) {
     }
 
     public function activate(User $user, int $activatedBy, Request $request): User
     {
         DB::transaction(function () use ($user, $activatedBy) {
-            $this->employeeLink->link($user);
-
             $this->users->approveOne($user->id, $activatedBy);
 
             if ($user->employee_id) {
@@ -71,10 +68,6 @@ class UserActivationService
         $staffRole = Role::firstOrCreate(['name' => 'Staff', 'guard_name' => self::GUARD]);
 
         DB::transaction(function () use ($users, $activatedBy, $staffRole) {
-            foreach ($users as $user) {
-                $this->employeeLink->link($user);
-            }
-
             $userIds = $users->pluck('id')->all();
             $this->users->bulkApprove($userIds, $activatedBy);
 

@@ -34,7 +34,6 @@ class StoreLeaveRequestRequest extends FormRequest
             'document_keys.*' => ['required_with:documents', 'string'],
         ];
 
-        // Merge per-leave-type field rules, namespaced under details.*
         $leaveTypeCode = $this->resolveLeaveTypeCode();
         $typeConfig = $leaveTypeCode ? config("leave.types.{$leaveTypeCode}") : null;
 
@@ -59,6 +58,13 @@ class StoreLeaveRequestRequest extends FormRequest
                     $validator->errors()->add(
                         'leave_type_id',
                         "{$leaveType->name} is not available for {$employee->employment_type} employees."
+                    );
+                }
+
+                if ($leaveType && $employee && ! $leaveType->isEligibleForGender($employee->info?->gender)) {
+                    $validator->errors()->add(
+                        'leave_type_id',
+                        "{$leaveType->name} is not available for this employee."
                     );
                 }
             }

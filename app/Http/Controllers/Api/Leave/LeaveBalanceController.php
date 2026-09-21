@@ -22,6 +22,7 @@ class LeaveBalanceController extends Controller
         $this->authorize('viewAny', LeaveBalance::class);
 
         $employees = Employee::query()
+            ->plantilla()
             ->select([
                 'id',
                 'employee_number',

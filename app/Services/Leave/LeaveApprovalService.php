@@ -231,7 +231,7 @@ class LeaveApprovalService
 
         $terminalStep = $leaveRequest->approvalSteps()
             ->where('status', ApprovalStepStatus::Approved)
-            ->orderByDesc('step_order')
+            ->reorder('step_order', 'desc')
             ->first();
 
         $clearedByRequiredRole = $terminalStep

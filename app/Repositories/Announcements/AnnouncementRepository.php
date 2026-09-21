@@ -16,7 +16,7 @@ class AnnouncementRepository
     private function baseWith(): array
     {
         return [
-            'creator' => fn ($q) => $q->select(['id', 'username', 'given_name', 'last_name', 'employee_id']),
+            'creator' => fn ($q) => $q->select(['id', 'username', 'employee_id']),
             'creator.employee' => fn ($q) => $q->select(['id', 'first_name', 'last_name', 'avatar_url', 'department_ids']),
             'attachments' => fn ($q) => $q->select(
                 ['id', 'announcement_id', 'original_filename', 'stored_path', 'mime_type', 'size', 'downloads_count']
@@ -49,9 +49,9 @@ class AnnouncementRepository
         return Announcement::with([
             ...$this->baseWith(),
             'comments.user.employee:id,first_name,last_name,avatar_url',
-            'comments.user:id,username,given_name,last_name,employee_id',
+            'comments.user:id,username,employee_id',
             'comments.replies.user.employee:id,first_name,last_name,avatar_url',
-            'comments.replies.user:id,username,given_name,last_name,employee_id',
+            'comments.replies.user:id,username,employee_id',
         ])->withCount('views')->findOrFail($id);
     }
 
@@ -140,8 +140,8 @@ class AnnouncementRepository
     {
         return AnnouncementView::where('announcement_id', $announcementId)
             ->with([
-                'user' => fn ($q) => $q->select('id', 'given_name', 'last_name', 'username', 'employee_id')
-                    ->with('employee:id,avatar_url'),
+                'user' => fn ($q) => $q->select('id', 'username', 'employee_id')
+                    ->with('employee:id,first_name,last_name,avatar_url'),
             ])
             ->latest('viewed_at')
             ->limit($limit)
@@ -154,9 +154,9 @@ class AnnouncementRepository
             ->whereNull('parent_id')
             ->with([
                 'user.employee:id,first_name,last_name,avatar_url',
-                'user:id,username,given_name,last_name,employee_id',
+                'user:id,username,employee_id',
                 'replies.user.employee:id,first_name,last_name,avatar_url',
-                'replies.user:id,username,given_name,last_name,employee_id',
+                'replies.user:id,username,employee_id',
             ])
             ->latest()
             ->get();

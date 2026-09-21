@@ -15,7 +15,6 @@ class UserRepository
 
     private const USER_COLUMNS = [
         'id', 'employee_id', 'username', 'email', 'password',
-        'given_name', 'middle_name', 'last_name',
         'approval_status', 'approved_at', 'has_completed_orientation',
         'created_at', 'updated_at',
     ];
@@ -154,7 +153,6 @@ class UserRepository
         return User::query()
             ->select([
                 'users.id', 'users.username', 'users.email', 'users.employee_id',
-                'users.given_name', 'users.middle_name', 'users.last_name',
                 'users.approved_at',
             ])
             ->with([
@@ -177,10 +175,6 @@ class UserRepository
             ->paginate($perPage);
     }
 
-    /**
-     * Every whitespace-separated word must match at least one name/contact
-     * column, so "juan cruz" finds first_name=Juan + last_name=Cruz.
-     */
     private function applySearch(Builder $query, string $term): void
     {
         $words = array_slice(
@@ -193,7 +187,7 @@ class UserRepository
             $pattern = '%' . $this->escapeLike($word) . '%';
 
             $query->where(function (Builder $q) use ($pattern) {
-                foreach (['users.username', 'users.email', 'users.given_name', 'users.last_name'] as $column) {
+                foreach (['users.username', 'users.email'] as $column) {
                     $q->orWhereRaw($this->likeSql($column), [$pattern]);
                 }
 
@@ -231,7 +225,7 @@ class UserRepository
     {
         return User::whereIn('id', $ids)
             ->where('approval_status', 'PENDING')
-            ->get(['id', 'employee_id', 'given_name', 'middle_name', 'last_name']);
+            ->get(['id', 'employee_id']);
     }
 
     public function bulkApprove(array $ids, int $approvedBy): void

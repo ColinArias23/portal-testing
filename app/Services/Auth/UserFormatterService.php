@@ -43,8 +43,8 @@ class UserFormatterService
             'is_active'       => $user->approval_status === 'APPROVED',
             'approval_status' => $user->approval_status,
             'has_completed_orientation' => (bool) $user->has_completed_orientation,
-            'first_name'      => $employee?->first_name ?? $user->given_name ?? null,
-            'last_name'       => $employee?->last_name  ?? $user->last_name  ?? null,
+            'first_name'      => $employee?->first_name,
+            'last_name'       => $employee?->last_name,
             'roles'           => $roles,
             'permissions'     => $permissions,
             'employee'        => $employee ? [

@@ -173,4 +173,8 @@ return [
         'monthly_credit' => 1.25,
         'eligible_type_codes' => ['vacation', 'sick'],
     ],
+
+    'mandatory_forced' => [
+        'due_month' => 12,
+    ],
 ];

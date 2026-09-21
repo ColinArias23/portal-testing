@@ -231,6 +231,42 @@ class LeaveRequestService
             throw new RuntimeException("{$leaveType->name} cannot exceed {$leaveType->max_days} days.");
         }
 
+        if (! $leaveType->isEligibleFor($employee->employment_type)) {
+            throw new RuntimeException("{$leaveType->name} is not available for {$employee->employment_type} employees.");
+        }
+
+        if (! $leaveType->isEligibleForGender($employee->info?->gender)) {
+            throw new RuntimeException("{$leaveType->name} is not available for this employee.");
+        }
+
+        if ($leaveType->code === 'mandatory_forced' && $totalDays) {
+            $year = isset($data['start_date']) ? \Carbon\Carbon::parse($data['start_date'])->year : now()->year;
+            $status = $this->balanceService->mandatoryForcedStatus($employee, $year);
+
+            if ($totalDays > $status['remaining_days']) {
+                throw new RuntimeException(
+                    'Mandatory/Forced Leave for '.$year.' only has '
+                    . number_format($status['remaining_days'], 2)
+                    . ' day(s) remaining out of the required '
+                    . number_format($status['required_days'], 2) . '.'
+                );
+            }
+        }
+
+        if ($leaveType->enforce_annual_cap && $totalDays) {
+            $year = isset($data['start_date']) ? \Carbon\Carbon::parse($data['start_date'])->year : now()->year;
+            $status = $this->balanceService->entitlementUsageStatus($employee, $leaveType, $year);
+
+            if ($totalDays > $status['remaining_days']) {
+                throw new RuntimeException(
+                    "{$leaveType->name} for {$year} only has "
+                    . number_format($status['remaining_days'], 2)
+                    . ' day(s) remaining out of the annual '
+                    . number_format($status['annual_cap_days'], 2) . '.'
+                );
+            }
+        }
+
         if ($leaveType->requires_balance_check && $totalDays) {
             $year = isset($data['start_date']) ? \Carbon\Carbon::parse($data['start_date'])->year : now()->year;
             $available = $this->balanceService->available($employee, $leaveType, $year);

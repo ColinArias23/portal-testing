@@ -29,9 +29,6 @@ class User extends Authenticatable
     protected $fillable = [
         'employee_id',
         'username',
-        'given_name',
-        'middle_name',
-        'last_name',
         'email',
         'password',
         'has_completed_orientation',
@@ -66,11 +63,7 @@ class User extends Authenticatable
 
     public function getNameAttribute(): string
     {
-        $parts = array_filter([
-            $this->given_name ?? $this->first_name,
-            $this->last_name,
-        ]);
-        return $parts ? implode(' ', $parts) : $this->username;
+        return $this->employee?->full_name ?: $this->username;
     }
 
     public function getFormalNameAttribute(): string
