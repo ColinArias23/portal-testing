@@ -3,6 +3,7 @@
 namespace App\Services\Recruitment\PlantillaPosting;
 
 use App\Models\ActivityLog;
+use App\Models\Department;
 use App\Models\PlantillaPosition;
 use App\Models\PlantillaPosting;
 use App\Repositories\Recruitment\PlantillaPosting\PlantillaPostingRepository;
@@ -98,6 +99,21 @@ class PlantillaPostingService
         }
     }
 
+    private function departmentChain(?Department $department): Collection
+    {
+        $chain = collect();
+        $node = $department;
+        $guard = 0;
+
+        while ($node && $guard < 5) {
+            $chain->push($node);
+            $node = $node->relationLoaded('parent') ? $node->parent : null;
+            $guard++;
+        }
+
+        return $chain;
+    }
+
     public function vacantItems(): Collection
     {
         $baseItemNumbers = $this->postings->distinctVacantBaseItemNumbers();
@@ -127,7 +143,14 @@ class PlantillaPostingService
 
             $defaultStep = $position->stepIncrement ?? $steps->first();
 
-            $supervisor = $position->displayDepartment?->head ?? $position->displayDivision?->head;
+            $deptChain = $this->departmentChain($position->displayDepartment);
+
+            $supervisorNode = $deptChain->first(fn (Department $d) => $d->head_employee_id);
+            $supervisor = $supervisorNode?->head ?? $position->displayDivision?->head;
+
+            $office = $position->displayDepartment;
+
+            $officeDivision = $office?->division ?? $position->displayDivision;
 
             return [
                 'base_item_number'      => $position->base_item_number,
@@ -135,13 +158,17 @@ class PlantillaPostingService
                 'vacant_count'          => $vacantSlots->count(),
 
                 'display_department_id' => $position->display_department_id,
-                'display_department'    => $position->displayDepartment
-                    ? $position->displayDepartment->only(['id', 'name', 'code'])
+                'display_department'    => $office
+                    ? $office->only(['id', 'name', 'code'])
                     : null,
+                'office_type'           => $office?->type,
+                'office_name'           => $office?->name,
+
                 'display_division_id'   => $position->display_division_id,
                 'display_division'      => $position->displayDivision
                     ? $position->displayDivision->only(['id', 'name', 'code'])
                     : null,
+                'division_name'         => $officeDivision?->name,
 
                 'salary_grade_id' => $position->salary_grade_id,
                 'salary_grade'    => $position->salaryGrade ? [

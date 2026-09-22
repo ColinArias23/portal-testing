@@ -12,6 +12,7 @@ return new class extends Migration
             ->where(function ($q) {
                 $q->whereNotNull('given_name')->orWhereNotNull('last_name');
             })
+            ->where('email', 'not like', '%@local.test')
             ->orderBy('id')
             ->chunkById(200, function ($users) {
                 foreach ($users as $user) {

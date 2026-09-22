@@ -11,7 +11,7 @@ use Illuminate\Support\Collection;
 
 class PlantillaPostingRepository
 {
-    private const LISTING_RELATIONS = ['department', 'division', 'salaryGrade'];
+    private const LISTING_RELATIONS = ['department.division', 'division', 'salaryGrade'];
 
     public function newQuery(): Builder
     {
@@ -56,9 +56,14 @@ class PlantillaPostingRepository
 
         $allForItems = PlantillaPosition::whereIn('base_item_number', $baseItemNumbers)
             ->with([
-                'displayDepartment:id,name,code,head_employee_id',
+                'displayDepartment:id,name,code,type,division_id,parent_id,head_employee_id',
                 'displayDepartment.head:id,first_name,last_name,prefix,suffix',
-                'displayDivision:id,name,code,head_employee_id',
+                'displayDepartment.division:id,name,code,type',
+                'displayDepartment.parent:id,name,code,type,division_id,parent_id,head_employee_id',
+                'displayDepartment.parent.head:id,first_name,last_name,prefix,suffix',
+                'displayDepartment.parent.parent:id,name,code,type,division_id,parent_id,head_employee_id',
+                'displayDepartment.parent.parent.head:id,first_name,last_name,prefix,suffix',
+                'displayDivision:id,name,code,type,head_employee_id',
                 'displayDivision.head:id,first_name,last_name,prefix,suffix',
                 'salaryGrade',
                 'stepIncrement',
