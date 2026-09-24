@@ -40,6 +40,9 @@ class PlantillaPositionService
         if ($request->filled('salary_grade_id')) {
             $query->where('salary_grade_id', $request->salary_grade_id);
         }
+        if ($request->filled('cti')) {
+            $query->where('cti', strtoupper($request->cti));
+        }
         if ($request->boolean('include_deleted')) {
             $query->withTrashed();
         }
@@ -146,6 +149,7 @@ class PlantillaPositionService
                     'display_department_id' => $template->display_department_id,
                     'display_division_id'   => $template->display_division_id,
                     'role'                  => $template->role,
+                    'cti'                   => $template->cti ?? 'NOT_SPECIFIED',
                     'salary_grade_id'       => $template->salary_grade_id,
                     'step_increment_id'     => $template->step_increment_id,
                     'status'                => 'VACANT',
@@ -181,6 +185,7 @@ class PlantillaPositionService
             'step_increment_id'     => $position->step_increment_id,
             'position_title'        => $position->position_title,
             'role'                  => $position->role,
+            'cti'                   => $position->cti,
             'display_department_id' => $position->display_department_id,
             'display_division_id'   => $position->display_division_id,
         ];
@@ -191,7 +196,7 @@ class PlantillaPositionService
         }
 
         if ($position->isFilled()) {
-            unset($data['role'], $data['display_department_id'], $data['display_division_id']);
+            unset($data['role'], $data['cti'], $data['display_department_id'], $data['display_division_id']);
         }
 
         if (array_key_exists('display_department_id', $data) && ! empty($data['display_department_id'])) {
@@ -213,6 +218,7 @@ class PlantillaPositionService
                 'step_increment_id'     => $position->step_increment_id,
                 'position_title'        => $position->position_title,
                 'role'                  => $position->role,
+                'cti'                   => $position->cti,
                 'display_department_id' => $position->display_department_id,
                 'display_division_id'   => $position->display_division_id,
             ]],

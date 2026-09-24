@@ -31,6 +31,8 @@ class PlantillaPositionFormatterService
             'position_slot_name'    => $position->position_slot_name,
             'position_title'        => $position->position_title,
             'role'                  => $position->role,
+            'cti'                   => $position->cti,
+            'is_cti'                => $position->is_cti,
             'display_department_id' => $position->display_department_id,
             'display_department'    => $dept ? $dept->only(['id', 'name', 'code']) : null,
             'display_division_id'   => $position->display_division_id,

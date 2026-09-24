@@ -46,6 +46,7 @@ class PlantillaPositionController extends Controller
             'display_department_id' => ['nullable', 'integer', 'exists:departments,id', 'prohibits:display_division_id'],
             'display_division_id'   => ['nullable', 'integer', 'exists:divisions,id', 'prohibits:display_department_id'],
             'role'                  => ['nullable', 'string', 'max:100'],
+            'cti'                   => ['nullable', 'in:YES,NOT_SPECIFIED'],
             'salary_grade_id'       => ['nullable', 'integer', 'exists:salary_grades,id'],
             'step_increment_id'     => ['nullable', 'integer', 'exists:step_increments,id'],
         ]);
@@ -72,6 +73,7 @@ class PlantillaPositionController extends Controller
         $data = $request->validate([
             'position_title'        => ['sometimes', 'nullable', 'string', 'max:255'],
             'role'                  => ['sometimes', 'nullable', 'string', 'max:100'],
+            'cti'                   => ['sometimes', 'nullable', 'in:YES,NOT_SPECIFIED'],
             'display_department_id' => ['sometimes', 'nullable', 'integer', 'exists:departments,id', 'prohibits:display_division_id'],
             'display_division_id'   => ['sometimes', 'nullable', 'integer', 'exists:divisions,id', 'prohibits:display_department_id'],
             'salary_grade_id'       => ['sometimes', 'nullable', 'integer', 'exists:salary_grades,id'],

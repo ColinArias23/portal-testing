@@ -24,6 +24,7 @@ class PlantillaPosition extends Model
         'position_slot_name',
         'position_title',
         'role',
+        'cti',
         'display_department_id',
         'display_division_id',
         'salary_grade_id',
@@ -48,6 +49,7 @@ class PlantillaPosition extends Model
         'computed_status',
         'has_salary_config',
         'is_assignable',
+        'is_cti',
     ];
 
     public function displayDepartment()
@@ -122,6 +124,11 @@ class PlantillaPosition extends Model
     public function getHasSalaryConfigAttribute(): bool
     {
         return $this->salary_grade_id !== null;
+    }
+
+    public function getIsCtiAttribute(): bool
+    {
+        return $this->cti === 'YES';
     }
 
     public function getIsAssignableAttribute(): bool
@@ -275,5 +282,10 @@ class PlantillaPosition extends Model
     public function scopeWithSalaryConfig($query)
     {
         return $query->whereNotNull('salary_grade_id');
+    }
+
+    public function scopeCti($query, string $value = 'YES')
+    {
+        return $query->where('cti', $value);
     }
 }

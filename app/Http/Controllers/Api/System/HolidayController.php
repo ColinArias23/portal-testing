@@ -12,6 +12,7 @@ class HolidayController extends Controller
     public function __construct(
         private readonly HolidayService $holidays,
     ) {
+        $this->middleware('permission:leave.holidays.manage')->only('clearCache');
     }
 
     // ─── GetByYear ─────────────────────────────────────────────────────

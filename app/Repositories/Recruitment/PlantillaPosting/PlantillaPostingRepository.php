@@ -11,7 +11,7 @@ use Illuminate\Support\Collection;
 
 class PlantillaPostingRepository
 {
-    private const LISTING_RELATIONS = ['department.division', 'division', 'salaryGrade'];
+    private const LISTING_RELATIONS = ['department.division', 'division', 'salaryGrade', 'stepIncrement'];
 
     public function newQuery(): Builder
     {
