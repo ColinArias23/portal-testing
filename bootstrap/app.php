@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withCommands([
         \App\Console\Commands\ProcessAutoRenewals::class,
+        \App\Console\Commands\ImportLegacyDtr::class,
     ])
 
     ->withMiddleware(function (Middleware $middleware): void {
@@ -22,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+            'dtr.network' => \App\Http\Middleware\RestrictToNetwork::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

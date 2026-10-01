@@ -438,3 +438,6 @@ Route::prefix('announcement-attachments')->middleware('throttle:announcements')-
     });
 
 });
+
+// ─── DTR / Face Attendance ────────────────────────────────────────────
+require __DIR__.'/dtr.php';
