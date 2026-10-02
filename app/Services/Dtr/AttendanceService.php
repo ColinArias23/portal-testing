@@ -74,7 +74,7 @@ class AttendanceService
             'type'     => self::TIME_IN,
             'time_in'  => $row->time_in,
             'time_out' => null,
-            'message'  => 'Time In recorded at '.$row->time_in,
+            'message'  => 'Time In recorded at '.$now->format('h:i A'),
         ];
     }
 
@@ -91,7 +91,7 @@ class AttendanceService
             'time_in'       => $open->time_in,
             'time_out'      => $open->time_out,
             'time_out_date' => $open->time_out_date->toDateString(),
-            'message'       => 'Time Out recorded at '.$open->time_out,
+            'message'       => 'Time Out recorded at '.$now->format('h:i A'),
         ];
     }
 }

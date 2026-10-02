@@ -29,6 +29,7 @@ class DtrCalendarService
             'has_signature' => $this->signatures->hasSignature($employee),
             'verifier'      => [
                 'name'          => $verifierUser?->formal_name ?? $verifierUser?->employee?->full_name,
+                'position'      => $verifierUser?->employee?->position_title,
                 'has_signature' => $this->signatures->hasSignature($verifierUser?->employee),
             ],
             'left_range'    => ['start' => $leftStart->toDateString(), 'end' => $leftEnd->toDateString()],
