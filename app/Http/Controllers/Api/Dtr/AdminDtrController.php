@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api\Dtr;
 use App\Exceptions\Dtr\DtrException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Dtr\CalendarRequest;
+use App\Http\Requests\Dtr\SaveAttendanceRequest;
 use App\Models\Dtr\DtrAttendance;
+use App\Services\Dtr\AttendanceService;
 use App\Services\Dtr\DtrCalendarService;
 use App\Services\Dtr\EmployeeResolver;
 use App\Services\Dtr\ImageStore;
@@ -15,10 +17,13 @@ use Illuminate\Http\Request;
 
 class AdminDtrController extends Controller
 {
+    private const EMPLOYEE_COLUMNS = 'employee:id,employee_number,first_name,middle_name,last_name';
+
     public function __construct(
         private readonly EmployeeResolver $employees,
         private readonly DtrCalendarService $calendar,
         private readonly ImageStore $images,
+        private readonly AttendanceService $attendance,
     ) {
     }
 
@@ -36,7 +41,7 @@ class AdminDtrController extends Controller
         $from = $data['from'] ?? CarbonImmutable::parse($to, $tz)->subDays(31)->toDateString();
 
         $query = DtrAttendance::query()
-            ->with('employee:id,employee_number,first_name,middle_name,last_name')
+            ->with(self::EMPLOYEE_COLUMNS)
             ->whereBetween('work_date', [$from, $to])
             ->orderByDesc('work_date')->orderByDesc('time_in');
 
@@ -50,17 +55,34 @@ class AdminDtrController extends Controller
 
         $page = $query->paginate((int) ($data['per_page'] ?? 200));
 
-        return response()->json($page->through(fn (DtrAttendance $r) => [
-            'id'                 => $r->id,
-            'name'               => $r->employee?->full_name,
-            'employee_number'    => $r->employee?->employee_number,
-            'date'               => $r->work_date->toDateString(),
-            'time_in'            => $r->time_in,
-            'time_out'           => $r->time_out,
-            'time_out_date'      => $r->time_out_date?->toDateString(),
-            'has_time_in_image'  => (bool) $r->time_in_image_path,
-            'has_time_out_image' => (bool) $r->time_out_image_path,
-        ]));
+        return response()->json($page->through(fn (DtrAttendance $r) => $this->present($r)));
+    }
+
+    public function store(SaveAttendanceRequest $request): JsonResponse
+    {
+        $record = $this->attendance->createManual($request->validated());
+
+        return response()->json(['data' => $this->present($record->load(self::EMPLOYEE_COLUMNS))], 201);
+    }
+
+    public function update(SaveAttendanceRequest $request, DtrAttendance $attendance): JsonResponse
+    {
+        $record = $this->attendance->updateManual($attendance, $request->validated());
+
+        return response()->json(['data' => $this->present($record->load(self::EMPLOYEE_COLUMNS))]);
+    }
+
+    public function employeeLookup(Request $request): JsonResponse
+    {
+        $data = $request->validate(['employee_number' => ['required', 'string', 'max:50']]);
+
+        $employee = $this->employees->byNumber($data['employee_number']);
+
+        return response()->json(['employee' => $employee ? [
+            'id'              => $employee->id,
+            'employee_number' => $employee->employee_number,
+            'name'            => $employee->full_name,
+        ] : null]);
     }
 
     public function employeeDtr(CalendarRequest $request, string $employeeNumber): JsonResponse
@@ -86,5 +108,22 @@ class AdminDtrController extends Controller
         }
 
         return $this->images->response($path);
+    }
+
+    private function present(DtrAttendance $r): array
+    {
+        return [
+            'id'                 => $r->id,
+            'employee_id'        => $r->employee_id,
+            'name'               => $r->employee?->full_name,
+            'employee_number'    => $r->employee?->employee_number,
+            'date'               => $r->work_date->toDateString(),
+            'time_in'            => $r->time_in,
+            'time_out'           => $r->time_out,
+            'time_out_date'      => $r->time_out_date?->toDateString(),
+            'has_time_in_image'  => (bool) $r->time_in_image_path,
+            'has_time_out_image' => (bool) $r->time_out_image_path,
+            'photo_version'      => $r->updated_at?->getTimestamp(),
+        ];
     }
 }

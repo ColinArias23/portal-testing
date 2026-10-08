@@ -43,6 +43,9 @@ Route::prefix('dtr')->name('dtr.')->group(function () {
         });
 
         Route::middleware('permission:dtr.manage')->group(function () {
+            Route::get('employees-by-number', [AdminDtrController::class, 'employeeLookup'])->middleware('throttle:60,1');
+            Route::post('attendances',     [AdminDtrController::class, 'store'])->middleware('throttle:30,1');
+            Route::put('attendances/{attendance}', [AdminDtrController::class, 'update'])->middleware('throttle:30,1');
             Route::get('employees-lookup', [FaceRegistrationController::class, 'lookup']);
             Route::get('faces',            [FaceRegistrationController::class, 'index']);
             Route::post('faces',           [FaceRegistrationController::class, 'store'])->middleware('throttle:10,1');

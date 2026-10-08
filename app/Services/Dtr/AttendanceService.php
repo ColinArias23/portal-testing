@@ -2,10 +2,12 @@
 
 namespace App\Services\Dtr;
 
+use App\Exceptions\Dtr\DtrException;
 use App\Models\Dtr\DtrAttendance;
 use App\Models\Employee;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class AttendanceService
 {
@@ -58,6 +60,120 @@ class AttendanceService
 
             return $this->clockIn($employeeId, $now, $imageDataUrl, $source);
         });
+    }
+
+    public function createManual(array $data): DtrAttendance
+    {
+        $stored = [];
+
+        try {
+            return DB::transaction(function () use ($data, &$stored) {
+                Employee::query()->whereKey($data['employee_id'])->lockForUpdate()->firstOrFail(['id']);
+
+                $this->assertNoRecordOnDate((int) $data['employee_id'], $data['work_date']);
+
+                $attributes = $this->manualAttributes($data);
+
+                if (! empty($data['time_in_image'])) {
+                    $attributes['time_in_image_path'] = $stored[] = $this->images->putUploadedFile($data['time_in_image'], 'attendance');
+                }
+                if (! empty($data['time_out_image'])) {
+                    $attributes['time_out_image_path'] = $stored[] = $this->images->putUploadedFile($data['time_out_image'], 'attendance');
+                }
+
+                return DtrAttendance::create($attributes + [
+                    'employee_id'     => (int) $data['employee_id'],
+                    'time_in_source'  => 'manual',
+                    'time_out_source' => ! empty($data['time_out']) ? 'manual' : null,
+                ]);
+            });
+        } catch (Throwable $e) {
+            foreach ($stored as $path) {
+                $this->images->delete($path);
+            }
+
+            throw $e;
+        }
+    }
+
+    public function updateManual(DtrAttendance $attendance, array $data): DtrAttendance
+    {
+        $stored   = [];
+        $replaced = [];
+
+        try {
+            $record = DB::transaction(function () use ($attendance, $data, &$stored, &$replaced) {
+                $row = DtrAttendance::query()->whereKey($attendance->getKey())->lockForUpdate()->firstOrFail();
+
+                if ($row->work_date->toDateString() !== $data['work_date']) {
+                    $this->assertNoRecordOnDate($row->employee_id, $data['work_date'], $row->id);
+                }
+
+                $timeInChanged  = substr((string) $row->time_in, 0, 5) !== $data['time_in'] || $row->work_date->toDateString() !== $data['work_date'];
+                $timeOutChanged = ! empty($data['time_out']) && substr((string) $row->time_out, 0, 5) !== $data['time_out'];
+
+                $attributes = $this->manualAttributes($data);
+
+                if (! empty($data['time_in_image'])) {
+                    $replaced[] = $row->time_in_image_path;
+                    $attributes['time_in_image_path'] = $stored[] = $this->images->putUploadedFile($data['time_in_image'], 'attendance');
+                    $timeInChanged = true;
+                }
+                if (! empty($data['time_out_image'])) {
+                    $replaced[] = $row->time_out_image_path;
+                    $attributes['time_out_image_path'] = $stored[] = $this->images->putUploadedFile($data['time_out_image'], 'attendance');
+                    $timeOutChanged = true;
+                }
+
+                if ($timeInChanged) {
+                    $attributes['time_in_source'] = 'manual';
+                }
+                if ($timeOutChanged) {
+                    $attributes['time_out_source'] = 'manual';
+                }
+
+                $row->update($attributes);
+
+                return $row;
+            });
+        } catch (Throwable $e) {
+            foreach ($stored as $path) {
+                $this->images->delete($path);
+            }
+
+            throw $e;
+        }
+
+        foreach (array_filter($replaced) as $path) {
+            $this->images->delete($path);
+        }
+
+        return $record;
+    }
+
+    private function manualAttributes(array $data): array
+    {
+        $hasTimeOut = ! empty($data['time_out']);
+
+        return [
+            'work_date'     => $data['work_date'],
+            'time_in'       => $data['time_in'].':00',
+            'time_out'      => $hasTimeOut ? $data['time_out'].':00' : null,
+            'time_out_date' => $hasTimeOut ? ($data['time_out_date'] ?? $data['work_date']) : null,
+        ];
+    }
+
+    private function assertNoRecordOnDate(int $employeeId, string $workDate, ?int $ignoreId = null): void
+    {
+        $exists = DtrAttendance::query()
+            ->where('employee_id', $employeeId)
+            ->where('work_date', $workDate)
+            ->when($ignoreId, fn ($q) => $q->whereKeyNot($ignoreId))
+            ->exists();
+
+        if ($exists) {
+            throw new DtrException('This employee already has an attendance record on that date.', 409);
+        }
     }
 
     private function clockIn(int $employeeId, CarbonImmutable $now, ?string $image, string $source): array
