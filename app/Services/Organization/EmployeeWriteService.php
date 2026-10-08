@@ -473,7 +473,7 @@ class EmployeeWriteService
         return $data;
     }
 
-    private function syncSalaryHistory(Employee $employee): void
+    public function syncSalaryHistory(Employee $employee): void
     {
         $snapshot = $this->formatter->resolveSalarySnapshot($employee);
 

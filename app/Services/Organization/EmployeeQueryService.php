@@ -133,6 +133,7 @@ class EmployeeQueryService
     {
         return PlantillaPostingApplication::where('employee_id', $employee->id)
             ->where('status', 'Completed')
+            ->whereDoesntHave('onboarding', fn ($q) => $q->withTrashed())
             ->with('posting')
             ->latest('reviewed_at')
             ->get()

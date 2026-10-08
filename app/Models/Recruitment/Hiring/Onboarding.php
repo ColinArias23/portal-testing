@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use App\Traits\Concerns\AutoUppercase;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -19,15 +20,19 @@ class Onboarding extends Model
     protected $fillable = [
         'employee_id',
         'applicant_id',
+        'plantilla_posting_application_id',
         'name',
         'position',
         'department',
         'start_date',
         'status',
+        'type',
+        'provisioned_at',
     ];
 
     protected $casts = [
-        'start_date' => 'datetime',
+        'start_date'     => 'datetime',
+        'provisioned_at' => 'datetime',
     ];
 
     public function employee()
@@ -38,6 +43,26 @@ class Onboarding extends Model
     public function applicant()
     {
         return $this->belongsTo(Applicant::class);
+    }
+
+    public function plantillaApplication()
+    {
+        return $this->belongsTo(PlantillaPostingApplication::class, 'plantilla_posting_application_id');
+    }
+
+    public function isPlantilla(): bool
+    {
+        return $this->type !== null;
+    }
+
+    public function isProvisioned(): bool
+    {
+        return $this->provisioned_at !== null;
+    }
+
+    public function scopeForPlantilla(Builder $query, bool $plantilla): Builder
+    {
+        return $plantilla ? $query->whereNotNull('type') : $query->whereNull('type');
     }
 
     public function tasks()

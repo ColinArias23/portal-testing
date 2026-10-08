@@ -8,7 +8,9 @@ use App\Models\PlantillaPostingApplication;
 use App\Models\PlantillaPostingApplicationDocument;
 use App\Repositories\Recruitment\PlantillaPosting\PlantillaPostingApplicationRepository;
 use App\Repositories\Recruitment\PlantillaPosting\PlantillaPostingRepository;
+use App\Services\Recruitment\Hiring\PlantillaOnboardingService;
 use App\Support\Recruitment\PlantillaApplicationDocumentKeys;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -48,6 +50,7 @@ class PlantillaPostingApplicationService
     public function __construct(
         private readonly PlantillaPostingApplicationRepository $applications,
         private readonly PlantillaPostingRepository $postings,
+        private readonly PlantillaOnboardingService $plantillaOnboardings,
     ) {
     }
 
@@ -284,12 +287,46 @@ class PlantillaPostingApplicationService
 
         $this->assertValidStatusTransition($previousStatus, $validated['status'], $reason);
 
-        $updated = $this->applications->updateReview($application, [
-            'status'      => $validated['status'],
-            'remarks'     => $validated['remarks'] ?? null,
-            'reviewed_by' => $request->user()?->id,
-            'reviewed_at' => now(),
-        ]);
+        if (
+            $previousStatus === 'Completed'
+            && $validated['status'] !== 'Completed'
+            && $this->plantillaOnboardings->hasOnboarding($application->id)
+        ) {
+            throw ValidationException::withMessages([
+                'status' => 'This application is already in onboarding and can no longer be moved back.',
+            ]);
+        }
+
+        $updated = DB::transaction(function () use ($request, $application, $validated) {
+            $updated = $this->applications->updateReview($application, [
+                'status'      => $validated['status'],
+                'remarks'     => $validated['remarks'] ?? null,
+                'reviewed_by' => $request->user()?->id,
+                'reviewed_at' => now(),
+            ]);
+
+            if ($validated['status'] === 'Completed') {
+                $onboarding = $this->plantillaOnboardings->createForCompletedApplication($updated);
+
+                if ($onboarding->wasRecentlyCreated) {
+                    ActivityLog::record(
+                        action: 'plantilla_posting_application.onboarding_created',
+                        userId: $request->user()?->id,
+                        subjectType: PlantillaPostingApplication::class,
+                        subjectId: $application->id,
+                        subjectLabel: optional($updated->employee)->full_name ?? "Application #{$application->id}",
+                        payload: [
+                            'onboarding_id'   => $onboarding->id,
+                            'onboarding_type' => $onboarding->type,
+                        ],
+                        ip: $request->ip(),
+                        userAgent: $request->userAgent(),
+                    );
+                }
+            }
+
+            return $updated;
+        });
 
         if ($this->isBackwardTransition($previousStatus, $validated['status'])) {
             ActivityLog::record(
@@ -394,10 +431,13 @@ class PlantillaPostingApplicationService
             abort(403);
         }
 
-        if (! Storage::disk('local')->exists($document->stored_path)) {
+        /** @var FilesystemAdapter $disk */
+        $disk = Storage::disk('local');
+
+        if (! $disk->exists($document->stored_path)) {
             abort(404, 'File not found. It may have been deleted.');
         }
 
-        return Storage::disk('local')->download($document->stored_path, $document->original_filename);
+        return $disk->download($document->stored_path, $document->original_filename);
     }
 }

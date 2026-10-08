@@ -2,9 +2,11 @@
 
 namespace App\Services\Recruitment\Hiring;
 
+use App\Events\Recruitment\Hiring\OnboardingDeleted;
 use App\Events\Recruitment\Hiring\OnboardingUpdated;
 use App\Support\Broadcasting\SafeBroadcast;
 use App\Models\ActivityLog;
+use App\Models\Employee;
 use App\Models\Onboarding;
 use App\Models\OnboardingTask;
 use App\Repositories\Recruitment\Hiring\OnboardingRepository;
@@ -12,6 +14,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class OnboardingService
 {
@@ -26,6 +29,7 @@ class OnboardingService
 
     public function __construct(
         private readonly OnboardingRepository $onboardings,
+        private readonly PlantillaOnboardingService $plantillaOnboardings,
     ) {
     }
 
@@ -44,6 +48,9 @@ class OnboardingService
             'applicant_id' => $onboarding->applicant_id,
             'employee_id'  => $onboarding->employee_id,
             'status'       => $onboarding->status,
+            'type'         => $onboarding->type,
+            'plantilla_posting_application_id' => $onboarding->plantilla_posting_application_id,
+            'provisioned_at' => $onboarding->provisioned_at?->setTimezone('Asia/Manila')->toDateTimeString(),
             'progress'     => $total > 0 ? round(($completed / $total) * 100) : 0,
             'tasks'        => $tasks->map(fn ($t) => [
                 'id'           => $t->id,
@@ -63,19 +70,50 @@ class OnboardingService
         SafeBroadcast::send(new OnboardingUpdated($this->format($onboarding)), toOthers: true);
     }
 
+    private function assertNotProvisioned(Onboarding $onboarding): void
+    {
+        if ($onboarding->isProvisioned()) {
+            throw ValidationException::withMessages([
+                'status' => 'This onboarding is already completed and the employee record was updated. Its checklist can no longer be changed.',
+            ]);
+        }
+    }
+
+    private function provisionIfReady(Request $request, Onboarding $onboarding): ?Employee
+    {
+        if (! $onboarding->isPlantilla()) {
+            return null;
+        }
+
+        $fresh = $onboarding->fresh()->load('tasks');
+
+        if ($fresh->computeStatus() !== 'Completed') {
+            return null;
+        }
+
+        return $this->plantillaOnboardings->provisionEmployee($request, $fresh);
+    }
+
+    private function broadcastEmployee(?Employee $employee): void
+    {
+        if ($employee) {
+            $this->plantillaOnboardings->broadcastEmployeeUpdated($employee);
+        }
+    }
+
     public function assertTaskBelongsToOnboarding(OnboardingTask $task, Onboarding $onboarding): bool
     {
         return $task->onboarding_id === $onboarding->id;
     }
 
-    public function summary(): array
+    public function summary(bool $plantilla = false): array
     {
-        return $this->onboardings->summaryCounts();
+        return $this->onboardings->summaryCounts($plantilla);
     }
 
-    public function index(Request $request): LengthAwarePaginator
+    public function index(Request $request, bool $plantilla = false): LengthAwarePaginator
     {
-        $query = $this->onboardings->newQuery();
+        $query = $this->onboardings->newQuery($plantilla);
 
         if ($request->filled('search')) {
             $term = $request->search;
@@ -145,12 +183,22 @@ class OnboardingService
             'start_date' => $onboarding->start_date?->toDateTimeString(),
         ];
 
-        $this->onboardings->update($onboarding, $data);
+        $employee = null;
 
-        if (! isset($data['status'])) {
-            $computedStatus = $onboarding->fresh()->load('tasks')->computeStatus();
-            $this->onboardings->update($onboarding, ['status' => $computedStatus]);
-        }
+        DB::transaction(function () use ($request, $onboarding, $data, &$employee) {
+            if ($onboarding->isPlantilla()) {
+                unset($data['status']);
+            }
+
+            $this->onboardings->update($onboarding, $data);
+
+            if (! isset($data['status'])) {
+                $computedStatus = $onboarding->fresh()->load('tasks')->computeStatus();
+                $this->onboardings->update($onboarding, ['status' => $computedStatus]);
+            }
+
+            $employee = $this->provisionIfReady($request, $onboarding);
+        });
 
         $this->onboardings->loadRelations($onboarding);
 
@@ -172,15 +220,17 @@ class OnboardingService
         );
 
         $this->broadcastUpdate($onboarding);
+        $this->broadcastEmployee($employee);
 
         return $onboarding;
     }
 
     public function destroy(Request $request, Onboarding $onboarding): void
     {
-        $id      = $onboarding->id;
-        $label   = $onboarding->name;
-        $counts  = $this->onboardings->taskCounts($onboarding);
+        $id        = $onboarding->id;
+        $label     = $onboarding->name;
+        $plantilla = $onboarding->isPlantilla();
+        $counts    = $this->onboardings->taskCounts($onboarding);
 
         $this->onboardings->delete($onboarding);
 
@@ -198,33 +248,41 @@ class OnboardingService
             userAgent: $request->userAgent(),
         );
 
-        SafeBroadcast::send(new \App\Events\OnboardingDeleted($id), toOthers: true);
+        SafeBroadcast::send(new OnboardingDeleted($id, $plantilla), toOthers: true);
     }
 
     public function toggleTask(Request $request, Onboarding $onboarding, OnboardingTask $task): Onboarding
     {
+        $this->assertNotProvisioned($onboarding);
+
         $wasCompleted = $task->completed;
         $nowCompleted = ! $wasCompleted;
         $now          = Carbon::now('Asia/Manila');
+        $newStatus    = null;
+        $employee     = null;
 
-        $this->onboardings->updateTask($task, [
-            'completed'    => $nowCompleted,
-            'completed_at' => $nowCompleted ? $now : null,
-        ]);
+        DB::transaction(function () use ($request, $onboarding, $task, $wasCompleted, $nowCompleted, $now, &$newStatus, &$employee) {
+            $this->onboardings->updateTask($task, [
+                'completed'    => $nowCompleted,
+                'completed_at' => $nowCompleted ? $now : null,
+            ]);
 
-        $freshOnboarding = $onboarding->fresh()->load('tasks');
-        $newStatus        = $freshOnboarding->computeStatus();
-        $allDone           = $newStatus === 'Completed';
+            $freshOnboarding = $onboarding->fresh()->load('tasks');
+            $newStatus       = $freshOnboarding->computeStatus();
+            $allDone         = $newStatus === 'Completed';
 
-        $updatePayload = ['status' => $newStatus];
+            $updatePayload = ['status' => $newStatus];
 
-        if ($allDone) {
-            $updatePayload['start_date'] = $now;
-        } elseif ($wasCompleted && $onboarding->status === 'Completed') {
-            $updatePayload['start_date'] = null;
-        }
+            if ($allDone) {
+                $updatePayload['start_date'] = $now;
+            } elseif ($wasCompleted && $onboarding->status === 'Completed') {
+                $updatePayload['start_date'] = null;
+            }
 
-        $this->onboardings->update($onboarding, $updatePayload);
+            $this->onboardings->update($onboarding, $updatePayload);
+
+            $employee = $this->provisionIfReady($request, $onboarding);
+        });
 
         ActivityLog::record(
             action:       'onboarding.task_toggled',
@@ -245,12 +303,15 @@ class OnboardingService
 
         $this->onboardings->loadRelations($onboarding);
         $this->broadcastUpdate($onboarding);
+        $this->broadcastEmployee($employee);
 
         return $onboarding;
     }
 
     public function addTask(Request $request, Onboarding $onboarding, string $title): Onboarding
     {
+        $this->assertNotProvisioned($onboarding);
+
         $lastOrder = $this->onboardings->lastTaskSortOrder($onboarding);
 
         $task = $this->onboardings->createTask([
@@ -283,6 +344,8 @@ class OnboardingService
 
     public function updateTask(Request $request, Onboarding $onboarding, OnboardingTask $task, string $title): Onboarding
     {
+        $this->assertNotProvisioned($onboarding);
+
         $oldTitle = $task->title;
         $this->onboardings->updateTask($task, ['title' => $title]);
 
@@ -309,13 +372,20 @@ class OnboardingService
 
     public function deleteTask(Request $request, Onboarding $onboarding, OnboardingTask $task): Onboarding
     {
+        $this->assertNotProvisioned($onboarding);
+
         $taskId    = $task->id;
         $taskTitle = $task->title;
+        $employee  = null;
 
-        $this->onboardings->deleteTask($task);
+        DB::transaction(function () use ($request, $onboarding, $task, &$employee) {
+            $this->onboardings->deleteTask($task);
 
-        $newStatus = $onboarding->fresh()->load('tasks')->computeStatus();
-        $this->onboardings->update($onboarding, ['status' => $newStatus]);
+            $newStatus = $onboarding->fresh()->load('tasks')->computeStatus();
+            $this->onboardings->update($onboarding, ['status' => $newStatus]);
+
+            $employee = $this->provisionIfReady($request, $onboarding);
+        });
 
         ActivityLog::record(
             action:       'onboarding.task_deleted',
@@ -333,6 +403,7 @@ class OnboardingService
 
         $this->onboardings->loadRelations($onboarding);
         $this->broadcastUpdate($onboarding);
+        $this->broadcastEmployee($employee);
 
         return $onboarding;
     }

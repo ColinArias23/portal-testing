@@ -2,8 +2,8 @@
 
 namespace App\Events\Recruitment\Hiring;
 
-use App\Models\Hiring\Onboarding;
 use Illuminate\Broadcasting\Channel;
+use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Queue\SerializesModels;
 
@@ -20,7 +20,9 @@ class OnboardingUpdated implements ShouldBroadcastNow
 
     public function broadcastOn(): Channel
     {
-        return new Channel('onboardings');
+        return empty($this->onboarding['type'])
+            ? new Channel('onboardings')
+            : new PrivateChannel('plantilla-onboardings');
     }
 
     public function broadcastAs(): string

@@ -11,9 +11,11 @@ class OnboardingRepository
 {
     private const RELATIONS = ['tasks', 'employee', 'applicant'];
 
-    public function newQuery(): Builder
+    public function newQuery(bool $plantilla = false): Builder
     {
-        return Onboarding::with(self::RELATIONS)->orderByDesc('created_at');
+        return Onboarding::with(self::RELATIONS)
+            ->forPlantilla($plantilla)
+            ->orderByDesc('created_at');
     }
 
     public function paginate(Builder $query, int $perPage): LengthAwarePaginator
@@ -82,24 +84,19 @@ class OnboardingRepository
         $task->delete();
     }
 
-    /**
-     * Was 3 of the 4 summary() counts as separate queries
-     * (`new_hires` needs its own COUNT(*), `pending_tasks` is a
-     * different table so also stays separate) — `in_progress` and
-     * `completed` are now one grouped query instead of two.
-     *
-     * @return array{new_hires:int, in_progress:int, completed:int, pending_tasks:int}
-     */
-    public function summaryCounts(): array
+    public function summaryCounts(bool $plantilla = false): array
     {
-        $newHires = Onboarding::count();
+        $newHires = Onboarding::forPlantilla($plantilla)->count();
 
-        $statusCounts = Onboarding::whereIn('status', ['In Progress', 'Completed'])
+        $statusCounts = Onboarding::forPlantilla($plantilla)
+            ->whereIn('status', ['In Progress', 'Completed'])
             ->selectRaw('status, count(*) as cnt')
             ->groupBy('status')
             ->pluck('cnt', 'status');
 
-        $pendingTasks = OnboardingTask::where('completed', false)->count();
+        $pendingTasks = OnboardingTask::where('completed', false)
+            ->whereHas('onboarding', fn ($q) => $q->forPlantilla($plantilla))
+            ->count();
 
         return [
             'new_hires'     => $newHires,

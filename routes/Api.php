@@ -35,6 +35,7 @@ use App\Http\Controllers\Api\Recruitment\Hiring\InterviewController;
 use App\Http\Controllers\Api\Recruitment\Hiring\HiringEventController;
 use App\Http\Controllers\Api\Recruitment\Hiring\ContractController;
 use App\Http\Controllers\Api\Recruitment\Hiring\OnboardingController;
+use App\Http\Controllers\Api\Recruitment\Hiring\PlantillaOnboardingController;
 use App\Http\Controllers\Api\Positions\CosPositionController;
 use App\Http\Controllers\Api\Positions\ConsultantPositionController;
 use App\Http\Controllers\Api\System\HolidayController;
@@ -349,6 +350,17 @@ Route::prefix('announcement-attachments')->middleware('throttle:announcements')-
         Route::patch('/{onboarding}/tasks/{task}/toggle',      [OnboardingController::class, 'toggleTask']);
         Route::put('/{onboarding}/tasks/{task}',               [OnboardingController::class, 'updateTask']);
         Route::delete('/{onboarding}/tasks/{task}',            [OnboardingController::class, 'deleteTask']);
+    });
+// --- Plantilla (PSB) Onboarding ---
+    Route::prefix('plantilla-onboarding')->group(function () {
+        Route::get('/summary',              [PlantillaOnboardingController::class, 'summary']);
+        Route::get('/',                     [PlantillaOnboardingController::class, 'index']);
+        Route::put('/{onboarding}',         [PlantillaOnboardingController::class, 'update']);
+        Route::delete('/{onboarding}',      [PlantillaOnboardingController::class, 'destroy']);
+        Route::post('/{onboarding}/tasks',                     [PlantillaOnboardingController::class, 'addTask']);
+        Route::patch('/{onboarding}/tasks/{task}/toggle',      [PlantillaOnboardingController::class, 'toggleTask']);
+        Route::put('/{onboarding}/tasks/{task}',               [PlantillaOnboardingController::class, 'updateTask']);
+        Route::delete('/{onboarding}/tasks/{task}',            [PlantillaOnboardingController::class, 'deleteTask']);
     });
 // ─── Holidays ─────────────────────────────────────────────────────
     Route::prefix('holidays')->group(function () {

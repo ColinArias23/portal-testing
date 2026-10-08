@@ -39,6 +39,10 @@ Broadcast::channel('trainings', function (User $user): bool {
     return $user->can('trainings.view');
 });
 
+Broadcast::channel('plantilla-onboardings', function (User $user): bool {
+    return $user->can('hiring.plantilla.onboarding.view');
+});
+
 Broadcast::channel('pending-users', function (User $user): bool {
     return $user->can('users.manage') || $user->hasRole('SuperAdmin');
 });

@@ -18,6 +18,11 @@ class OnboardingController extends Controller
         $this->middleware('permission:hiring.nonplantilla.onboarding.manage')->only(['store', 'update', 'destroy', 'toggleTask', 'addTask', 'updateTask', 'deleteTask']);
     }
 
+    private function ensureNonPlantilla(Onboarding $onboarding): void
+    {
+        abort_if($onboarding->isPlantilla(), 404);
+    }
+
     // ─── Summary ─────────────────────────────────────────────────────
     public function summary()
     {
@@ -60,12 +65,16 @@ class OnboardingController extends Controller
     // ─── Show ─────────────────────────────────────────────────────
     public function show(Onboarding $onboarding)
     {
+        $this->ensureNonPlantilla($onboarding);
+
         return response()->json($this->onboardings->format($this->onboardings->show($onboarding)));
     }
 
     // ─── Update ─────────────────────────────────────────────────────
     public function update(Request $request, Onboarding $onboarding)
     {
+        $this->ensureNonPlantilla($onboarding);
+
         $data = $request->validate([
             'name'       => ['sometimes', 'string', 'max:150'],
             'position'   => ['nullable', 'string', 'max:100'],
@@ -80,6 +89,8 @@ class OnboardingController extends Controller
     // ─── Destroy ─────────────────────────────────────────────────────
     public function destroy(Request $request, Onboarding $onboarding)
     {
+        $this->ensureNonPlantilla($onboarding);
+
         $this->onboardings->destroy($request, $onboarding);
 
         return response()->json(['message' => 'Onboarding record deleted.']);
@@ -88,6 +99,8 @@ class OnboardingController extends Controller
     // ─── ToggleTask ─────────────────────────────────────────────────────
     public function toggleTask(Request $request, Onboarding $onboarding, OnboardingTask $task)
     {
+        $this->ensureNonPlantilla($onboarding);
+
         if (! $this->onboardings->assertTaskBelongsToOnboarding($task, $onboarding)) {
             return response()->json(['message' => 'Task does not belong to this onboarding record.'], 404);
         }
@@ -98,6 +111,8 @@ class OnboardingController extends Controller
     // ─── AddTask ─────────────────────────────────────────────────────
     public function addTask(Request $request, Onboarding $onboarding)
     {
+        $this->ensureNonPlantilla($onboarding);
+
         $data = $request->validate(['title' => ['required', 'string', 'max:150']]);
 
         return response()->json($this->onboardings->format($this->onboardings->addTask($request, $onboarding, $data['title'])));
@@ -106,6 +121,8 @@ class OnboardingController extends Controller
     // ─── UpdateTask ─────────────────────────────────────────────────────
     public function updateTask(Request $request, Onboarding $onboarding, OnboardingTask $task)
     {
+        $this->ensureNonPlantilla($onboarding);
+
         if (! $this->onboardings->assertTaskBelongsToOnboarding($task, $onboarding)) {
             return response()->json(['message' => 'Task does not belong to this onboarding record.'], 404);
         }
@@ -118,6 +135,8 @@ class OnboardingController extends Controller
     // ─── DeleteTask ─────────────────────────────────────────────────────
     public function deleteTask(Request $request, Onboarding $onboarding, OnboardingTask $task)
     {
+        $this->ensureNonPlantilla($onboarding);
+
         if (! $this->onboardings->assertTaskBelongsToOnboarding($task, $onboarding)) {
             return response()->json(['message' => 'Task does not belong to this onboarding record.'], 404);
         }

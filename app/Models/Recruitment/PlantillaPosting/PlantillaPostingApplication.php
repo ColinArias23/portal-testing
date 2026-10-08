@@ -50,6 +50,11 @@ class PlantillaPostingApplication extends Model
         return $this->belongsTo(User::class, 'reviewed_by');
     }
 
+    public function onboarding(): HasOne
+    {
+        return $this->hasOne(Onboarding::class, 'plantilla_posting_application_id');
+    }
+
     public function interview(): HasOne
     {
         return $this->hasOne(PlantillaPostingApplicationInterview::class);
