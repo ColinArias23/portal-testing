@@ -76,6 +76,36 @@ class PlantillaPositionRepository
         return PlantillaPosition::where('base_item_number', $baseItemNumber)->max('slot_number') ?? 0;
     }
 
+    public function lockedBaseItemNumbers(): array
+    {
+        return PlantillaPosition::query()
+            ->lockForUpdate()
+            ->pluck('base_item_number')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public function baseItemNumberExists(string $baseItemNumber): bool
+    {
+        return PlantillaPosition::where('base_item_number', $baseItemNumber)->exists();
+    }
+
+    public function activeForBaseItemNumber(string $baseItemNumber): Collection
+    {
+        return PlantillaPosition::where('base_item_number', $baseItemNumber)
+            ->orderBy('slot_number')
+            ->get();
+    }
+
+    public function withTrashedForBaseItemNumber(string $baseItemNumber): Collection
+    {
+        return PlantillaPosition::withTrashed()
+            ->where('base_item_number', $baseItemNumber)
+            ->orderBy('slot_number')
+            ->get();
+    }
+
     public function allForBaseItemNumber(string $baseItemNumber): Collection
     {
         return PlantillaPosition::where('base_item_number', $baseItemNumber)

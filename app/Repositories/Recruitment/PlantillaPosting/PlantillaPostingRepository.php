@@ -104,6 +104,30 @@ class PlantillaPostingRepository
             ->get();
     }
 
+    public function renumberBaseItem(string $from, string $to): void
+    {
+        PlantillaPosting::withTrashed()
+            ->where('base_item_number', $from)
+            ->update(['base_item_number' => $to]);
+    }
+
+    public function refreshSlotNames(string $baseItemNumber): void
+    {
+        PlantillaPosting::withTrashed()
+            ->where('base_item_number', $baseItemNumber)
+            ->get()
+            ->each(function (PlantillaPosting $posting) {
+                $names = $posting->plantillaPositions()
+                    ->withTrashed()
+                    ->orderBy('position_slot_name')
+                    ->pluck('position_slot_name');
+
+                if ($names->isNotEmpty()) {
+                    $posting->update(['position_slot_name' => $names->implode(', ')]);
+                }
+            });
+    }
+
     public function activePostingSlotIds(): Collection
     {
         return \Illuminate\Support\Facades\DB::table('plantilla_posting_slots')

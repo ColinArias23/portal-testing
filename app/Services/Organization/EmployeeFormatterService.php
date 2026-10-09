@@ -38,7 +38,7 @@ class EmployeeFormatterService
             $positionInfo = $position ? [
                 'id'             => $position->id,
                 'type'           => 'plantilla',
-                'item_number'    => $position->item_number,
+                'item_number'    => $position->position_slot_name,
                 'position_title' => $position->position_title,
                 'status'         => $position->computed_status,
                 'salary_grade'   => $position->salaryGrade ? [
@@ -70,6 +70,9 @@ class EmployeeFormatterService
             'title' => $employmentType === 'plantilla'
                 ? ($positionInfo['position_title'] ?? null)
                 : ($positionInfo['title'] ?? null),
+            'item_number' => $employmentType === 'plantilla'
+                ? ($positionInfo['item_number'] ?? null)
+                : null,
         ] : null;
 
         $latestAssessment = $employee->relationLoaded('latestAssessment')

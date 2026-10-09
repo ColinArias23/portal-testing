@@ -13,6 +13,7 @@ class PlantillaPositionService
     public function __construct(
         private readonly PlantillaPositionRepository $positions,
         private readonly PlantillaPositionFormatterService $formatter,
+        private readonly PlantillaItemNumberService $itemNumbers,
     ) {
     }
 
@@ -79,7 +80,9 @@ class PlantillaPositionService
         $slots = $data['slots'];
         unset($data['slots']);
 
-        DB::transaction(function () use ($data, $slots, $request) {
+        $renumbered = DB::transaction(function () use ($data, $slots, $request) {
+            $renumbered = $this->itemNumbers->makeRoomFor($data['base_item_number']);
+
             $this->positions->purgeTrashedForBaseItem($data['base_item_number']);
 
             for ($i = 1; $i <= $slots; $i++) {
@@ -109,14 +112,46 @@ class PlantillaPositionService
                 ip: $request->ip(),
                 userAgent: $request->userAgent(),
             );
+
+            if ($renumbered !== []) {
+                ActivityLog::record(
+                    action: 'plantilla_position.items_renumbered',
+                    userId: $request->user()?->id,
+                    subjectType: PlantillaPosition::class,
+                    subjectLabel: "Item {$data['base_item_number']} inserted",
+                    payload: [
+                        'inserted_item_number' => $data['base_item_number'],
+                        'renumbered'           => $renumbered,
+                    ],
+                    ip: $request->ip(),
+                    userAgent: $request->userAgent(),
+                );
+            }
+
+            return $renumbered;
         });
 
         $positions = $this->positions->allForBaseItemNumber($data['base_item_number']);
 
         return [
-            'message'   => "Created {$slots} position" . ($slots > 1 ? 's' : '') . " for {$data['title']}.",
-            'positions' => $positions->map(fn (PlantillaPosition $pos) => $this->formatter->format($pos)),
+            'message'    => "Created {$slots} position" . ($slots > 1 ? 's' : '') . " for {$data['title']}." . $this->renumberNotice($renumbered),
+            'renumbered' => $renumbered,
+            'positions'  => $positions->map(fn (PlantillaPosition $pos) => $this->formatter->format($pos)),
         ];
+    }
+
+    private function renumberNotice(array $renumbered): string
+    {
+        if ($renumbered === []) {
+            return '';
+        }
+
+        $from = min(array_map('intval', array_keys($renumbered)));
+        $to   = max(array_map('intval', array_keys($renumbered)));
+
+        return $from === $to
+            ? " Existing item {$from} moved to {$renumbered[(string) $from]}."
+            : " Existing items {$from}-{$to} moved down by one (now " . ($from + 1) . '-' . ($to + 1) . ').';
     }
 
     /**
@@ -156,6 +191,8 @@ class PlantillaPositionService
                     'requires_approval'     => false,
                 ]);
             }
+
+            $this->itemNumbers->syncSlotNames($template->base_item_number);
 
             ActivityLog::record(
                 action: 'plantilla_position.slots_added',
@@ -244,21 +281,25 @@ class PlantillaPositionService
             ];
         }
 
-        $position->delete();
+        DB::transaction(function () use ($position, $request) {
+            $position->delete();
 
-        ActivityLog::record(
-            action: 'plantilla_position.deleted',
-            userId: $request->user()?->id,
-            subjectType: PlantillaPosition::class,
-            subjectId: $position->id,
-            subjectLabel: $position->position_slot_name,
-            payload: [
-                'base_item_number' => $position->base_item_number,
-                'slot_number'      => $position->slot_number,
-            ],
-            ip: $request->ip(),
-            userAgent: $request->userAgent(),
-        );
+            ActivityLog::record(
+                action: 'plantilla_position.deleted',
+                userId: $request->user()?->id,
+                subjectType: PlantillaPosition::class,
+                subjectId: $position->id,
+                subjectLabel: $position->position_slot_name,
+                payload: [
+                    'base_item_number' => $position->base_item_number,
+                    'slot_number'      => $position->slot_number,
+                ],
+                ip: $request->ip(),
+                userAgent: $request->userAgent(),
+            );
+
+            $this->itemNumbers->syncSlotNames($position->base_item_number);
+        });
 
         return ['status' => 200, 'body' => ['message' => 'Position slot deleted.']];
     }
@@ -282,6 +323,7 @@ class PlantillaPositionService
 
         DB::transaction(function () use ($positions, $request) {
             $positions->each(fn ($pos) => $pos->delete());
+            $positions->pluck('base_item_number')->unique()->each(fn ($base) => $this->itemNumbers->syncSlotNames($base));
 
             ActivityLog::record(
                 action: 'plantilla_position.bulk_deleted',
@@ -310,18 +352,21 @@ class PlantillaPositionService
             return ['status' => 404, 'body' => ['message' => 'Position not found (or not deleted).']];
         }
 
-        $position->restore();
+        DB::transaction(function () use ($position, $request) {
+            $position->restore();
+            $this->itemNumbers->syncSlotNames($position->base_item_number);
 
-        ActivityLog::record(
-            action: 'plantilla_position.restored',
-            userId: $request->user()?->id,
-            subjectType: PlantillaPosition::class,
-            subjectId: $position->id,
-            subjectLabel: $position->position_slot_name,
-            payload: ['base_item_number' => $position->base_item_number, 'slot_number' => $position->slot_number],
-            ip: $request->ip(),
-            userAgent: $request->userAgent(),
-        );
+            ActivityLog::record(
+                action: 'plantilla_position.restored',
+                userId: $request->user()?->id,
+                subjectType: PlantillaPosition::class,
+                subjectId: $position->id,
+                subjectLabel: $position->position_slot_name,
+                payload: ['base_item_number' => $position->base_item_number, 'slot_number' => $position->slot_number],
+                ip: $request->ip(),
+                userAgent: $request->userAgent(),
+            );
+        });
 
         return [
             'status' => 200,
@@ -342,6 +387,7 @@ class PlantillaPositionService
 
         DB::transaction(function () use ($positions, $request) {
             $positions->each(fn ($pos) => $pos->restore());
+            $positions->pluck('base_item_number')->unique()->each(fn ($base) => $this->itemNumbers->syncSlotNames($base));
 
             ActivityLog::record(
                 action: 'plantilla_position.bulk_restored',
