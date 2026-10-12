@@ -7,7 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Dtr\CalendarRequest;
 use App\Http\Requests\Dtr\PunchRequest;
 use App\Http\Requests\Dtr\RecognizeRequest;
-use App\Models\Dtr\DtrFace;
+use App\Models\DtrFace;
 use App\Models\Employee;
 use App\Services\Dtr\AttendanceService;
 use App\Services\Dtr\DtrCalendarService;

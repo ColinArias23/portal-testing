@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\Dtr\FaceRegistrationController;
 use App\Http\Controllers\Api\Dtr\KioskController;
 use App\Http\Controllers\Api\Dtr\MeController;
 use App\Http\Controllers\Api\Dtr\SelfFaceRegistrationController;
+use App\Http\Controllers\Api\Dtr\ShiftController;
 use App\Http\Controllers\Api\Dtr\SignatureController;
 use Illuminate\Support\Facades\Route;
 
@@ -37,6 +38,7 @@ Route::prefix('dtr')->name('dtr.')->group(function () {
 
         Route::middleware('permission:dtr.view|dtr.manage')->group(function () {
             Route::get('records', [AdminDtrController::class, 'records']);
+            Route::get('shifts', [ShiftController::class, 'index']);
             Route::get('employees/{employeeNumber}/dtr', [AdminDtrController::class, 'employeeDtr']);
             Route::get('attendances/{attendance}/image/{type}', [AdminDtrController::class, 'image'])
                 ->whereIn('type', ['in', 'out']);
@@ -50,6 +52,12 @@ Route::prefix('dtr')->name('dtr.')->group(function () {
             Route::get('faces',            [FaceRegistrationController::class, 'index']);
             Route::post('faces',           [FaceRegistrationController::class, 'store'])->middleware('throttle:10,1');
             Route::delete('faces/{face}',  [FaceRegistrationController::class, 'destroy']);
+
+            Route::post('shifts',              [ShiftController::class, 'store'])->middleware('throttle:30,1');
+            Route::put('shifts/{shift}',       [ShiftController::class, 'update'])->middleware('throttle:30,1');
+            Route::delete('shifts/{shift}',    [ShiftController::class, 'destroy'])->middleware('throttle:30,1');
+            Route::get('shift-assignments',    [ShiftController::class, 'assignments'])->middleware('throttle:60,1');
+            Route::put('shift-assignments',    [ShiftController::class, 'assign'])->middleware('throttle:30,1');
         });
     });
 });

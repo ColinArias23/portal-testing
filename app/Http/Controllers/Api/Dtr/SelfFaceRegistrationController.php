@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api\Dtr;
 use App\Exceptions\Dtr\DtrException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Dtr\RegisterFaceRequest;
-use App\Models\Dtr\DtrFace;
+use App\Models\DtrFace;
 use App\Models\Employee;
 use App\Models\ActivityLog;
 use App\Services\Dtr\EmployeeResolver;

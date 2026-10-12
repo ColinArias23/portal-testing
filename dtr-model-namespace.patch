@@ -1,0 +1,110 @@
+diff -ru a/app/Http/Controllers/Api/Dtr/AdminDtrController.php b/app/Http/Controllers/Api/Dtr/AdminDtrController.php
+--- a/app/Http/Controllers/Api/Dtr/AdminDtrController.php	2026-10-08 02:53:51.000000000 +0000
++++ b/app/Http/Controllers/Api/Dtr/AdminDtrController.php	2026-10-12 02:23:00.317794697 +0000
+@@ -6,7 +6,7 @@
+ use App\Http\Controllers\Controller;
+ use App\Http\Requests\Dtr\CalendarRequest;
+ use App\Http\Requests\Dtr\SaveAttendanceRequest;
+-use App\Models\Dtr\DtrAttendance;
++use App\Models\DtrAttendance;
+ use App\Services\Dtr\AttendanceService;
+ use App\Services\Dtr\DtrCalendarService;
+ use App\Services\Dtr\EmployeeResolver;
+diff -ru a/app/Http/Controllers/Api/Dtr/FaceRegistrationController.php b/app/Http/Controllers/Api/Dtr/FaceRegistrationController.php
+--- a/app/Http/Controllers/Api/Dtr/FaceRegistrationController.php	2026-10-01 08:31:47.000000000 +0000
++++ b/app/Http/Controllers/Api/Dtr/FaceRegistrationController.php	2026-10-12 02:23:00.314733543 +0000
+@@ -5,7 +5,7 @@
+ use App\Exceptions\Dtr\DtrException;
+ use App\Http\Controllers\Controller;
+ use App\Http\Requests\Dtr\RegisterFaceRequest;
+-use App\Models\Dtr\DtrFace;
++use App\Models\DtrFace;
+ use App\Models\Employee;
+ use App\Models\ActivityLog;
+ use App\Services\Dtr\EmployeeResolver;
+diff -ru a/app/Http/Controllers/Api/Dtr/KioskController.php b/app/Http/Controllers/Api/Dtr/KioskController.php
+--- a/app/Http/Controllers/Api/Dtr/KioskController.php	2026-09-30 08:26:19.000000000 +0000
++++ b/app/Http/Controllers/Api/Dtr/KioskController.php	2026-10-12 02:23:00.316085614 +0000
+@@ -5,7 +5,7 @@
+ use App\Http\Controllers\Controller;
+ use App\Http\Requests\Dtr\PunchRequest;
+ use App\Http\Requests\Dtr\RecognizeRequest;
+-use App\Models\Dtr\DtrFace;
++use App\Models\DtrFace;
+ use App\Models\Employee;
+ use App\Services\Dtr\AttendanceService;
+ use App\Services\Dtr\FaceEngineClient;
+diff -ru a/app/Http/Controllers/Api/Dtr/MeController.php b/app/Http/Controllers/Api/Dtr/MeController.php
+--- a/app/Http/Controllers/Api/Dtr/MeController.php	2026-09-30 08:26:24.000000000 +0000
++++ b/app/Http/Controllers/Api/Dtr/MeController.php	2026-10-12 02:23:00.319233625 +0000
+@@ -7,7 +7,7 @@
+ use App\Http\Requests\Dtr\CalendarRequest;
+ use App\Http\Requests\Dtr\PunchRequest;
+ use App\Http\Requests\Dtr\RecognizeRequest;
+-use App\Models\Dtr\DtrFace;
++use App\Models\DtrFace;
+ use App\Models\Employee;
+ use App\Services\Dtr\AttendanceService;
+ use App\Services\Dtr\DtrCalendarService;
+diff -ru a/app/Http/Controllers/Api/Dtr/SelfFaceRegistrationController.php b/app/Http/Controllers/Api/Dtr/SelfFaceRegistrationController.php
+--- a/app/Http/Controllers/Api/Dtr/SelfFaceRegistrationController.php	2026-10-01 08:31:52.000000000 +0000
++++ b/app/Http/Controllers/Api/Dtr/SelfFaceRegistrationController.php	2026-10-12 02:23:00.313312363 +0000
+@@ -5,7 +5,7 @@
+ use App\Exceptions\Dtr\DtrException;
+ use App\Http\Controllers\Controller;
+ use App\Http\Requests\Dtr\RegisterFaceRequest;
+-use App\Models\Dtr\DtrFace;
++use App\Models\DtrFace;
+ use App\Models\Employee;
+ use App\Models\ActivityLog;
+ use App\Services\Dtr\EmployeeResolver;
+diff -ru a/app/Http/Requests/Dtr/SaveAttendanceRequest.php b/app/Http/Requests/Dtr/SaveAttendanceRequest.php
+--- a/app/Http/Requests/Dtr/SaveAttendanceRequest.php	2026-10-08 02:53:51.000000000 +0000
++++ b/app/Http/Requests/Dtr/SaveAttendanceRequest.php	2026-10-12 02:23:00.320687858 +0000
+@@ -2,7 +2,7 @@
+ 
+ namespace App\Http\Requests\Dtr;
+ 
+-use App\Models\Dtr\DtrAttendance;
++use App\Models\DtrAttendance;
+ use App\Services\Dtr\EmployeeResolver;
+ use Carbon\CarbonImmutable;
+ use Illuminate\Foundation\Http\FormRequest;
+diff -ru a/app/Services/Dtr/AttendanceService.php b/app/Services/Dtr/AttendanceService.php
+--- a/app/Services/Dtr/AttendanceService.php	2026-10-08 02:53:51.000000000 +0000
++++ b/app/Services/Dtr/AttendanceService.php	2026-10-12 02:23:00.310395449 +0000
+@@ -3,7 +3,7 @@
+ namespace App\Services\Dtr;
+ 
+ use App\Exceptions\Dtr\DtrException;
+-use App\Models\Dtr\DtrAttendance;
++use App\Models\DtrAttendance;
+ use App\Models\Employee;
+ use Carbon\CarbonImmutable;
+ use Illuminate\Support\Facades\DB;
+diff -ru a/app/Services/Dtr/DtrCalendarService.php b/app/Services/Dtr/DtrCalendarService.php
+--- a/app/Services/Dtr/DtrCalendarService.php	2026-10-02 01:48:46.000000000 +0000
++++ b/app/Services/Dtr/DtrCalendarService.php	2026-10-12 02:23:00.308491301 +0000
+@@ -2,7 +2,7 @@
+ 
+ namespace App\Services\Dtr;
+ 
+-use App\Models\Dtr\DtrAttendance;
++use App\Models\DtrAttendance;
+ use App\Models\Employee;
+ use Carbon\CarbonImmutable;
+ use Illuminate\Support\Collection;
+diff -ru a/app/Services/Dtr/LegacyDtrImporter.php b/app/Services/Dtr/LegacyDtrImporter.php
+--- a/app/Services/Dtr/LegacyDtrImporter.php	2026-09-30 08:28:52.000000000 +0000
++++ b/app/Services/Dtr/LegacyDtrImporter.php	2026-10-12 02:23:00.311907301 +0000
+@@ -3,8 +3,8 @@
+ namespace App\Services\Dtr;
+ 
+ use App\Exceptions\Dtr\DtrException;
+-use App\Models\Dtr\DtrAttendance;
+-use App\Models\Dtr\DtrFace;
++use App\Models\DtrAttendance;
++use App\Models\DtrFace;
+ use Illuminate\Support\Facades\DB;
+ 
+ class LegacyDtrImporter

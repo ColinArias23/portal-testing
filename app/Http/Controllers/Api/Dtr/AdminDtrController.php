@@ -6,11 +6,12 @@ use App\Exceptions\Dtr\DtrException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Dtr\CalendarRequest;
 use App\Http\Requests\Dtr\SaveAttendanceRequest;
-use App\Models\Dtr\DtrAttendance;
+use App\Models\DtrAttendance;
 use App\Services\Dtr\AttendanceService;
 use App\Services\Dtr\DtrCalendarService;
 use App\Services\Dtr\EmployeeResolver;
 use App\Services\Dtr\ImageStore;
+use App\Services\Dtr\ShiftCalculator;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,6 +25,7 @@ class AdminDtrController extends Controller
         private readonly DtrCalendarService $calendar,
         private readonly ImageStore $images,
         private readonly AttendanceService $attendance,
+        private readonly ShiftCalculator $calculator,
     ) {
     }
 
@@ -41,7 +43,7 @@ class AdminDtrController extends Controller
         $from = $data['from'] ?? CarbonImmutable::parse($to, $tz)->subDays(31)->toDateString();
 
         $query = DtrAttendance::query()
-            ->with(self::EMPLOYEE_COLUMNS)
+            ->with([self::EMPLOYEE_COLUMNS, 'shift:id,name'])
             ->whereBetween('work_date', [$from, $to])
             ->orderByDesc('work_date')->orderByDesc('time_in');
 
@@ -62,14 +64,14 @@ class AdminDtrController extends Controller
     {
         $record = $this->attendance->createManual($request->validated());
 
-        return response()->json(['data' => $this->present($record->load(self::EMPLOYEE_COLUMNS))], 201);
+        return response()->json(['data' => $this->present($record->load([self::EMPLOYEE_COLUMNS, 'shift:id,name']))], 201);
     }
 
     public function update(SaveAttendanceRequest $request, DtrAttendance $attendance): JsonResponse
     {
         $record = $this->attendance->updateManual($attendance, $request->validated());
 
-        return response()->json(['data' => $this->present($record->load(self::EMPLOYEE_COLUMNS))]);
+        return response()->json(['data' => $this->present($record->load([self::EMPLOYEE_COLUMNS, 'shift:id,name']))]);
     }
 
     public function employeeLookup(Request $request): JsonResponse
@@ -121,6 +123,13 @@ class AdminDtrController extends Controller
             'time_in'            => $r->time_in,
             'time_out'           => $r->time_out,
             'time_out_date'      => $r->time_out_date?->toDateString(),
+            'shift'              => $r->shift_start ? [
+                'id'    => $r->shift_id,
+                'name'  => $r->shift?->name,
+                'start' => $r->shift_start,
+                'end'   => $r->shift_end,
+            ] : null,
+            ...$this->calculator->minutes($r),
             'has_time_in_image'  => (bool) $r->time_in_image_path,
             'has_time_out_image' => (bool) $r->time_out_image_path,
             'photo_version'      => $r->updated_at?->getTimestamp(),

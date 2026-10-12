@@ -24,6 +24,10 @@ return [
         'min_interval_seconds' => (int) env('DTR_MIN_PUNCH_INTERVAL', 60),
     ],
 
+    'shift' => [
+        'default_grace_minutes' => (int) env('DTR_SHIFT_GRACE_MINUTES', 15),
+    ],
+
     'frames' => [
         'recognize_min' => 3,
         'recognize_max' => 5,

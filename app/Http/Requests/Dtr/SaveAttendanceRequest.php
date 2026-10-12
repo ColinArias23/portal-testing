@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Dtr;
 
-use App\Models\Dtr\DtrAttendance;
+use App\Models\DtrAttendance;
 use App\Services\Dtr\EmployeeResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
@@ -63,6 +63,7 @@ class SaveAttendanceRequest extends FormRequest
             'time_in'        => ['required', 'date_format:H:i'],
             'time_out'       => ['nullable', 'date_format:H:i'],
             'time_out_date'  => ['nullable', 'date_format:Y-m-d'],
+            'shift_id'       => ['nullable', 'integer', 'exists:dtr_shifts,id'],
             'time_in_image'  => $photo,
             'time_out_image' => $photo,
         ];
@@ -79,6 +80,7 @@ class SaveAttendanceRequest extends FormRequest
             'time_in.required'             => 'Time in is required.',
             'time_in.date_format'          => 'Time in must use the HH:MM format.',
             'time_out.date_format'         => 'Time out must use the HH:MM format.',
+            'shift_id.exists'              => 'The selected shift does not exist.',
             'time_in_image.mimes'          => 'Time in photo must be a JPG or PNG image.',
             'time_in_image.max'            => 'Time in photo is too large.',
             'time_out_image.mimes'         => 'Time out photo must be a JPG or PNG image.',

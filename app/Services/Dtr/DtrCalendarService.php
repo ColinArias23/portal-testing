@@ -2,15 +2,18 @@
 
 namespace App\Services\Dtr;
 
-use App\Models\Dtr\DtrAttendance;
+use App\Models\DtrAttendance;
 use App\Models\Employee;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
 class DtrCalendarService
 {
-    public function __construct(private readonly DtrSignatureService $signatures)
-    {
+    public function __construct(
+        private readonly DtrSignatureService $signatures,
+        private readonly ShiftService $shifts,
+        private readonly ShiftCalculator $calculator,
+    ) {
     }
 
     public function cutoff(Employee $employee, int $month, int $year): array
@@ -24,6 +27,11 @@ class DtrCalendarService
 
         $verifierUser = $this->signatures->verifierUser();
 
+        $leftEntries  = $this->build($records, $leftStart, $leftEnd);
+        $rightEntries = $this->build($records, $rightStart, $rightEnd);
+
+        $fallbackShift = $this->shifts->label($this->shifts->forEmployee($employee->id));
+
         return [
             'employee'      => $this->employeePayload($employee),
             'has_signature' => $this->signatures->hasSignature($employee),
@@ -34,8 +42,12 @@ class DtrCalendarService
             ],
             'left_range'    => ['start' => $leftStart->toDateString(), 'end' => $leftEnd->toDateString()],
             'right_range'   => ['start' => $rightStart->toDateString(), 'end' => $rightEnd->toDateString()],
-            'left_entries'  => $this->build($records, $leftStart, $leftEnd),
-            'right_entries' => $this->build($records, $rightStart, $rightEnd),
+            'left_entries'  => $leftEntries,
+            'right_entries' => $rightEntries,
+            'left_totals'   => $this->calculator->totals($leftEntries),
+            'right_totals'  => $this->calculator->totals($rightEntries),
+            'left_shifts'   => $this->rangeShifts($records, $leftStart, $leftEnd, $fallbackShift),
+            'right_shifts'  => $this->rangeShifts($records, $rightStart, $rightEnd, $fallbackShift),
         ];
     }
 
@@ -61,6 +73,7 @@ class DtrCalendarService
     {
         return DtrAttendance::query()
             ->where('employee_id', $employeeId)
+            ->with('shift:id,name')
             ->whereBetween('work_date', [$from->subDay()->toDateString(), $to->addDay()->toDateString()])
             ->orderBy('work_date')
             ->get();
@@ -74,6 +87,7 @@ class DtrCalendarService
                 'day' => $c->day, 'date' => $c->toDateString(),
                 'am_arrival' => null, 'am_departure' => null,
                 'pm_arrival' => null, 'pm_departure' => null,
+                'late_minutes' => null, 'undertime_minutes' => null, 'overtime_minutes' => null,
             ];
         }
 
@@ -82,6 +96,7 @@ class DtrCalendarService
             if ($r->time_in && isset($days[$inKey])) {
                 $slot = (int) substr($r->time_in, 0, 2) < 12 ? 'am_arrival' : 'pm_arrival';
                 $days[$inKey][$slot] = $r->time_in;
+                $days[$inKey] = array_merge($days[$inKey], $this->calculator->minutes($r));
             }
 
             if ($r->time_out) {
@@ -94,5 +109,22 @@ class DtrCalendarService
         }
 
         return array_values($days);
+    }
+
+    private function rangeShifts(Collection $records, CarbonImmutable $start, CarbonImmutable $end, ?array $fallback): array
+    {
+        $shifts = $records
+            ->filter(fn ($r) => $r->shift_start && $r->work_date->betweenIncluded($start, $end))
+            ->map(fn ($r) => [
+                'id'    => $r->shift_id,
+                'name'  => $r->shift?->name,
+                'start' => $r->shift_start,
+                'end'   => $r->shift_end,
+            ])
+            ->unique(fn (array $shift) => $shift['start'].'-'.$shift['end'])
+            ->values()
+            ->all();
+
+        return $shifts ?: array_filter([$fallback]);
     }
 }

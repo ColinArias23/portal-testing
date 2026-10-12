@@ -3,7 +3,8 @@
 namespace App\Services\Dtr;
 
 use App\Exceptions\Dtr\DtrException;
-use App\Models\Dtr\DtrAttendance;
+use App\Models\DtrAttendance;
+use App\Models\DtrShift;
 use App\Models\Employee;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -16,8 +17,11 @@ class AttendanceService
     public const ALREADY_COMPLETED = 'ALREADY_COMPLETED';
     public const TOO_SOON = 'TOO_SOON';
 
-    public function __construct(private readonly ImageStore $images)
-    {
+    public function __construct(
+        private readonly ImageStore $images,
+        private readonly ShiftService $shifts,
+        private readonly ShiftCalculator $calculator,
+    ) {
     }
 
     public function punch(int $employeeId, ?string $imageDataUrl, string $source): array
@@ -72,7 +76,8 @@ class AttendanceService
 
                 $this->assertNoRecordOnDate((int) $data['employee_id'], $data['work_date']);
 
-                $attributes = $this->manualAttributes($data);
+                $attributes = $this->manualAttributes($data)
+                    + $this->shifts->snapshot($this->manualShift((int) $data['employee_id'], $data['shift_id'] ?? null));
 
                 if (! empty($data['time_in_image'])) {
                     $attributes['time_in_image_path'] = $stored[] = $this->images->putUploadedFile($data['time_in_image'], 'attendance');
@@ -114,6 +119,10 @@ class AttendanceService
 
                 $attributes = $this->manualAttributes($data);
 
+                if (! empty($data['shift_id']) && (int) $data['shift_id'] !== $row->shift_id) {
+                    $attributes += $this->shifts->snapshot(DtrShift::query()->findOrFail((int) $data['shift_id']));
+                }
+
                 if (! empty($data['time_in_image'])) {
                     $replaced[] = $row->time_in_image_path;
                     $attributes['time_in_image_path'] = $stored[] = $this->images->putUploadedFile($data['time_in_image'], 'attendance');
@@ -151,6 +160,13 @@ class AttendanceService
         return $record;
     }
 
+    private function manualShift(int $employeeId, mixed $shiftId): ?DtrShift
+    {
+        return $shiftId
+            ? DtrShift::query()->findOrFail((int) $shiftId)
+            : $this->shifts->forEmployee($employeeId);
+    }
+
     private function manualAttributes(array $data): array
     {
         $hasTimeOut = ! empty($data['time_out']);
@@ -178,19 +194,23 @@ class AttendanceService
 
     private function clockIn(int $employeeId, CarbonImmutable $now, ?string $image, string $source): array
     {
+        $shift = $this->shifts->forEmployee($employeeId);
+
         $row = DtrAttendance::create([
             'employee_id'        => $employeeId,
             'work_date'          => $now->toDateString(),
             'time_in'            => $now->format('H:i:s'),
             'time_in_image_path' => $image ? $this->images->putDataUrl($image, 'attendance') : null,
             'time_in_source'     => $source,
-        ]);
+        ] + $this->shifts->snapshot($shift));
 
         return [
-            'type'     => self::TIME_IN,
-            'time_in'  => $row->time_in,
-            'time_out' => null,
-            'message'  => 'Time In recorded at '.$now->format('h:i A'),
+            'type'         => self::TIME_IN,
+            'time_in'      => $row->time_in,
+            'time_out'     => null,
+            'shift'        => $this->shifts->label($shift),
+            'late_minutes' => $this->calculator->minutes($row)['late_minutes'],
+            'message'      => 'Time In recorded at '.$now->format('h:i A'),
         ];
     }
 
@@ -202,12 +222,17 @@ class AttendanceService
         $open->time_out_source     = $source;
         $open->save();
 
+        $minutes = $this->calculator->minutes($open);
+
         return [
-            'type'          => self::TIME_OUT,
-            'time_in'       => $open->time_in,
-            'time_out'      => $open->time_out,
-            'time_out_date' => $open->time_out_date->toDateString(),
-            'message'       => 'Time Out recorded at '.$now->format('h:i A'),
+            'type'              => self::TIME_OUT,
+            'time_in'           => $open->time_in,
+            'time_out'          => $open->time_out,
+            'time_out_date'     => $open->time_out_date->toDateString(),
+            'late_minutes'      => $minutes['late_minutes'],
+            'undertime_minutes' => $minutes['undertime_minutes'],
+            'overtime_minutes'  => $minutes['overtime_minutes'],
+            'message'           => 'Time Out recorded at '.$now->format('h:i A'),
         ];
     }
 }

@@ -3,8 +3,8 @@
 namespace App\Services\Dtr;
 
 use App\Exceptions\Dtr\DtrException;
-use App\Models\Dtr\DtrAttendance;
-use App\Models\Dtr\DtrFace;
+use App\Models\DtrAttendance;
+use App\Models\DtrFace;
 use Illuminate\Support\Facades\DB;
 
 class LegacyDtrImporter
