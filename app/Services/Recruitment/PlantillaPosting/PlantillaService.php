@@ -5,6 +5,7 @@ namespace App\Services\Recruitment\PlantillaPosting;
 use App\Models\Employee;
 use App\Models\EmployeeAssignment;
 use App\Models\PlantillaPosition;
+use App\Models\PlantillaPositionHistory;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -15,16 +16,16 @@ class PlantillaService
         Employee $employee,
         ?int $stepIncrementId = null,
         ?string $startDate = null,
+        string $event = PlantillaPositionHistory::ASSIGNED,
+        ?PlantillaPosition $fromPosition = null,
+        ?int $applicationId = null,
     ): EmployeeAssignment {
 
         if (!$position->isAssignable()) {
-            $status = $position->computed_status;
             throw new RuntimeException(
                 "Position [{$position->position_slot_name}] cannot be assigned. " .
-                "Current status: {$status}. " .
-                ($status === 'UNFILLED'
-                    ? "Approval is required before this position can be filled again."
-                    : "Only VACANT positions can be assigned.")
+                "Current status: {$position->computed_status}. " .
+                "Only UNFILLED positions can be assigned."
             );
         }
 
@@ -51,17 +52,21 @@ class PlantillaService
             );
         }
 
-        return DB::transaction(function () use ($position, $employee, $stepIncrementId, $startDate) {
+        return DB::transaction(function () use ($position, $employee, $stepIncrementId, $startDate, $event, $fromPosition, $applicationId) {
+            $date = $startDate ?? now()->toDateString();
+
             $assignment = EmployeeAssignment::create([
                 'employee_id' => $employee->id,
                 'plantilla_position_id' => $position->id,
                 'step_increment_id' => $stepIncrementId,
                 'is_primary' => true,
-                'start_date' => $startDate ?? now()->toDateString(),
+                'start_date' => $date,
                 'end_date' => null,
             ]);
 
             $position->fillPosition();
+
+            $this->recordHistory($position, $employee, $assignment, $event, $date, $fromPosition, $applicationId);
 
             return $assignment;
         });
@@ -71,6 +76,8 @@ class PlantillaService
         EmployeeAssignment $assignment,
         ?string $endDate = null,
         ?string $remarks = null,
+        ?PlantillaPosition $relatedPosition = null,
+        ?int $applicationId = null,
     ): PlantillaPosition {
 
         if (!$assignment->isActive()) {
@@ -79,13 +86,24 @@ class PlantillaService
             );
         }
 
-        return DB::transaction(function () use ($assignment, $endDate, $remarks) {
-            $assignment->update([
-                'end_date' => $endDate ?? now()->toDateString(),
-            ]);
+        return DB::transaction(function () use ($assignment, $endDate, $remarks, $relatedPosition, $applicationId) {
+            $date = $endDate ?? now()->toDateString();
+
+            $assignment->update(['end_date' => $date]);
 
             $position = $assignment->plantillaPosition;
             $position->vacatePosition($remarks);
+
+            $this->recordHistory(
+                $position,
+                $assignment->employee,
+                $assignment,
+                PlantillaPositionHistory::VACATED,
+                $date,
+                $relatedPosition,
+                $applicationId,
+                $remarks,
+            );
 
             return $position->fresh();
         });
@@ -105,13 +123,9 @@ class PlantillaService
         }
 
         if (!$toPosition->isAssignable()) {
-            $status = $toPosition->computed_status;
             throw new RuntimeException(
                 "Destination position [{$toPosition->position_slot_name}] is not available. " .
-                "Status: {$status}." .
-                ($status === 'UNFILLED'
-                    ? " Approval is required before this position can be filled."
-                    : "")
+                "Status: {$toPosition->computed_status}."
             );
         }
 
@@ -122,7 +136,19 @@ class PlantillaService
 
             $fromAssignment->update(['end_date' => $date]);
 
-            $fromPosition->vacatePosition("Transferred to [{$toPosition->position_slot_name}]");
+            $remarks = "Transferred to [{$toPosition->position_slot_name}]";
+            $fromPosition->vacatePosition($remarks);
+
+            $this->recordHistory(
+                $fromPosition,
+                $employee,
+                $fromAssignment,
+                PlantillaPositionHistory::VACATED,
+                $date,
+                $toPosition,
+                null,
+                $remarks,
+            );
 
             $newAssignment = EmployeeAssignment::create([
                 'employee_id' => $employee->id,
@@ -135,39 +161,17 @@ class PlantillaService
 
             $toPosition->fillPosition();
 
+            $this->recordHistory(
+                $toPosition,
+                $employee,
+                $newAssignment,
+                PlantillaPositionHistory::TRANSFERRED,
+                $date,
+                $fromPosition,
+            );
+
             return $newAssignment;
         });
-    }
-
-    public function approve(PlantillaPosition $position): PlantillaPosition
-    {
-        if ($position->status !== 'UNFILLED') {
-            throw new RuntimeException(
-                "Position [{$position->position_slot_name}] is not UNFILLED — nothing to approve. " .
-                "Current status: {$position->status}."
-            );
-        }
-
-        if ($position->isFilled()) {
-            throw new RuntimeException(
-                "Position [{$position->position_slot_name}] still has an active occupant."
-            );
-        }
-
-        $position->approveForRefilling();
-
-        return $position->fresh();
-    }
-
-    public function forceUnlock(PlantillaPosition $position, string $reason = ''): PlantillaPosition
-    {
-        $position->approveForRefilling();
-
-        if ($reason) {
-            $position->update(['vacancy_notes' => "Force unlocked: {$reason}"]);
-        }
-
-        return $position->fresh();
     }
 
     public function getCompatiblePositions(
@@ -175,7 +179,7 @@ class PlantillaService
         ?int $divisionId = null,
         ?int $salaryGradeId = null,
     ) {
-        $query = PlantillaPosition::assignable();
+        $query = PlantillaPosition::unfilled();
 
         if ($divisionId) {
             $query->forDivision($divisionId);
@@ -208,6 +212,31 @@ class PlantillaService
             ->with(['plantillaPosition', 'stepIncrement'])
             ->orderBy('start_date', 'desc')
             ->get();
+    }
+
+    private function recordHistory(
+        PlantillaPosition $position,
+        ?Employee $employee,
+        EmployeeAssignment $assignment,
+        string $event,
+        string $date,
+        ?PlantillaPosition $relatedPosition = null,
+        ?int $applicationId = null,
+        ?string $remarks = null,
+    ): void {
+        PlantillaPositionHistory::create([
+            'plantilla_position_id' => $position->id,
+            'position_label' => $position->position_slot_name,
+            'employee_id' => $employee?->id,
+            'employee_name' => $employee?->full_name,
+            'event_type' => $event,
+            'related_position_id' => $relatedPosition?->id,
+            'related_position_label' => $relatedPosition?->position_slot_name,
+            'plantilla_posting_application_id' => $applicationId,
+            'employee_assignment_id' => $assignment->id,
+            'effective_date' => $date,
+            'remarks' => $remarks,
+        ]);
     }
 
     public function getOverstaffedPositions()

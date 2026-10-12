@@ -32,7 +32,6 @@ class PlantillaPositionService
         }
         if ($request->filled('status')) {
             match (strtoupper($request->status)) {
-                'VACANT'   => $query->vacant(),
                 'FILLED'   => $query->filled(),
                 'UNFILLED' => $query->unfilled(),
                 default    => null,
@@ -91,8 +90,7 @@ class PlantillaPositionService
                     'slot_number'        => $i,
                     'position_slot_name' => $this->formatter->buildSlotName($data['base_item_number'], $i, $slots),
                     'position_title'     => $data['title'],
-                    'status'             => 'VACANT',
-                    'requires_approval'  => false,
+                    'status'             => 'UNFILLED',
                 ]);
             }
 
@@ -187,8 +185,7 @@ class PlantillaPositionService
                     'cti'                   => $template->cti ?? 'NOT_SPECIFIED',
                     'salary_grade_id'       => $template->salary_grade_id,
                     'step_increment_id'     => $template->step_increment_id,
-                    'status'                => 'VACANT',
-                    'requires_approval'     => false,
+                    'status'                => 'UNFILLED',
                 ]);
             }
 
@@ -226,11 +223,6 @@ class PlantillaPositionService
             'display_department_id' => $position->display_department_id,
             'display_division_id'   => $position->display_division_id,
         ];
-
-        if (isset($data['requires_approval'])) {
-            $data['status']     = $data['requires_approval'] ? 'UNFILLED' : 'VACANT';
-            $data['vacated_at'] = $data['requires_approval'] ? now() : null;
-        }
 
         if ($position->isFilled()) {
             unset($data['role'], $data['cti'], $data['display_department_id'], $data['display_division_id']);
@@ -274,12 +266,6 @@ class PlantillaPositionService
                 'body' => ['message' => "Cannot delete [{$position->position_slot_name}] — it is currently FILLED."],
             ];
         }
-        if ($position->isUnfilled()) {
-            return [
-                'status' => 422,
-                'body' => ['message' => "Cannot delete [{$position->position_slot_name}] — it is UNFILLED and awaiting approval."],
-            ];
-        }
 
         DB::transaction(function () use ($position, $request) {
             $position->delete();
@@ -307,7 +293,7 @@ class PlantillaPositionService
     public function bulkDelete(array $ids, Request $request): array
     {
         $positions  = $this->positions->findByIds($ids);
-        $unfillable = $positions->filter(fn ($p) => $p->isFilled() || $p->isUnfilled());
+        $unfillable = $positions->filter(fn ($p) => $p->isFilled());
 
         if ($unfillable->isNotEmpty()) {
             $names = $unfillable->pluck('position_slot_name')->implode(', ');
@@ -315,7 +301,7 @@ class PlantillaPositionService
             return [
                 'status' => 422,
                 'body' => [
-                    'message'          => "Cannot delete these positions (they are FILLED or UNFILLED): {$names}",
+                    'message'          => "Cannot delete these positions (they are FILLED): {$names}",
                     'unfillable_count' => $unfillable->count(),
                 ],
             ];
@@ -408,34 +394,6 @@ class PlantillaPositionService
         ];
     }
 
-    public function approve(PlantillaPosition $position, Request $request): array
-    {
-        if (! $position->requires_approval) {
-            return ['status' => 422, 'body' => ['message' => 'This position does not require approval.']];
-        }
-
-        $position->approveForRefilling();
-
-        ActivityLog::record(
-            action: 'plantilla_position.approved',
-            userId: $request->user()?->id,
-            subjectType: PlantillaPosition::class,
-            subjectId: $position->id,
-            subjectLabel: $position->position_slot_name,
-            payload: ['approved_by' => $request->user()?->id],
-            ip: $request->ip(),
-            userAgent: $request->userAgent(),
-        );
-
-        return [
-            'status' => 200,
-            'body' => [
-                'message'  => 'Position approved and reopened for assignment.',
-                'position' => $this->formatter->format($this->positions->loadBasicRelations($position)),
-            ],
-        ];
-    }
-
     public function summary(): array
     {
         $counts = $this->positions->counts();
@@ -450,6 +408,21 @@ class PlantillaPositionService
         ];
     }
 
+    public function history(PlantillaPosition $position): array
+    {
+        return [
+            'position' => [
+                'id'                 => $position->id,
+                'position_slot_name' => $position->position_slot_name,
+                'position_title'     => $position->position_title,
+            ],
+            'data' => $this->positions->historyFor($position)
+                ->map(fn ($event) => $this->formatter->formatHistory($event))
+                ->values()
+                ->all(),
+        ];
+    }
+
     public function salaryConfig(PlantillaPosition $position): array
     {
         $position->load(['salaryGrade.stepIncrements', 'stepIncrement']);
@@ -459,8 +432,8 @@ class PlantillaPositionService
 
     public function availableItems(): array
     {
-        $items         = $this->positions->distinctVacantBaseItems();
-        $vacantCounts  = $this->positions->vacantCountsByBaseItemNumber();
+        $items          = $this->positions->distinctUnfilledBaseItems();
+        $unfilledCounts = $this->positions->unfilledCountsByBaseItemNumber();
 
         return $items
             ->map(fn ($pos) => [
@@ -473,7 +446,7 @@ class PlantillaPositionService
                 'division'         => $pos->displayDivision
                     ? $pos->displayDivision->only(['id', 'name', 'code'])
                     : null,
-                'available_count'  => $vacantCounts[$pos->base_item_number] ?? 0,
+                'available_count'  => $unfilledCounts[$pos->base_item_number] ?? 0,
             ])
             ->values()
             ->all();

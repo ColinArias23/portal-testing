@@ -27,7 +27,7 @@ class ManpowerMappingService
     public function departmentDetail($departmentId): array
     {
         $dept      = $this->manpower->departmentWithStaff((int) $departmentId);
-        $positions = $this->manpower->vacantOrUnfilledPositionsForDepartment($dept->id);
+        $positions = $this->manpower->unfilledPositionsForDepartment($dept->id);
 
         return [
             'department'       => $this->formatter->formatDepartment($dept, $positions),
@@ -95,7 +95,7 @@ class ManpowerMappingService
             }
         }
 
-        $vacantPositions = $this->manpower->vacantOrUnfilledDisplayedPositions();
+        $vacantPositions = $this->manpower->unfilledDisplayedPositions();
 
         $vacantByDept     = [];
         $vacantByDivision = [];

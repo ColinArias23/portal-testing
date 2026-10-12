@@ -13,8 +13,8 @@ class PlantillaPositionController extends Controller
         private readonly PlantillaPositionService $positions,
     ) {
         $this->middleware('auth:sanctum');
-        $this->middleware('permission:plantilla_items.view')->only(['index', 'show', 'steps', 'summary', 'salaryConfig', 'availableItems']);
-        $this->middleware('permission:plantilla_items.manage')->only(['store', 'addSlots', 'update', 'destroy', 'bulkDelete', 'restore', 'bulkRestore', 'approve']);
+        $this->middleware('permission:plantilla_items.view')->only(['index', 'show', 'steps', 'summary', 'salaryConfig', 'availableItems', 'history']);
+        $this->middleware('permission:plantilla_items.manage')->only(['store', 'addSlots', 'update', 'destroy', 'bulkDelete', 'restore', 'bulkRestore']);
     }
 
     // ─── Index ─────────────────────────────────────────────────────────────
@@ -80,7 +80,6 @@ class PlantillaPositionController extends Controller
             'step_increment_id'     => ['sometimes', 'nullable', 'integer', 'exists:step_increments,id'],
             'date_of_assumption'    => ['sometimes', 'nullable', 'date'],
             'vacancy_notes'         => ['sometimes', 'nullable', 'string'],
-            'requires_approval'     => ['sometimes', 'boolean'],
         ]);
 
         return response()->json($this->positions->update($request, $plantillaPosition, $data));
@@ -128,18 +127,15 @@ class PlantillaPositionController extends Controller
         return response()->json($result['body'], $result['status']);
     }
 
-    // ─── Approve ───────────────────────────────────────────────────────────
-    public function approve(Request $request, PlantillaPosition $plantillaPosition)
-    {
-        $result = $this->positions->approve($plantillaPosition, $request);
-
-        return response()->json($result['body'], $result['status']);
-    }
-
     // ─── Summary ───────────────────────────────────────────────────────────
     public function summary()
     {
         return response()->json($this->positions->summary());
+    }
+
+    public function history(PlantillaPosition $plantillaPosition)
+    {
+        return response()->json($this->positions->history($plantillaPosition));
     }
 
     // ─── SalaryConfig ─────────────────────────────────────────────────────

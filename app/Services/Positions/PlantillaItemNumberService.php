@@ -58,24 +58,43 @@ class PlantillaItemNumberService
         return $renumbered;
     }
 
-    public function syncSlotNames(string $baseItemNumber): void
+        public function syncSlotNames(string $baseItemNumber): void
     {
         $slots = $this->positions->activeForBaseItemNumber($baseItemNumber);
 
         foreach ($slots as $slot) {
             $name = $this->formatter->buildSlotName($slot->base_item_number, (int) $slot->slot_number, $slots->count());
 
-            if ($slot->position_slot_name !== $name) {
-                $slot->update(['position_slot_name' => $name]);
+            if ($slot->position_slot_name === $name) {
+                continue;
             }
+
+            $this->releaseSlotName($name, $slot->id);
+            $slot->update(['position_slot_name' => $name]);
         }
 
         $this->postings->refreshSlotNames($baseItemNumber);
     }
 
+    private function releaseSlotName(string $name, int $exceptId): void
+    {
+        $holder = $this->positions->findSlotNameHolder($name, $exceptId);
+
+        if ($holder === null) {
+            return;
+        }
+
+        if (! $holder->trashed()) {
+            throw ValidationException::withMessages([
+                'base_item_number' => "Slot name {$name} is already used by active position #{$holder->id} (item {$holder->base_item_number}). Fix that record first.",
+            ]);
+        }
+
+        $holder->update(['position_slot_name' => "{$name}~{$holder->id}"]);
+    }
+
     private function renumber(string $from, string $to): void
     {
-        // Soft-deleted slots move with their item so a restore can't land on another item's number.
         foreach ($this->positions->withTrashedForBaseItemNumber($from) as $slot) {
             $slot->update([
                 'base_item_number'   => $to,

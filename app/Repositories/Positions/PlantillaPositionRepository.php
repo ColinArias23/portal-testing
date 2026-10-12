@@ -3,6 +3,7 @@
 namespace App\Repositories\Positions;
 
 use App\Models\PlantillaPosition;
+use App\Models\PlantillaPositionHistory;
 use App\Models\StepIncrement;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -45,6 +46,14 @@ class PlantillaPositionRepository
     public function loadBasicRelations(PlantillaPosition $position): PlantillaPosition
     {
         return $position->fresh(['displayDepartment', 'displayDivision', 'salaryGrade', 'stepIncrement']);
+    }
+
+        public function findSlotNameHolder(string $name, int $exceptId): ?PlantillaPosition
+    {
+        return PlantillaPosition::withTrashed()
+            ->where('position_slot_name', $name)
+            ->where('id', '!=', $exceptId)
+            ->first();
     }
 
     public function stepsForSalaryGrade(int $salaryGradeId): Collection
@@ -133,7 +142,6 @@ class PlantillaPositionRepository
         return [
             'total_positions' => PlantillaPosition::count(),
             'filled'          => PlantillaPosition::filled()->count(),
-            'vacant'          => PlantillaPosition::vacant()->count(),
             'unfilled'        => PlantillaPosition::unfilled()->count(),
             'overstaffed'     => PlantillaPosition::overstaffed()->count(),
             'deleted'         => PlantillaPosition::onlyTrashed()->count(),
@@ -148,22 +156,36 @@ class PlantillaPositionRepository
             ->get();
     }
 
-    public function distinctVacantBaseItems(): Collection
+    public function distinctUnfilledBaseItems(): Collection
     {
         return PlantillaPosition::selectRaw('DISTINCT base_item_number, title, role, display_department_id, display_division_id')
             ->with(['displayDepartment:id,name,code', 'displayDivision:id,name,code'])
-            ->vacant()
+            ->unfilled()
             ->get()
             ->unique('base_item_number');
     }
 
-    public function vacantCountsByBaseItemNumber(): array
+    public function unfilledCountsByBaseItemNumber(): array
     {
-        return PlantillaPosition::vacant()
+        return PlantillaPosition::unfilled()
             ->selectRaw('base_item_number, count(*) as cnt')
             ->groupBy('base_item_number')
             ->pluck('cnt', 'base_item_number')
             ->map(fn ($v) => (int) $v)
             ->all();
+    }
+
+    public function historyFor(PlantillaPosition $position): Collection
+    {
+        return PlantillaPositionHistory::where('plantilla_position_id', $position->id)
+            ->with([
+                'employee:id,prefix,first_name,middle_name,last_name,suffix',
+                'relatedPosition:id,position_slot_name',
+                'application:id,plantilla_posting_id',
+                'application.posting:id,title,base_item_number,position_slot_name',
+            ])
+            ->orderByDesc('effective_date')
+            ->orderByDesc('id')
+            ->get();
     }
 }

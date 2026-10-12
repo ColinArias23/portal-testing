@@ -74,7 +74,7 @@ class EmployeeAssignment extends Model
             if (! $stillOccupied) {
                 if ($position->status !== 'UNFILLED') {
                     $position->markUnfilled(
-                        'Automatically locked after employee vacated the position.'
+                        'Automatically marked unfilled after the employee vacated the position.'
                     );
                 }
             }

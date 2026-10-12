@@ -102,7 +102,7 @@ class PlantillaPosting extends Model
     public function getVacantSlotsAttribute(): int
     {
         return PlantillaPosition::where('base_item_number', $this->base_item_number)
-            ->where('status', 'VACANT')
+            ->where('status', 'UNFILLED')
             ->count();
     }
 

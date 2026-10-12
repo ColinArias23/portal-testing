@@ -3,6 +3,7 @@
 namespace App\Services\Positions;
 
 use App\Models\PlantillaPosition;
+use App\Models\PlantillaPositionHistory;
 
 class PlantillaPositionFormatterService
 {
@@ -41,9 +42,7 @@ class PlantillaPositionFormatterService
             'computed_status'       => $position->computed_status,
             'is_assignable'         => $position->is_assignable,
             'is_filled'             => $position->isFilled(),
-            'is_vacant'             => $position->isVacant(),
             'is_unfilled'           => $position->isUnfilled(),
-            'requires_approval'     => $position->requires_approval,
             'vacated_at'            => $position->vacated_at?->toIso8601String(),
             'vacancy_notes'         => $position->vacancy_notes,
             'date_of_assumption'    => $position->date_of_assumption?->toDateString(),
@@ -83,6 +82,33 @@ class PlantillaPositionFormatterService
             'deleted_at'            => $position->deleted_at?->toIso8601String(),
             'created_at'            => $position->created_at?->toIso8601String(),
             'updated_at'            => $position->updated_at?->toIso8601String(),
+        ];
+    }
+
+    public function formatHistory(PlantillaPositionHistory $event): array
+    {
+        $related     = $event->relatedPosition;
+        $application = $event->application;
+        $posting     = $application?->posting;
+
+        return [
+            'id'             => $event->id,
+            'event_type'     => $event->event_type,
+            'effective_date' => $event->effective_date?->toDateString(),
+            'employee_id'    => $event->employee_id,
+            'employee_name'  => $event->employee?->full_name ?? $event->employee_name,
+            'remarks'        => $event->remarks,
+            'related_position' => ($related || $event->related_position_label) ? [
+                'id'    => $event->related_position_id,
+                'label' => $related?->position_slot_name ?? $event->related_position_label,
+            ] : null,
+            'application'    => $application ? [
+                'id'                 => $application->id,
+                'posting_title'      => $posting?->title,
+                'base_item_number'   => $posting?->base_item_number,
+                'position_slot_name' => $posting?->position_slot_name,
+            ] : null,
+            'created_at'     => $event->created_at?->toIso8601String(),
         ];
     }
 }

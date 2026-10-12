@@ -46,11 +46,11 @@ class ManpowerMappingRepository
         ])->findOrFail($departmentId);
     }
 
-    public function vacantOrUnfilledPositionsForDepartment(int $departmentId): Collection
+    public function unfilledPositionsForDepartment(int $departmentId): Collection
     {
         return PlantillaPosition::where('display_department_id', $departmentId)
             ->with(['displayDepartment:id,name', 'salaryGrade:id,salary_grade'])
-            ->whereIn('status', ['VACANT', 'UNFILLED'])
+            ->where('status', 'UNFILLED')
             ->get();
     }
 
@@ -74,7 +74,7 @@ class ManpowerMappingRepository
 
     public function countVacantPositions(): int
     {
-        return PlantillaPosition::where('status', 'VACANT')->count();
+        return PlantillaPosition::where('status', 'UNFILLED')->count();
     }
 
     public function allDivisionsWithHead(): Collection
@@ -103,10 +103,10 @@ class ManpowerMappingRepository
             ->get();
     }
 
-    public function vacantOrUnfilledDisplayedPositions(): Collection
+    public function unfilledDisplayedPositions(): Collection
     {
         return PlantillaPosition::with(['displayDepartment:id,name', 'displayDivision:id,name'])
-            ->whereIn('status', ['VACANT', 'UNFILLED'])
+            ->where('status', 'UNFILLED')
             ->where(function ($q) {
                 $q->whereNotNull('display_department_id')
                     ->orWhereNotNull('display_division_id');
@@ -188,7 +188,7 @@ class ManpowerMappingRepository
 
     public function vacantCountsByDivision(): array
     {
-        return PlantillaPosition::where('plantilla_positions.status', 'VACANT')
+        return PlantillaPosition::where('plantilla_positions.status', 'UNFILLED')
             ->whereNotNull('plantilla_positions.display_department_id')
             ->join('departments', 'departments.id', '=', 'plantilla_positions.display_department_id')
             ->whereNotNull('departments.division_id')

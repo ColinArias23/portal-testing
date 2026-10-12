@@ -163,7 +163,7 @@ class EmployeeQueryService
         }
 
         $vacantPosition = PlantillaPosition::where('base_item_number', $application->posting->base_item_number)
-            ->vacant()
+            ->unfilled()
             ->with(['displayDepartment:id,name,code', 'displayDivision:id,name,code', 'salaryGrade', 'stepIncrement'])
             ->orderBy('slot_number')
             ->first();

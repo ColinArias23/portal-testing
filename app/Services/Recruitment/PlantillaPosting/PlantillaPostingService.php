@@ -261,9 +261,9 @@ class PlantillaPostingService
             ]);
         }
 
-        if ($slots->contains(fn (PlantillaPosition $s) => ! $s->isVacant())) {
+        if ($slots->contains(fn (PlantillaPosition $s) => ! $s->isUnfilled())) {
             throw ValidationException::withMessages([
-                'plantilla_position_ids' => 'One or more selected item numbers is no longer vacant.',
+                'plantilla_position_ids' => 'One or more selected item numbers is no longer unfilled.',
             ]);
         }
 

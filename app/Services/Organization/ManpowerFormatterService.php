@@ -32,7 +32,7 @@ class ManpowerFormatterService
 
     public function formatDepartment($dept, $positions = null): array
     {
-        $positions ??= $this->manpower->vacantOrUnfilledPositionsForDepartment($dept->id);
+        $positions ??= $this->manpower->unfilledPositionsForDepartment($dept->id);
 
         $assignments = $dept->assignedEmployees ?? [];
 
@@ -69,8 +69,7 @@ class ManpowerFormatterService
             'leadership'      => $leadership,
             'staff'           => $staff,
             'staff_count'     => count($staff),
-            'vacant_count'    => $positions->where('status', 'VACANT')->count(),
-            'unfilled_count'  => $positions->where('status', 'UNFILLED')->count(),
+            'vacant_count'    => $positions->where('status', 'UNFILLED')->count(),
             'total_headcount' => count($leadership) + count($staff),
         ];
     }
@@ -96,12 +95,12 @@ class ManpowerFormatterService
     public function formatVacantPositions($positions): array
     {
         return $positions
-            ->where('status', 'VACANT')
+            ->where('status', 'UNFILLED')
             ->map(fn ($pos) => [
                 'id'             => $pos->id,
                 'item_number'    => $pos->base_item_number,
                 'position_title' => $pos->position_title ?? $pos->title,
-                'status'         => 'VACANT',
+                'status'         => 'UNFILLED',
                 'salary_grade'   => $pos->salaryGrade?->salary_grade,
             ])
             ->values()

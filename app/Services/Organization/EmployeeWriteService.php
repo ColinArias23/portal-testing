@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\EmployeeAssignment;
 use App\Models\EmployeeSalaryHistory;
 use App\Models\PlantillaPosition;
+use App\Models\PlantillaPositionHistory;
 use App\Models\User;
 use App\Repositories\Shared\EmployeeRepository;
 use App\Services\Recruitment\PlantillaPosting\PlantillaService;
@@ -562,22 +563,21 @@ class EmployeeWriteService
             return;
         }
 
+        $position         = $newPositionId ? PlantillaPosition::findOrFail($newPositionId) : null;
+        $previousPosition = $existing?->plantillaPosition;
+        $isTransfer       = $position && $previousPosition && $previousPosition->id !== $position->id;
+
         if ($existing) {
             $this->plantillaService->vacate(
                 $existing,
                 now()->toDateString(),
-                'Reassigned via employee form'
+                'Reassigned via employee form',
+                relatedPosition: $isTransfer ? $position : null,
             );
         }
 
-        if (! $newPositionId) {
+        if (! $position) {
             return;
-        }
-
-        $position = PlantillaPosition::findOrFail($newPositionId);
-
-        if ($existingPositionId === $newPositionId) {
-            $this->plantillaService->approve($position->fresh());
         }
 
         $this->plantillaService->assign(
@@ -585,6 +585,8 @@ class EmployeeWriteService
             employee:        $employee,
             stepIncrementId: $newStepId ?: null,
             startDate:       now()->toDateString(),
+            event:           $isTransfer ? PlantillaPositionHistory::TRANSFERRED : PlantillaPositionHistory::ASSIGNED,
+            fromPosition:    $isTransfer ? $previousPosition : null,
         );
     }
 }

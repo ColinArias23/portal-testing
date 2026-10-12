@@ -30,14 +30,12 @@ class PlantillaPosition extends Model
         'salary_grade_id',
         'step_increment_id',
         'status',
-        'requires_approval',
         'vacated_at',
         'vacancy_notes',
         'date_of_assumption',
     ];
 
     protected $casts = [
-        'requires_approval'  => 'boolean',
         'vacated_at'         => 'datetime',
         'date_of_assumption' => 'date',
         'created_at'         => 'datetime',
@@ -82,6 +80,11 @@ class PlantillaPosition extends Model
         return $this->assignments()->whereNull('end_date');
     }
 
+    public function histories()
+    {
+        return $this->hasMany(PlantillaPositionHistory::class, 'plantilla_position_id');
+    }
+
     public function postings()
     {
         return $this->belongsToMany(PlantillaPosting::class, 'plantilla_posting_slots')
@@ -93,14 +96,9 @@ class PlantillaPosition extends Model
         return $this->activeAssignments()->exists();
     }
 
-    public function isVacant(): bool
-    {
-        return !$this->activeAssignments()->exists() && !$this->requires_approval;
-    }
-
     public function isUnfilled(): bool
     {
-        return !$this->activeAssignments()->exists() && $this->requires_approval;
+        return !$this->activeAssignments()->exists();
     }
 
     public function isOverstaffed(): bool
@@ -110,15 +108,14 @@ class PlantillaPosition extends Model
 
     public function isAssignable(): bool
     {
-        return !$this->requires_approval && !$this->isFilled();
+        return !$this->isFilled();
     }
 
     public function getComputedStatusAttribute(): string
     {
         if ($this->isOverstaffed())   return 'OVERSTAFFED';
         if ($this->isFilled())        return 'FILLED';
-        if ($this->requires_approval) return 'UNFILLED';
-        return 'VACANT';
+        return 'UNFILLED';
     }
 
     public function getHasSalaryConfigAttribute(): bool
@@ -196,20 +193,9 @@ class PlantillaPosition extends Model
     public function markUnfilled(?string $notes = null): void
     {
         $this->update([
-            'status'            => 'UNFILLED',
-            'requires_approval' => true,
-            'vacated_at'        => now(),
-            'vacancy_notes'     => $notes,
-        ]);
-    }
-
-    public function approveForRefilling(): void
-    {
-        $this->update([
-            'status'            => 'VACANT',
-            'requires_approval' => false,
-            'vacated_at'        => null,
-            'vacancy_notes'     => null,
+            'status'        => 'UNFILLED',
+            'vacated_at'    => now(),
+            'vacancy_notes' => $notes,
         ]);
     }
 
@@ -231,17 +217,7 @@ class PlantillaPosition extends Model
                     "Cannot delete position [{$position->position_slot_name}] — it is currently FILLED."
                 );
             }
-            if ($position->isUnfilled()) {
-                throw new \RuntimeException(
-                    "Cannot delete position [{$position->position_slot_name}] — it is UNFILLED and awaiting approval."
-                );
-            }
         });
-    }
-
-    public function scopeVacant($query)
-    {
-        return $query->whereDoesntHave('activeAssignments')->where('requires_approval', false);
     }
 
     public function scopeFilled($query)
@@ -251,12 +227,7 @@ class PlantillaPosition extends Model
 
     public function scopeUnfilled($query)
     {
-        return $query->whereDoesntHave('activeAssignments')->where('requires_approval', true);
-    }
-
-    public function scopeAssignable($query)
-    {
-        return $query->whereDoesntHave('activeAssignments')->where('requires_approval', false);
+        return $query->whereDoesntHave('activeAssignments');
     }
 
     public function scopeOverstaffed($query)

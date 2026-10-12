@@ -41,7 +41,7 @@ class PlantillaPostingRepository
         $activeSlotIds = $this->activePostingSlotIds();
 
         return PlantillaPosition::selectRaw('DISTINCT base_item_number')
-            ->vacant()
+            ->unfilled()
             ->when($activeSlotIds->isNotEmpty(), fn ($q) => $q->whereNotIn('id', $activeSlotIds))
             ->pluck('base_item_number');
     }
@@ -73,7 +73,7 @@ class PlantillaPostingRepository
         $representatives = $allForItems->groupBy('base_item_number')->map->first();
 
         $vacantSlotsByItem = PlantillaPosition::whereIn('base_item_number', $baseItemNumbers)
-            ->vacant()
+            ->unfilled()
             ->when($activeSlotIds->isNotEmpty(), fn ($q) => $q->whereNotIn('id', $activeSlotIds))
             ->with('stepIncrement:id,monthly_salary,annual_salary')
             ->orderBy('position_slot_name')

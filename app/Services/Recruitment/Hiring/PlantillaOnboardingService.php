@@ -7,6 +7,7 @@ use App\Models\ActivityLog;
 use App\Models\Employee;
 use App\Models\Onboarding;
 use App\Models\PlantillaPosition;
+use App\Models\PlantillaPositionHistory;
 use App\Models\PlantillaPostingApplication;
 use App\Repositories\Recruitment\Hiring\OnboardingRepository;
 use App\Services\Organization\EmployeeFormatterService;
@@ -115,7 +116,7 @@ class PlantillaOnboardingService
             return null;
         }
 
-        $position = PlantillaPosition::assignable()
+        $position = PlantillaPosition::unfilled()
             ->forItem($baseItemNumber)
             ->orderBy('slot_number')
             ->lockForUpdate()
@@ -123,18 +124,34 @@ class PlantillaOnboardingService
 
         if (! $position) {
             throw ValidationException::withMessages([
-                'status' => "No vacant plantilla slot is available for item {$baseItemNumber}, so the employee record could not be updated. Nothing was saved. Make a slot available and try again.",
+                'status' => "No unfilled plantilla slot is available for item {$baseItemNumber}, so the employee record could not be updated. Nothing was saved. Make a slot available and try again.",
             ]);
         }
 
         $today = now()->toDateString();
 
         try {
+            $previousPosition = $current?->plantillaPosition;
+
             if ($current) {
-                $this->plantilla->vacate($current, $today, "Promoted via PSB application #{$application->id}");
+                $this->plantilla->vacate(
+                    $current,
+                    $today,
+                    "Promoted via PSB application #{$application->id}",
+                    relatedPosition: $position,
+                    applicationId: $application->id,
+                );
             }
 
-            $this->plantilla->assign($position->fresh(), $employee, null, $today);
+            $this->plantilla->assign(
+                $position->fresh(),
+                $employee,
+                null,
+                $today,
+                event: $current ? PlantillaPositionHistory::PROMOTED : PlantillaPositionHistory::ASSIGNED,
+                fromPosition: $previousPosition,
+                applicationId: $application->id,
+            );
         } catch (RuntimeException $e) {
             throw ValidationException::withMessages(['status' => $e->getMessage()]);
         }

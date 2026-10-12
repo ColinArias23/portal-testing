@@ -17,6 +17,8 @@ use App\Http\Controllers\Api\Organization\DivisionController;
 use App\Http\Controllers\Api\Positions\SalaryGradeController;
 use App\Http\Controllers\Api\Positions\StepIncrementController;
 use App\Http\Controllers\Api\Positions\PlantillaPositionController;
+use App\Http\Controllers\Api\PersonnelSchedule\PersonnelScheduleController;
+use App\Http\Controllers\Api\PersonnelSchedule\DepartmentDatabaseController;
 use App\Http\Controllers\Api\Recruitment\PlantillaPosting\PlantillaPostingController;
 use App\Http\Controllers\Api\Recruitment\PlantillaPosting\PlantillaApplicationInterviewController;
 use App\Http\Controllers\Api\Organization\EmployeeDepartmentAssignmentController;
@@ -209,11 +211,27 @@ Route::prefix('announcement-attachments')->middleware('throttle:announcements')-
         Route::get('/available/items', [PlantillaPositionController::class, 'availableItems']);
         Route::get('/{plantillaPosition}/steps',         [PlantillaPositionController::class, 'steps']);
         Route::get('/{plantillaPosition}/salary-config', [PlantillaPositionController::class, 'salaryConfig']);
-        Route::post('/{plantillaPosition}/approve',      [PlantillaPositionController::class, 'approve']);
+        Route::get('/{plantillaPosition}/history',       [PlantillaPositionController::class, 'history']);
         Route::patch('/{id}/restore',                    [PlantillaPositionController::class, 'restore']);
         Route::get('/{plantillaPosition}',    [PlantillaPositionController::class, 'show']);
         Route::patch('/{plantillaPosition}',  [PlantillaPositionController::class, 'update']);
         Route::delete('/{plantillaPosition}', [PlantillaPositionController::class, 'destroy']);
+    });
+// ─── Personnel Schedule + Department Database (standalone, not linked to other modules) ─────────────────────────────────────────────────────
+    Route::prefix('plantilla-schedule')->group(function () {
+        Route::get('/',                  [PersonnelScheduleController::class, 'index']);
+        Route::get('/employee-options',  [PersonnelScheduleController::class, 'employeeOptions']);
+        Route::patch('/lines/{line}',    [PersonnelScheduleController::class, 'updateLine']);
+        Route::put('/slots/{slot}/assignee',    [PersonnelScheduleController::class, 'assign']);
+        Route::delete('/slots/{slot}/assignee', [PersonnelScheduleController::class, 'unassign']);
+
+        Route::post('/divisions',             [DepartmentDatabaseController::class, 'storeDivision']);
+        Route::patch('/divisions/{division}', [DepartmentDatabaseController::class, 'updateDivision']);
+        Route::delete('/divisions/{division}', [DepartmentDatabaseController::class, 'destroyDivision']);
+
+        Route::post('/units',          [DepartmentDatabaseController::class, 'storeUnit']);
+        Route::patch('/units/{unit}',  [DepartmentDatabaseController::class, 'updateUnit']);
+        Route::delete('/units/{unit}', [DepartmentDatabaseController::class, 'destroyUnit']);
     });
 // ─── Plantilla Postings (job posting + applications for vacant plantilla items) ─────────────────────────────────────────────────────
     Route::prefix('plantilla-postings')->group(function () {
