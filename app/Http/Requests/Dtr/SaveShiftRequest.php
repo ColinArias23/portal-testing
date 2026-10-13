@@ -40,7 +40,6 @@ class SaveShiftRequest extends FormRequest
             ],
             'start_time'    => ['required', 'date_format:H:i'],
             'end_time'      => ['required', 'date_format:H:i', 'different:start_time'],
-            'grace_minutes' => ['nullable', 'integer', 'between:0,120'],
             'is_default'    => ['nullable', 'boolean'],
             'is_active'     => ['nullable', 'boolean'],
         ];

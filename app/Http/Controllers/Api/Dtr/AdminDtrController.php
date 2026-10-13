@@ -6,12 +6,14 @@ use App\Exceptions\Dtr\DtrException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Dtr\CalendarRequest;
 use App\Http\Requests\Dtr\SaveAttendanceRequest;
+use App\Models\ActivityLog;
 use App\Models\DtrAttendance;
 use App\Services\Dtr\AttendanceService;
 use App\Services\Dtr\DtrCalendarService;
 use App\Services\Dtr\EmployeeResolver;
 use App\Services\Dtr\ImageStore;
 use App\Services\Dtr\ShiftCalculator;
+use App\Services\Dtr\ShiftService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,6 +28,7 @@ class AdminDtrController extends Controller
         private readonly ImageStore $images,
         private readonly AttendanceService $attendance,
         private readonly ShiftCalculator $calculator,
+        private readonly ShiftService $shifts,
     ) {
     }
 
@@ -62,16 +65,27 @@ class AdminDtrController extends Controller
 
     public function store(SaveAttendanceRequest $request): JsonResponse
     {
-        $record = $this->attendance->createManual($request->validated());
+        $record = $this->attendance->createManual($request->validated())
+            ->load([self::EMPLOYEE_COLUMNS, 'shift:id,name']);
 
-        return response()->json(['data' => $this->present($record->load([self::EMPLOYEE_COLUMNS, 'shift:id,name']))], 201);
+        $this->audit($request, 'dtr.attendance.created', $record, ['after' => $this->snapshot($record)]);
+
+        return response()->json(['data' => $this->present($record)], 201);
     }
 
     public function update(SaveAttendanceRequest $request, DtrAttendance $attendance): JsonResponse
     {
-        $record = $this->attendance->updateManual($attendance, $request->validated());
+        $before = $this->snapshot($attendance);
 
-        return response()->json(['data' => $this->present($record->load([self::EMPLOYEE_COLUMNS, 'shift:id,name']))]);
+        $record = $this->attendance->updateManual($attendance, $request->validated())
+            ->load([self::EMPLOYEE_COLUMNS, 'shift:id,name']);
+
+        $this->audit($request, 'dtr.attendance.updated', $record, [
+            'before' => $before,
+            'after'  => $this->snapshot($record),
+        ]);
+
+        return response()->json(['data' => $this->present($record)]);
     }
 
     public function employeeLookup(Request $request): JsonResponse
@@ -84,6 +98,7 @@ class AdminDtrController extends Controller
             'id'              => $employee->id,
             'employee_number' => $employee->employee_number,
             'name'            => $employee->full_name,
+            'shift'           => $this->shifts->label($this->shifts->forEmployee($employee->id)),
         ] : null]);
     }
 
@@ -110,6 +125,31 @@ class AdminDtrController extends Controller
         }
 
         return $this->images->response($path);
+    }
+
+    private function snapshot(DtrAttendance $r): array
+    {
+        return [
+            'work_date'     => $r->work_date?->toDateString(),
+            'time_in'       => $r->time_in,
+            'time_out'      => $r->time_out,
+            'time_out_date' => $r->time_out_date?->toDateString(),
+            'shift_id'      => $r->shift_id,
+        ];
+    }
+
+    private function audit(Request $request, string $action, DtrAttendance $record, array $payload): void
+    {
+        ActivityLog::record(
+            action: $action,
+            userId: $request->user()?->id,
+            subjectType: DtrAttendance::class,
+            subjectId: $record->id,
+            subjectLabel: $record->employee?->employee_number,
+            payload: $payload,
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+        );
     }
 
     private function present(DtrAttendance $r): array

@@ -20,6 +20,27 @@ class AuditLogRepository
         return $query->paginate($perPage);
     }
 
+    public function paginateByActionPrefix(string $prefix, array $filters, int $perPage): LengthAwarePaginator
+    {
+        // AutoUppercase stores actions and labels in uppercase, so match in uppercase too.
+        $query = ActivityLog::with([
+            'user:id,username,employee_id',
+            'user.employee:id,employee_number,first_name,middle_name,last_name',
+        ])
+            ->where('action', 'like', addcslashes(strtoupper($prefix), '%_\\') . '%')
+            ->orderByDesc('performed_at')
+            ->orderByDesc('id');
+
+        $this->excludeSuperAdmin($query);
+        $this->applyFilters($query, $filters);
+
+        if (! empty($filters['q'])) {
+            $query->where('subject_label', 'like', '%' . addcslashes(strtoupper($filters['q']), '%_\\') . '%');
+        }
+
+        return $query->paginate($perPage);
+    }
+
     public function distinctActions(): Collection
     {
         $query = ActivityLog::query();

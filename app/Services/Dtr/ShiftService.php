@@ -3,6 +3,7 @@
 namespace App\Services\Dtr;
 
 use App\Exceptions\Dtr\DtrException;
+use App\Models\DtrAttendance;
 use App\Models\DtrEmployeeShift;
 use App\Models\DtrShift;
 use Illuminate\Support\Facades\DB;
@@ -99,6 +100,12 @@ class ShiftService
 
             $now = now();
 
+            DtrAttendance::query()
+                ->whereIn('employee_id', $ids)
+                ->whereNull('shift_id')
+                ->toBase()
+                ->update($this->snapshot($shift));
+
             DtrEmployeeShift::upsert(
                 array_map(fn (int $id) => [
                     'employee_id' => $id,
@@ -130,7 +137,7 @@ class ShiftService
             'name'          => trim($data['name']),
             'start_time'    => $data['start_time'].':00',
             'end_time'      => $data['end_time'].':00',
-            'grace_minutes' => (int) ($data['grace_minutes'] ?? config('dtr.shift.default_grace_minutes')),
+            'grace_minutes' => (int) config('dtr.shift.default_grace_minutes'),
             'is_default'    => (bool) ($data['is_default'] ?? false),
             'is_active'     => (bool) ($data['is_active'] ?? true),
         ];

@@ -129,6 +129,7 @@ class RbacSeeder extends Seeder
         // DTR
         'dtr.view',
         'dtr.manage',
+        'dtr.audit.view',
 
         // Bug Reports
         'bug-reports.view',

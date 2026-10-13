@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Dtr\AdminDtrController;
+use App\Http\Controllers\Api\Dtr\DtrAuditLogController;
 use App\Http\Controllers\Api\Dtr\FaceRegistrationController;
 use App\Http\Controllers\Api\Dtr\KioskController;
 use App\Http\Controllers\Api\Dtr\MeController;
@@ -43,6 +44,9 @@ Route::prefix('dtr')->name('dtr.')->group(function () {
             Route::get('attendances/{attendance}/image/{type}', [AdminDtrController::class, 'image'])
                 ->whereIn('type', ['in', 'out']);
         });
+
+        Route::get('audit-logs', [DtrAuditLogController::class, 'index'])
+            ->middleware(['permission:dtr.audit.view', 'throttle:60,1']);
 
         Route::middleware('permission:dtr.manage')->group(function () {
             Route::get('employees-by-number', [AdminDtrController::class, 'employeeLookup'])->middleware('throttle:60,1');

@@ -32,6 +32,9 @@ class DtrCalendarService
 
         $fallbackShift = $this->shifts->label($this->shifts->forEmployee($employee->id));
 
+        $leftShifts  = $this->rangeShifts($records, $leftStart, $leftEnd, $fallbackShift);
+        $rightShifts = $this->rangeShifts($records, $rightStart, $rightEnd, $fallbackShift);
+
         return [
             'employee'      => $this->employeePayload($employee),
             'has_signature' => $this->signatures->hasSignature($employee),
@@ -46,8 +49,10 @@ class DtrCalendarService
             'right_entries' => $rightEntries,
             'left_totals'   => $this->calculator->totals($leftEntries),
             'right_totals'  => $this->calculator->totals($rightEntries),
-            'left_shifts'   => $this->rangeShifts($records, $leftStart, $leftEnd, $fallbackShift),
-            'right_shifts'  => $this->rangeShifts($records, $rightStart, $rightEnd, $fallbackShift),
+            'left_shifts'   => $leftShifts,
+            'right_shifts'  => $rightShifts,
+            'left_weekend_off'  => $this->weekendOff($leftShifts),
+            'right_weekend_off' => $this->weekendOff($rightShifts),
         ];
     }
 
@@ -73,7 +78,7 @@ class DtrCalendarService
     {
         return DtrAttendance::query()
             ->where('employee_id', $employeeId)
-            ->with('shift:id,name')
+            ->with('shift:id,name,is_default')
             ->whereBetween('work_date', [$from->subDay()->toDateString(), $to->addDay()->toDateString()])
             ->orderBy('work_date')
             ->get();
@@ -116,15 +121,27 @@ class DtrCalendarService
         $shifts = $records
             ->filter(fn ($r) => $r->shift_start && $r->work_date->betweenIncluded($start, $end))
             ->map(fn ($r) => [
-                'id'    => $r->shift_id,
-                'name'  => $r->shift?->name,
-                'start' => $r->shift_start,
-                'end'   => $r->shift_end,
+                'id'         => $r->shift_id,
+                'name'       => $r->shift?->name,
+                'start'      => $r->shift_start,
+                'end'        => $r->shift_end,
+                'is_default' => (bool) $r->shift?->is_default,
             ])
             ->unique(fn (array $shift) => $shift['start'].'-'.$shift['end'])
             ->values()
             ->all();
 
         return $shifts ?: array_filter([$fallback]);
+    }
+
+    private function weekendOff(array $shifts): bool
+    {
+        foreach ($shifts as $shift) {
+            if (! ($shift['is_default'] ?? true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
